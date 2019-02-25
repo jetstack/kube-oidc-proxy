@@ -20,9 +20,6 @@ type Proxy struct {
 }
 
 func main() {
-	//fs := flag.NewFlagSet("kube-oidc-proxy", flag.ContinueOnError)
-	//klog.InitFlags(fs)
-
 	cert, err := tls.LoadX509KeyPair("client.crt", "client.key")
 	if err != nil {
 		log.Fatal(err)
@@ -59,7 +56,7 @@ func main() {
 	reqAuther := bearertoken.New(iodcAuther)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		info, ok, err := reqAuther.AuthenticateRequest(r)
+		_, ok, err := reqAuther.AuthenticateRequest(r)
 		if err != nil {
 			log.Printf("Unable to authenticate the request due to an error: %v", err)
 			w.WriteHeader(http.StatusUnauthorized)
@@ -72,21 +69,6 @@ func main() {
 			return
 		}
 
-		fmt.Printf("--------\n")
-		fmt.Printf("INFO: %s\n", info)
-		fmt.Printf("ERR: %s\n", err)
-		fmt.Printf("OK: %t\n", ok)
-		fmt.Printf("%s\n", r.URL.Path)
-		fmt.Printf(">%+v\n", r.Header)
-
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "readall error: "+err.Error()+"\n")
-			return
-		}
-
-		fmt.Printf(">>>%s\n", b)
-
 		URL, err := url.Parse("https://api.jvl-cluster.develop.tarmak.org" + r.URL.Path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "parse error: "+err.Error()+"\n")
@@ -94,12 +76,10 @@ func main() {
 		}
 
 		req := &http.Request{
-			URL: URL,
+			URL:  URL,
+			Body: r.Body,
 		}
-		req.Header = copyHeader(r.Header)
-		fmt.Printf(">%s\n", req.Header)
-		fmt.Printf(">%s\n", r.Header)
-		fmt.Printf("%+v\n", r.TLS)
+		req.Header = r.Header
 
 		res, err := client.Do(req)
 		if err != nil {
@@ -117,18 +97,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func copyHeader(src http.Header) http.Header {
-	dst := http.Header{}
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-
-	dst.Del("Authorization")
-	return dst
 }
 
 func setHeader(w http.ResponseWriter, src http.Header) {
