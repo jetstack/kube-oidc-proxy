@@ -100,6 +100,9 @@ func duplicateHeader(o http.Header) http.Header {
 func (p *Proxy) ErrorHandler(rw http.ResponseWriter, r *http.Request, err error) {
 	if err == errUnauthorized {
 		rw.WriteHeader(http.StatusUnauthorized)
+		if _, err := rw.Write([]byte("Unauthorized")); err != nil {
+			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
+		}
 		return
 	}
 
