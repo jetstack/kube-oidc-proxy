@@ -1,0 +1,19 @@
+version: '{branch}.{build}'
+branches:
+  only:
+  - v1
+clone_folder: c:\gopath\src\gopkg.in\gcfg.v1
+environment:
+  GOPATH: c:\gopath
+install:
+- set Path=c:\go\bin;%Path%
+- echo %Path%
+- go version
+- go env
+build_script:
+- cd %APPVEYOR_BUILD_FOLDER%
+- go get -v -t ./...
+- go build -v ./...
+test_script:
+- cd %APPVEYOR_BUILD_FOLDER%
+- go test -v ./...

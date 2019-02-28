@@ -1,0 +1,55 @@
+[[override]]
+  name = "k8s.io/api"
+  version = "kubernetes-1.13.3"
+
+[[override]]
+  name = "k8s.io/apiserver"
+  version = "kubernetes-1.13.3"
+
+[[override]]
+  name = "k8s.io/apimachinery"
+  version = "kubernetes-1.13.3"
+
+[[override]]
+  name = "k8s.io/client-go"
+  version = "kubernetes-1.13.3"
+
+[[override]]
+  name = "k8s.io/apiextensions-apiserver"
+  version = "kubernetes-1.13.3"
+
+[[override]]
+  name = "k8s.io/cli-runtime"
+  version = "kubernetes-1.13.3"
+
+[[override]]
+  name = "k8s.io/kubernetes"
+  version = "1.13.3"
+
+[[override]]
+  name = "k8s.io/kube-openapi"
+  revision = "c59034cc13d587f5ef4e85ca0ade0c1866ae8e1d"
+
+[[override]]
+  name = "github.com/docker/docker"
+  revision = "a9fbbdc8dd8794b20af358382ab780559bca589d"
+
+[[override]]
+  name = "github.com/gophercloud/gophercloud"
+  revision = "781450b3c4fcb4f5182bcc5133adb4b2e4a09d1d"
+
+[[override]]
+  name = "github.com/Azure/azure-sdk-for-go"
+  revision = "da91af54816b4cf72949c225a2d0980f51fab01b"
+
+[[override]]
+  name = "github.com/vmware/photon-controller-go-sdk"
+  revision = "4a435daef6ccd3d0edaac1161e76f51a70c2589a"
+
+[[override]]
+  name = "github.com/spf13/cobra"
+  revision = "c439c4fa093711d42e1b01acb1235b52004753c1"
+
+[[override]]
+  name = "github.com/davecgh/go-spew"
+  revision = "782f4967f2dc4564575ca782fe2d04090b5faca8"

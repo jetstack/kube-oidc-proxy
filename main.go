@@ -1,12 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/joshvanl/kubernetes/pkg/version/verflag"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	apiserverflag "k8s.io/apiserver/pkg/util/flag"
@@ -14,12 +12,6 @@ import (
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
-)
-
-var (
-	errUnauthorized      = errors.New("Unauthorized")
-	errImpersonateHeader = errors.New("Impersonate-User in header")
-	errNoName            = errors.New("No name in OIDC info")
 )
 
 func main() {
@@ -83,7 +75,7 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				UsernamePrefix:       oidcOptions.OIDC.UsernamePrefix,
 			})
 			if err != nil {
-				logrus.Fatal(err)
+				return err
 			}
 
 			reqAuther := bearertoken.New(oidcAuther)

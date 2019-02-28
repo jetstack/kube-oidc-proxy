@@ -1,0 +1,42 @@
+version: 2
+
+test: &test
+  working_directory: /go/src/gopkg.in/gcfg.v1
+  steps:
+    - checkout
+    - run: go version
+    - run: go env
+    - run: go get -v -t ./...
+    - run: go test -v ./...
+
+jobs:
+  rc:
+    <<: *test
+    docker:
+      - image: circleci/golang:rc
+  go1.10:
+    <<: *test
+    docker:
+      - image: circleci/golang:1.10
+  go1.9:
+    <<: *test
+    docker:
+      - image: circleci/golang:1.9
+  go1.8:
+    <<: *test
+    docker:
+      - image: circleci/golang:1.8
+  go1.7:
+    <<: *test
+    docker:
+      - image: circleci/golang:1.7
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - rc
+      - go1.10
+      - go1.9
+      - go1.8
+      - go1.7
