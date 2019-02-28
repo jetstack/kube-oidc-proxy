@@ -9,15 +9,19 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 )
 
 var (
-	errUnauthorized = errors.New("Unauthorized")
+	errUnauthorized      = errors.New("Unauthorized")
+	errImpersonateHeader = errors.New("Impersonate-User in header")
+	errNoName            = errors.New("No name in OIDC info")
 )
 
 type Proxy struct {
@@ -50,14 +54,14 @@ func main() {
 	config := oidc.Options{
 		IssuerURL:     "https://accounts.google.com",
 		ClientID:      "",
-		UsernameClaim: "sub",
+		UsernameClaim: "email",
 	}
 
-	iodcAuther, err := oidc.New(config)
+	oidcAuther, err := oidc.New(config)
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	reqAuther := bearertoken.New(iodcAuther)
+	reqAuther := bearertoken.New(oidcAuther)
 	logrus.Infof("waiting for oidc provider to become ready...")
 	time.Sleep(10 * time.Second)
 	logrus.Infof("proxy ready")
@@ -70,7 +74,6 @@ func main() {
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	p := &Proxy{transport, reqAuther}
 	proxy := httputil.NewSingleHostReverseProxy(url)
-	//proxy.Transport = transport
 	proxy.Transport = p
 	proxy.ErrorHandler = p.ErrorHandler
 
@@ -80,44 +83,76 @@ func main() {
 	}
 }
 
-func setHeader(w http.ResponseWriter, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			w.Header().Add(k, v)
-		}
-	}
-}
-
-func duplicateHeader(o http.Header) http.Header {
-	n := http.Header{}
-	for k, v := range o {
-		n[k] = v
-	}
-
-	return n
-}
-
 func (p *Proxy) ErrorHandler(rw http.ResponseWriter, r *http.Request, err error) {
-	if err == errUnauthorized {
+	switch err {
+
+	case errUnauthorized:
+		logrus.Debugf("unauthenticated user request %s", r.RemoteAddr)
+
 		rw.WriteHeader(http.StatusUnauthorized)
 		if _, err := rw.Write([]byte("Unauthorized")); err != nil {
 			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
 		}
 		return
-	}
 
-	rw.WriteHeader(http.StatusBadGateway)
+	case errImpersonateHeader:
+		logrus.Debugf("impersonation user request %s", r.RemoteAddr)
+
+		rw.WriteHeader(http.StatusForbidden)
+		if _, err := rw.Write(
+			[]byte("Impersonation requests are disabled when using kube-oidc-proxy"),
+		); err != nil {
+			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
+		}
+		return
+
+	case errNoName:
+		logrus.Debugf("no name available in oidc info %s", r.RemoteAddr)
+
+		rw.WriteHeader(http.StatusForbidden)
+		if _, err := rw.Write(
+			[]byte("No name available in OIDC info response"),
+		); err != nil {
+			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
+		}
+
+	default:
+		logrus.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
+		rw.WriteHeader(http.StatusBadGateway)
+	}
 }
 
 func (p *Proxy) RoundTrip(r *http.Request) (*http.Response, error) {
-	_, ok, err := p.reqAuther.AuthenticateRequest(r)
+	// auth request
+	info, ok, err := p.reqAuther.AuthenticateRequest(r)
 	if err != nil {
-		logrus.Errorf("Unable to authenticate the request due to an error: %v", err)
+		logrus.Errorf("unable to authenticate the request due to an error: %v", err)
 		return nil, errUnauthorized
 	}
+
 	if !ok {
 		return nil, errUnauthorized
 	}
 
+	// check for incoming impersonation headers and reject if any exists
+	for h := range r.Header {
+		if h == authv1.ImpersonateUserHeader ||
+			h == authv1.ImpersonateGroupHeader ||
+			strings.HasPrefix(h, authv1.ImpersonateUserExtraHeaderPrefix) {
+			return nil, errImpersonateHeader
+		}
+	}
+
+	name := info.User.GetName()
+
+	// no name available to reject request
+	if name == "" {
+		return nil, errNoName
+	}
+
+	// set impersonation header using authenticated identity name
+	r.Header.Set(authv1.ImpersonateUserHeader, name)
+
+	// return through normal transport layer function
 	return p.tlsTransport.RoundTrip(r)
 }
