@@ -1,21 +1,19 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"strings"
-	"time"
+	"fmt"
+	"os"
 
+	"github.com/joshvanl/kubernetes/pkg/version/verflag"
 	"github.com/sirupsen/logrus"
-	authv1 "k8s.io/api/authentication/v1"
+	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	apiserverflag "k8s.io/apiserver/pkg/util/flag"
+	"k8s.io/apiserver/pkg/util/globalflag"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 )
 
 var (
@@ -24,135 +22,110 @@ var (
 	errNoName            = errors.New("No name in OIDC info")
 )
 
-type Proxy struct {
-	tlsTransport *http.Transport
-	reqAuther    *bearertoken.Authenticator
-}
-
 func main() {
-	cert, err := tls.LoadX509KeyPair("client.crt", "client.key")
-	if err != nil {
-		logrus.Fatal(err)
+	stopCh := make(chan struct{})
+	cmd := newRunCommand(stopCh)
+
+	if err := cmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Load CA cert
-	caCert, err := ioutil.ReadFile("client.ca")
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	//cert, err := tls.LoadX509KeyPair("client.crt", "client.key")
+	//if err != nil {
+	//	logrus.Fatal(err)
+	//}
 
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
+	//// Load CA cert
+	//caCert, err := ioutil.ReadFile("client.ca")
+	//if err != nil {
+	//	logrus.Fatal(err)
+	//}
 
-	// Setup HTTPS client
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caCertPool,
-	}
-	tlsConfig.BuildNameToCertificate()
+	//caCertPool := x509.NewCertPool()
+	//caCertPool.AppendCertsFromPEM(caCert)
 
-	config := oidc.Options{
-		IssuerURL:     "https://accounts.google.com",
-		ClientID:      "",
-		UsernameClaim: "email",
-	}
-
-	oidcAuther, err := oidc.New(config)
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	reqAuther := bearertoken.New(oidcAuther)
-	logrus.Infof("waiting for oidc provider to become ready...")
-	time.Sleep(10 * time.Second)
-	logrus.Infof("proxy ready")
-
-	url, err := url.Parse("https://api.jvl-cluster.develop.tarmak.org")
-	if err != nil {
-		logrus.Fatalf("failed to parse url: %s", err)
-	}
-
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	p := &Proxy{transport, reqAuther}
-	proxy := httputil.NewSingleHostReverseProxy(url)
-	proxy.Transport = p
-	proxy.ErrorHandler = p.ErrorHandler
-
-	err = http.ListenAndServeTLS(":8000", "apiserver.crt", "apiserver.key", proxy)
-	if err != nil {
-		log.Fatal(err)
-	}
+	//// Setup HTTPS client
+	//tlsConfig := &tls.Config{
+	//	Certificates: []tls.Certificate{cert},
+	//	RootCAs:      caCertPool,
+	//}
+	//tlsConfig.BuildNameToCertificate()
 }
 
-func (p *Proxy) ErrorHandler(rw http.ResponseWriter, r *http.Request, err error) {
-	switch err {
-
-	case errUnauthorized:
-		logrus.Debugf("unauthenticated user request %s", r.RemoteAddr)
-
-		rw.WriteHeader(http.StatusUnauthorized)
-		if _, err := rw.Write([]byte("Unauthorized")); err != nil {
-			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
-		}
-		return
-
-	case errImpersonateHeader:
-		logrus.Debugf("impersonation user request %s", r.RemoteAddr)
-
-		rw.WriteHeader(http.StatusForbidden)
-		if _, err := rw.Write(
-			[]byte("Impersonation requests are disabled when using kube-oidc-proxy"),
-		); err != nil {
-			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
-		}
-		return
-
-	case errNoName:
-		logrus.Debugf("no name available in oidc info %s", r.RemoteAddr)
-
-		rw.WriteHeader(http.StatusForbidden)
-		if _, err := rw.Write(
-			[]byte("No name available in OIDC info response"),
-		); err != nil {
-			logrus.Errorf("failed to write Unauthorized to client response: %s", err)
-		}
-
-	default:
-		logrus.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
-		rw.WriteHeader(http.StatusBadGateway)
+func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
+	oidcOptions := &apiserveroptions.BuiltInAuthenticationOptions{
+		OIDC: &apiserveroptions.OIDCAuthenticationOptions{},
 	}
-}
+	secureServingOptions := apiserveroptions.NewSecureServingOptions()
+	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
+	clientConfigFlags := genericclioptions.NewConfigFlags()
 
-func (p *Proxy) RoundTrip(r *http.Request) (*http.Response, error) {
-	// auth request
-	info, ok, err := p.reqAuther.AuthenticateRequest(r)
-	if err != nil {
-		logrus.Errorf("unable to authenticate the request due to an error: %v", err)
-		return nil, errUnauthorized
-	}
+	cmd := &cobra.Command{
+		Use:   "k8s-oidc-proxy",
+		Short: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication unavailable.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			restClient, err := clientConfigFlags.ToRESTConfig()
+			if err != nil {
+				return err
+			}
 
-	if !ok {
-		return nil, errUnauthorized
+			oidcAuther, err := oidc.New(oidc.Options{
+				APIAudiences:         oidcOptions.APIAudiences,
+				CAFile:               oidcOptions.OIDC.CAFile,
+				ClientID:             oidcOptions.OIDC.ClientID,
+				GroupsClaim:          oidcOptions.OIDC.GroupsClaim,
+				GroupsPrefix:         oidcOptions.OIDC.GroupsPrefix,
+				IssuerURL:            oidcOptions.OIDC.IssuerURL,
+				RequiredClaims:       oidcOptions.OIDC.RequiredClaims,
+				SupportedSigningAlgs: oidcOptions.OIDC.SigningAlgs,
+				UsernameClaim:        oidcOptions.OIDC.UsernameClaim,
+				UsernamePrefix:       oidcOptions.OIDC.UsernamePrefix,
+			})
+			if err != nil {
+				logrus.Fatal(err)
+			}
+
+			reqAuther := bearertoken.New(oidcAuther)
+			p := &Proxy{restClient: restClient, reqAuther: reqAuther}
+
+			if err := p.Run(); err != nil {
+				return err
+			}
+
+			<-stopCh
+
+			return nil
+		},
 	}
 
-	// check for incoming impersonation headers and reject if any exists
-	for h := range r.Header {
-		if h == authv1.ImpersonateUserHeader ||
-			h == authv1.ImpersonateGroupHeader ||
-			strings.HasPrefix(h, authv1.ImpersonateUserExtraHeaderPrefix) {
-			return nil, errImpersonateHeader
-		}
+	var namedFlagSets apiserverflag.NamedFlagSets
+	fs := cmd.Flags()
+
+	oidcfs := namedFlagSets.FlagSet("OIDC")
+	oidcOptions.AddFlags(oidcfs)
+	oidcfs.MarkHidden("api-audiences")
+
+	secureServingOptions.AddFlags(namedFlagSets.FlagSet("secure serving"))
+
+	clientConfigFlags.CacheDir = nil
+	clientConfigFlags.Impersonate = nil
+	clientConfigFlags.ImpersonateGroup = nil
+	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
+
+	verflag.AddFlags(namedFlagSets.FlagSet("global"))
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
+
+	for _, f := range namedFlagSets.FlagSets {
+		fs.AddFlagSet(f)
 	}
 
-	name := info.User.GetName()
+	usageFmt := "Usage:\n  %s\n"
+	cols, _, _ := apiserverflag.TerminalSize(cmd.OutOrStdout())
+	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
+		apiserverflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
+	})
 
-	// no name available to reject request
-	if name == "" {
-		return nil, errNoName
-	}
-
-	// set impersonation header using authenticated identity name
-	r.Header.Set(authv1.ImpersonateUserHeader, name)
-
-	// return through normal transport layer function
-	return p.tlsTransport.RoundTrip(r)
+	return cmd
 }
