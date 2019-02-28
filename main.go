@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joshvanl/kubernetes/pkg/version/verflag"
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	"k8s.io/apiserver/pkg/server"
 	apiserverflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/globalflag"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
+	"k8s.io/kubernetes/pkg/version/verflag"
 )
 
 func main() {
@@ -22,27 +23,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-
-	//cert, err := tls.LoadX509KeyPair("client.crt", "client.key")
-	//if err != nil {
-	//	logrus.Fatal(err)
-	//}
-
-	//// Load CA cert
-	//caCert, err := ioutil.ReadFile("client.ca")
-	//if err != nil {
-	//	logrus.Fatal(err)
-	//}
-
-	//caCertPool := x509.NewCertPool()
-	//caCertPool.AppendCertsFromPEM(caCert)
-
-	//// Setup HTTPS client
-	//tlsConfig := &tls.Config{
-	//	Certificates: []tls.Certificate{cert},
-	//	RootCAs:      caCertPool,
-	//}
-	//tlsConfig.BuildNameToCertificate()
 }
 
 func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -54,8 +34,8 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags := genericclioptions.NewConfigFlags()
 
 	cmd := &cobra.Command{
-		Use:   "k8s-oidc-proxy",
-		Short: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication unavailable.",
+		Use:  "k8s-oidc-proxy",
+		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication unavailable.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			restClient, err := clientConfigFlags.ToRESTConfig()
 			if err != nil {
@@ -79,9 +59,19 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			}
 
 			reqAuther := bearertoken.New(oidcAuther)
-			p := &Proxy{restClient: restClient, reqAuther: reqAuther}
+			//secure serving info has a Serve( function
+			secureServingInfo := new(server.SecureServingInfo)
+			if err := secureServingOptions.ApplyTo(&secureServingInfo, nil); err != nil {
+				return err
+			}
 
-			if err := p.Run(); err != nil {
+			p := &Proxy{
+				restClient:        restClient,
+				reqAuther:         reqAuther,
+				secureServingInfo: secureServingInfo,
+			}
+
+			if err := p.Run(stopCh); err != nil {
 				return err
 			}
 
@@ -105,8 +95,8 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags.ImpersonateGroup = nil
 	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
 
-	verflag.AddFlags(namedFlagSets.FlagSet("global"))
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
+	verflag.AddFlags(namedFlagSets.FlagSet("misc"))
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
@@ -114,6 +104,11 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	usageFmt := "Usage:\n  %s\n"
 	cols, _, _ := apiserverflag.TerminalSize(cmd.OutOrStdout())
+	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
+		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
+		apiserverflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
+		return nil
+	})
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		apiserverflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)

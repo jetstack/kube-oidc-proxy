@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"errors"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -10,33 +10,46 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 	authtypes "k8s.io/kubernetes/pkg/apis/authentication"
 )
 
+var (
+	errUnauthorized      = errors.New("Unauthorized")
+	errImpersonateHeader = errors.New("Impersonate-User in header")
+	errNoName            = errors.New("No name in OIDC info")
+)
+
 type Proxy struct {
-	reqAuther  *bearertoken.Authenticator
-	restClient *rest.Config
+	reqAuther         *bearertoken.Authenticator
+	restClient        *rest.Config
+	secureServingInfo *server.SecureServingInfo
 }
 
-func (p *Proxy) Run() error {
+func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	logrus.Infof("waiting for oidc provider to become ready...")
 	time.Sleep(10 * time.Second)
 	logrus.Infof("proxy ready")
 
-	url, err := url.Parse("https://api.jvl-cluster.develop.tarmak.org")
+	url, err := url.Parse(p.restClient.APIPath)
 	if err != nil {
 		logrus.Fatalf("failed to parse url: %s", err)
 	}
 
-	//transport := &http.Transport{TLSClientConfig: tlsConfig}
+	if p.restClient.Insecure {
+		url.Scheme = "http"
+	} else {
+		url.Scheme = "https"
+	}
+
 	proxy := httputil.NewSingleHostReverseProxy(url)
 	proxy.Transport = p
 	proxy.ErrorHandler = p.errorHandler
 
-	err = http.ListenAndServeTLS(":8000", "apiserver.crt", "apiserver.key", proxy)
+	err = p.secureServingInfo.Serve(proxy, time.Second*120, stopCh)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return nil
