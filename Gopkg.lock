@@ -271,12 +271,11 @@
   version = "1.0.1"
 
 [[projects]]
-  digest = "1:4216202f4088a73e2982df875e2f0d1401137bbc248e57391e70547af167a18a"
+  digest = "1:8466756c66127d5ea10cc6c305a16174755ebd187e64ec2b4efc3eef58281dcd"
   name = "github.com/evanphx/json-patch"
   packages = ["."]
   pruneopts = ""
-  revision = "72bf35d0ff611848c1dc9df0f976c81192392fa5"
-  version = "v4.1.0"
+  revision = "5858425f75500d40c52783dce87d085a483ce135"
 
 [[projects]]
   digest = "1:c8052dcf3ec378a9a6bc4f00ecc10d6d5eb3cc1f8faaf6b2f70f047e8881d446"
@@ -472,14 +471,6 @@
   packages = ["."]
   pruneopts = ""
   revision = "c2b33e84"
-
-[[projects]]
-  digest = "1:9ac53939e57f04ea4886ed3c7b23612c65258de122c028a6c5ee8f9bdc0c51dd"
-  name = "github.com/joshvanl/kubernetes"
-  packages = ["pkg/version/verflag"]
-  pruneopts = ""
-  revision = "cff46ab41ff0bb44d8584413b598ad8360ec1def"
-  version = "v1.13.2"
 
 [[projects]]
   digest = "1:b79fc583e4dc7055ed86742e22164ac41bf8c0940722dbcb600f1a3ace1a8cb5"
@@ -1019,7 +1010,7 @@
   version = "v2.2.2"
 
 [[projects]]
-  digest = "1:f0cd7e871325a2631f7df6a9ce64fd004c7182393ea4a878d5c007241ab0b55a"
+  digest = "1:8a3902b1f1aab51953de9741e4a62daaab441788d85ba7f50709ceca8e26b6ff"
   name = "k8s.io/api"
   packages = [
     "admission/v1beta1",
@@ -1058,19 +1049,19 @@
     "storage/v1beta1",
   ]
   pruneopts = ""
-  revision = "74b699b93c15473932b89e3d1818ba8282f3b5ab"
-  version = "kubernetes-1.13.3"
+  revision = "5cb15d34447165a97c76ed5a60e4e99c8a01ecfe"
+  version = "kubernetes-1.13.4"
 
 [[projects]]
-  digest = "1:72909aafcbc258f9335e28e6ebc435b384d1b26ee750d81bff915e5ac481ab9e"
+  digest = "1:d2e0532d3ecd98e8540f6dcc6d9ca102df8e7e908d17f879ed4fa293efe149cb"
   name = "k8s.io/apiextensions-apiserver"
   packages = ["pkg/features"]
   pruneopts = ""
-  revision = "d4288ab6494571219e781fa423db363247635942"
-  version = "kubernetes-1.13.3"
+  revision = "d002e88f6236312f0289d9d1deab106751718ff0"
+  version = "kubernetes-1.13.4"
 
 [[projects]]
-  digest = "1:9634834683749eb75b7dffd7aa94b5b3d5560d355c1d664eb1e2724a3c382449"
+  digest = "1:c05610391a133b223e1736a3b8cbd725da30f64c0c6a93d6422714ccfd8f4a73"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
@@ -1127,11 +1118,11 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = ""
-  revision = "572dfc7bdfcb4531361a17d27b92851f59acf0dc"
-  version = "kubernetes-1.13.3"
+  revision = "86fb29eff6288413d76bd8506874fddd9fccdff0"
+  version = "kubernetes-1.13.4"
 
 [[projects]]
-  digest = "1:8a127eaf74b9e0eb172766dc6988c163ca4b8be37bd8cb792cd6a80771a832c5"
+  digest = "1:b5ba08b77ee48e25ea122a682e8363144b48e090741bc36d15f0f3c8d7757c0a"
   name = "k8s.io/apiserver"
   packages = [
     "pkg/admission",
@@ -1239,11 +1230,11 @@
     "plugin/pkg/authorizer/webhook",
   ]
   pruneopts = ""
-  revision = "26bc712632e1faf9efc6b63f712325c760ad1ebe"
-  version = "kubernetes-1.13.3"
+  revision = "79427f02047f9189a75b8cdaadccaf65a126853e"
+  version = "kubernetes-1.13.4"
 
 [[projects]]
-  digest = "1:a71d209b4c7c656f06b38635c1cf56a28310af5d2cc0113994caf82b972599e5"
+  digest = "1:f03f595d63b795ac81354127d77f1a901ca663d15267d484187940f5ece60c59"
   name = "k8s.io/cli-runtime"
   packages = [
     "pkg/genericclioptions",
@@ -1251,11 +1242,11 @@
     "pkg/genericclioptions/resource",
   ]
   pruneopts = ""
-  revision = "491c94071cfae3b539753adf65705d8a333fb92b"
-  version = "kubernetes-1.13.3"
+  revision = "a9e421a7932607ce4623ff45add8274499cca193"
+  version = "kubernetes-1.13.4"
 
 [[projects]]
-  digest = "1:70be3571468873a56591b1bbb7af49dc9df5f4e644054082b27a0a3e00c45bb4"
+  digest = "1:12c43154153575abb595eb35ba6c3f42ae1e3192b4a184dda640b2a1b4f930d0"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1405,8 +1396,8 @@
     "util/workqueue",
   ]
   pruneopts = ""
-  revision = "6e4752048fde21176ab35eb54ec1117359830d8a"
-  version = "kubernetes-1.13.3"
+  revision = "b40b2a5939e43f7ffe0028ad67586b7ce50bb675"
+  version = "kubernetes-1.13.4"
 
 [[projects]]
   branch = "master"
@@ -1630,6 +1621,7 @@
     "pkg/util/tolerations",
     "pkg/util/workqueue/prometheus",
     "pkg/version",
+    "pkg/version/verflag",
     "pkg/volume",
     "pkg/volume/util",
     "pkg/volume/util/fs",
@@ -1711,10 +1703,10 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/joshvanl/kubernetes/pkg/version/verflag",
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
     "k8s.io/apiserver/pkg/authentication/request/bearertoken",
+    "k8s.io/apiserver/pkg/server",
     "k8s.io/apiserver/pkg/util/flag",
     "k8s.io/apiserver/pkg/util/globalflag",
     "k8s.io/apiserver/plugin/pkg/authenticator/token/oidc",
@@ -1722,6 +1714,7 @@
     "k8s.io/client-go/rest",
     "k8s.io/kubernetes/pkg/apis/authentication",
     "k8s.io/kubernetes/pkg/kubeapiserver/options",
+    "k8s.io/kubernetes/pkg/version/verflag",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

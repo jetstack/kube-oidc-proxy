@@ -1,30 +1,30 @@
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/apiserver"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/apiextensions-apiserver"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/cli-runtime"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/kubernetes"
-  version = "1.13.3"
+  version = "v1.13.4"
 
 [[override]]
   name = "k8s.io/kube-openapi"
@@ -53,3 +53,7 @@
 [[override]]
   name = "github.com/davecgh/go-spew"
   revision = "782f4967f2dc4564575ca782fe2d04090b5faca8"
+
+[[override]]
+  name = "github.com/evanphx/json-patch"
+  revision = "5858425f75500d40c52783dce87d085a483ce135"
