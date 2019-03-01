@@ -1,14 +1,18 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
@@ -34,11 +38,34 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	klog.Infof("waiting for oidc provider to become ready...")
 
 	// get client transport to the API server
-	transport, err := rest.TransportFor(p.restClient)
+	//transport, err := rest.TransportFor(p.restClient)
+	//if err != nil {
+	//	return err
+	//}
+	//p.clientTransport = transport
+
+	cert, err := tls.LoadX509KeyPair("client.crt", "client.key")
 	if err != nil {
-		return err
+		logrus.Fatal(err)
 	}
-	p.clientTransport = transport
+
+	// Load CA cert
+	caCert, err := ioutil.ReadFile("client.ca")
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	// Setup HTTPS client
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caCertPool,
+	}
+	tlsConfig.BuildNameToCertificate()
+
+	p.clientTransport = &http.Transport{TLSClientConfig: tlsConfig}
 
 	// get API server url
 	url, err := url.Parse(p.restClient.Host)
@@ -47,14 +74,14 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	}
 
 	// set up proxy handler using client config
-	proxy := httputil.NewSingleHostReverseProxy(url)
-	proxy.Transport = p
-	proxy.ErrorHandler = p.errorHandler
+	proxyHandler := httputil.NewSingleHostReverseProxy(url)
+	proxyHandler.Transport = p
+	proxyHandler.ErrorHandler = p.Error
 
 	time.Sleep(10 * time.Second)
 
 	// securely serve using serving config
-	err = p.secureServingInfo.Serve(proxy, time.Second*120, stopCh)
+	err = p.secureServingInfo.Serve(proxyHandler, time.Second*120, stopCh)
 	if err != nil {
 		return err
 	}
@@ -64,9 +91,9 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
-func (p *Proxy) RoundTrip(r *http.Request) (*http.Response, error) {
+func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// auth request and handle unauthed
-	info, ok, err := p.reqAuther.AuthenticateRequest(r)
+	info, ok, err := p.reqAuther.AuthenticateRequest(req)
 	if err != nil {
 		klog.Errorf("unable to authenticate the request due to an error: %v", err)
 		return nil, errUnauthorized
@@ -77,7 +104,7 @@ func (p *Proxy) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	// check for incoming impersonation headers and reject if any exists
-	for h := range r.Header {
+	for h := range req.Header {
 		if h == authtypes.ImpersonateUserHeader ||
 			h == authtypes.ImpersonateGroupHeader ||
 			strings.HasPrefix(h, authtypes.ImpersonateUserExtraHeaderPrefix) {
@@ -93,13 +120,12 @@ func (p *Proxy) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	// set impersonation header using authenticated identity name
-	r.Header.Set(authtypes.ImpersonateUserHeader, name)
+	req.Header.Set(authtypes.ImpersonateUserHeader, name)
 
-	// return through normal client transport layer function
-	return p.clientTransport.RoundTrip(r)
+	return p.clientTransport.RoundTrip(req)
 }
 
-func (p *Proxy) errorHandler(rw http.ResponseWriter, r *http.Request, err error) {
+func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
 	switch err {
 
 	// failed auth
