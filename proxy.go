@@ -136,7 +136,7 @@ func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
 
 		rw.WriteHeader(http.StatusForbidden)
 		if _, err := rw.Write(
-			[]byte("No name available in OIDC info response"),
+			[]byte("Username claim not available in OIDC Issuer response"),
 		); err != nil {
 			klog.Errorf("failed to write Unauthorized to client response: %s", err)
 		}

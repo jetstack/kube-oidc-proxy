@@ -244,17 +244,6 @@
   revision = "a9fbbdc8dd8794b20af358382ab780559bca589d"
 
 [[projects]]
-  branch = "master"
-  digest = "1:d6c13a378213e3de60445e49084b8a0a9ce582776dfc77927775dbeb3ff72a35"
-  name = "github.com/docker/spdystream"
-  packages = [
-    ".",
-    "spdy",
-  ]
-  pruneopts = ""
-  revision = "6480d4af844c189cf5dd913db24ddd339d3a4f85"
-
-[[projects]]
   digest = "1:044b2f1eea2f5cfb0d3678baf60892734f59d5c2ea3932cb6ed894a97ccba15c"
   name = "github.com/elazarl/go-bindata-assetfs"
   packages = ["."]
@@ -560,14 +549,6 @@
   version = "1.0.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:d33ce379780d7c43405b9251289493cabada82f6bf9ab35eea6915d04f6ac8e0"
-  name = "github.com/mxk/go-flowrate"
-  packages = ["flowrate"]
-  pruneopts = ""
-  revision = "cca7078d478f8520f85629ad7c68962d31ed7682"
-
-[[projects]]
   digest = "1:5d9b668b0b4581a978f07e7d2e3314af18eb27b3fb5d19b70185b7c575723d11"
   name = "github.com/opencontainers/go-digest"
   packages = ["."]
@@ -794,8 +775,6 @@
   packages = [
     "context",
     "context/ctxhttp",
-    "html",
-    "html/atom",
     "http/httpguts",
     "http2",
     "http2/hpack",
@@ -1116,15 +1095,12 @@
     "pkg/util/diff",
     "pkg/util/errors",
     "pkg/util/framer",
-    "pkg/util/httpstream",
-    "pkg/util/httpstream/spdy",
     "pkg/util/initialization",
     "pkg/util/intstr",
     "pkg/util/json",
     "pkg/util/mergepatch",
     "pkg/util/naming",
     "pkg/util/net",
-    "pkg/util/proxy",
     "pkg/util/rand",
     "pkg/util/runtime",
     "pkg/util/sets",
@@ -1139,7 +1115,6 @@
     "pkg/version",
     "pkg/watch",
     "third_party/forked/golang/json",
-    "third_party/forked/golang/netutil",
     "third_party/forked/golang/reflect",
   ]
   pruneopts = ""
@@ -1410,7 +1385,6 @@
     "tools/reference",
     "tools/watch",
     "transport",
-    "transport/spdy",
     "util/buffer",
     "util/cert",
     "util/connrotation",
@@ -1729,10 +1703,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
-    "k8s.io/apimachinery/pkg/util/httpstream",
-    "k8s.io/apimachinery/pkg/util/proxy",
     "k8s.io/apiserver/pkg/authentication/request/bearertoken",
     "k8s.io/apiserver/pkg/server",
     "k8s.io/apiserver/pkg/util/flag",
@@ -1740,7 +1711,6 @@
     "k8s.io/apiserver/plugin/pkg/authenticator/token/oidc",
     "k8s.io/cli-runtime/pkg/genericclioptions",
     "k8s.io/client-go/rest",
-    "k8s.io/client-go/transport/spdy",
     "k8s.io/klog",
     "k8s.io/kubernetes/pkg/apis/authentication",
     "k8s.io/kubernetes/pkg/kubeapiserver/options",
