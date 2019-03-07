@@ -12,6 +12,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/transport"
 	"k8s.io/klog"
 	authtypes "k8s.io/kubernetes/pkg/apis/authentication"
 )
@@ -30,19 +31,37 @@ type Proxy struct {
 	clientTransport http.RoundTripper
 }
 
+// authHeaderExtractor is used to push a fake request though
+type authHeaderExtractor struct {
+	req *http.Request
+}
+
 func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	klog.Infof("waiting for oidc provider to become ready...")
 
-	// get client transport to the API server
+	// get golang tls config to the API server
 	tlsConfig, err := rest.TLSConfigFor(p.restConfig)
 	if err != nil {
 		return err
 	}
-	tlsConfig.BuildNameToCertificate()
 
-	p.clientTransport = &http.Transport{
+	// create tls transport to request
+	tlsTransport := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
+
+	// get kube transport config form rest client config
+	restTransportConfig, err := p.restConfig.TransportConfig()
+	if err != nil {
+		return err
+	}
+
+	// wrap golang tls config with kube transport round tripper
+	clientRT, err := transport.HTTPWrappersForConfig(restTransportConfig, tlsTransport)
+	if err != nil {
+		return err
+	}
+	p.clientTransport = clientRT
 
 	// get API server url
 	url, err := url.Parse(p.restConfig.Host)
@@ -50,7 +69,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 		return fmt.Errorf("failed to parse url: %s", err)
 	}
 
-	// set up proxy handler using client config
+	// set up proxy handler using proxy
 	proxyHandler := httputil.NewSingleHostReverseProxy(url)
 	proxyHandler.Transport = p
 	proxyHandler.ErrorHandler = p.Error
@@ -82,68 +101,71 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// check for incoming impersonation headers and reject if any exists
-	for h := range req.Header {
-		if h == authtypes.ImpersonateUserHeader ||
-			h == authtypes.ImpersonateGroupHeader ||
-			strings.HasPrefix(h, authtypes.ImpersonateUserExtraHeaderPrefix) {
-			return nil, errors.New(errImpersonateHeader)
-		}
+	if p.hasImpersonation(req.Header) {
+		return nil, errors.New(errImpersonateHeader)
 	}
 
-	name := info.User.GetName()
+	user := info.User
 
 	// no name available so reject request
-	if name == "" {
+	if user.GetName() == "" {
 		return nil, errors.New(errNoName)
 	}
 
-	// set impersonation header using authenticated identity name
-	req.Header.Set(authtypes.ImpersonateUserHeader, name)
+	// set impersonation header using authenticated user identity
+	conf := transport.ImpersonationConfig{
+		UserName: user.GetName(),
+		Groups:   user.GetGroups(),
+		Extra:    user.GetExtra(),
+	}
+	rt := transport.NewImpersonatingRoundTripper(conf, p.clientTransport)
 
-	// push request through our TLS client to the API server
-	return p.clientTransport.RoundTrip(req)
+	// push request through round trippers to the API server
+	return rt.RoundTrip(req)
+}
+
+func (p *Proxy) hasImpersonation(header http.Header) bool {
+	for h := range header {
+		if h == authtypes.ImpersonateUserHeader ||
+			h == authtypes.ImpersonateGroupHeader ||
+			strings.HasPrefix(h, authtypes.ImpersonateUserExtraHeaderPrefix) {
+
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
+	if err == nil {
+		klog.Error("error was called with no error")
+		http.Error(rw, "", http.StatusInternalServerError)
+	}
+
 	switch err.Error() {
 
 	// failed auth
 	case errUnauthorized:
 		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
-
-		rw.WriteHeader(http.StatusUnauthorized)
-		if _, err := rw.Write([]byte("Unauthorized")); err != nil {
-			klog.Errorf(
-				"failed to write Unauthorized to client response (%s): %s", r.RemoteAddr, err)
-		}
+		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 		return
 
 		// user request with impersonation
 	case errImpersonateHeader:
 		klog.V(2).Infof("impersonation user request %s", r.RemoteAddr)
 
-		rw.WriteHeader(http.StatusForbidden)
-		if _, err := rw.Write(
-			[]byte("Impersonation requests are disabled when using kube-oidc-proxy"),
-		); err != nil {
-			klog.Errorf("failed to write Unauthorized to client response: %s", err)
-		}
+		http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
 		return
 
 		// no name given or available in oidc response
 	case errNoName:
 		klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
-
-		rw.WriteHeader(http.StatusForbidden)
-		if _, err := rw.Write(
-			[]byte("Username claim not available in OIDC Issuer response"),
-		); err != nil {
-			klog.Errorf("failed to write Unauthorized to client response: %s", err)
-		}
+		http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
 
 		// server or unknown error
 	default:
 		klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
-		rw.WriteHeader(http.StatusBadGateway)
+		http.Error(rw, "", http.StatusInternalServerError)
 	}
 }

@@ -40,7 +40,7 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// client rest config
-			restConfig, err := clientConfigFlags.ToRawKubeConfigLoader().ClientConfig()
+			restConfig, err := clientConfigFlags.ToRESTConfig()
 			if err != nil {
 				return err
 			}
