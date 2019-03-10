@@ -1,0 +1,14 @@
+# From http://apetec.com/support/GenerateSAN-CSR.htm
+
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+
+[req_distinguished_name]
+commonName = HOSTNAME
+commonName_max	= 64
+
+[ v3_req ]
+# Extensions to add to a certificate request
+basicConstraints = CA:FALSE
+extendedKeyUsage = clientAuth,serverAuth

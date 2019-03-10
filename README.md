@@ -103,18 +103,16 @@ clusters:
 - cluster:
     certificate-authority: ./demo/generated/ca.pem
     server: https://[url|ip:443]
-  name: kube-oidc-proxy
+  name: *
 contexts:
 - context:
-    cluster: kube-oidc-proxy
-    namespace: kube-oidc-proxy
-    user: joshua.vanleeuwen@jetstack.io
-  name: kube-oidc-proxy
-current-context: kube-oidc-proxy
+    cluster: *
+    user: *
+  name: *
 kind: Config
 preferences: {}
 users:
-- name: username
+- name: *
   user:
     auth-provider:
       config:
