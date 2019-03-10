@@ -11,6 +11,7 @@ import (
 	"k8s.io/apiserver/pkg/util/globalflag"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/rest"
 	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 	"k8s.io/kubernetes/pkg/version/verflag"
 )
@@ -39,10 +40,16 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Use:  "k8s-oidc-proxy",
 		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
 			// client rest config
-			restConfig, err := clientConfigFlags.ToRESTConfig()
+			restConfig, err := rest.InClusterConfig()
 			if err != nil {
-				return err
+
+				// fall back to cli flags if in cluster fails
+				restConfig, err = clientConfigFlags.ToRESTConfig()
+				if err != nil {
+					return err
+				}
 			}
 
 			// oidc config
