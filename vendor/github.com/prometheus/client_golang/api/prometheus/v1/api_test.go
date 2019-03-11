@@ -158,6 +158,12 @@ func TestAPIs(t *testing.T) {
 		}
 	}
 
+	doRules := func() func() (interface{}, error) {
+		return func() (interface{}, error) {
+			return promAPI.Rules(context.Background())
+		}
+	}
+
 	doTargets := func() func() (interface{}, error) {
 		return func() (interface{}, error) {
 			return promAPI.Targets(context.Background())
@@ -461,6 +467,108 @@ func TestAPIs(t *testing.T) {
 		},
 
 		{
+			do:        doRules(),
+			reqMethod: "GET",
+			reqPath:   "/api/v1/rules",
+			inRes: map[string]interface{}{
+				"groups": []map[string]interface{}{
+					{
+						"file":     "/rules.yaml",
+						"interval": 60,
+						"name":     "example",
+						"rules": []map[string]interface{}{
+							{
+								"alerts": []map[string]interface{}{
+									{
+										"activeAt": testTime.UTC().Format(time.RFC3339Nano),
+										"annotations": map[string]interface{}{
+											"summary": "High request latency",
+										},
+										"labels": map[string]interface{}{
+											"alertname": "HighRequestLatency",
+											"severity":  "page",
+										},
+										"state": "firing",
+										"value": 1,
+									},
+								},
+								"annotations": map[string]interface{}{
+									"summary": "High request latency",
+								},
+								"duration": 600,
+								"health":   "ok",
+								"labels": map[string]interface{}{
+									"severity": "page",
+								},
+								"name":  "HighRequestLatency",
+								"query": "job:request_latency_seconds:mean5m{job=\"myjob\"} > 0.5",
+								"type":  "alerting",
+							},
+							{
+								"health": "ok",
+								"name":   "job:http_inprogress_requests:sum",
+								"query":  "sum(http_inprogress_requests) by (job)",
+								"type":   "recording",
+							},
+						},
+					},
+				},
+			},
+			res: RulesResult{
+				Groups: []RuleGroup{
+					{
+						Name:     "example",
+						File:     "/rules.yaml",
+						Interval: 60,
+						Rules: []interface{}{
+							AlertingRule{
+								Alerts: []*Alert{
+									{
+										ActiveAt: testTime.UTC(),
+										Annotations: model.LabelSet{
+											"summary": "High request latency",
+										},
+										Labels: model.LabelSet{
+											"alertname": "HighRequestLatency",
+											"severity":  "page",
+										},
+										State: AlertStateFiring,
+										Value: 1,
+									},
+								},
+								Annotations: model.LabelSet{
+									"summary": "High request latency",
+								},
+								Labels: model.LabelSet{
+									"severity": "page",
+								},
+								Duration:  600,
+								Health:    RuleHealthGood,
+								Name:      "HighRequestLatency",
+								Query:     "job:request_latency_seconds:mean5m{job=\"myjob\"} > 0.5",
+								LastError: "",
+							},
+							RecordingRule{
+								Health:    RuleHealthGood,
+								Name:      "job:http_inprogress_requests:sum",
+								Query:     "sum(http_inprogress_requests) by (job)",
+								LastError: "",
+							},
+						},
+					},
+				},
+			},
+		},
+
+		{
+			do:        doRules(),
+			reqMethod: "GET",
+			reqPath:   "/api/v1/rules",
+			inErr:     fmt.Errorf("some error"),
+			err:       fmt.Errorf("some error"),
+		},
+
+		{
 			do:        doTargets(),
 			reqMethod: "GET",
 			reqPath:   "/api/v1/targets",
@@ -497,7 +605,7 @@ func TestAPIs(t *testing.T) {
 			res: TargetsResult{
 				Active: []ActiveTarget{
 					{
-						DiscoveredLabels: model.LabelSet{
+						DiscoveredLabels: map[string]string{
 							"__address__":      "127.0.0.1:9090",
 							"__metrics_path__": "/metrics",
 							"__scheme__":       "http",
@@ -515,7 +623,7 @@ func TestAPIs(t *testing.T) {
 				},
 				Dropped: []DroppedTarget{
 					{
-						DiscoveredLabels: model.LabelSet{
+						DiscoveredLabels: map[string]string{
 							"__address__":      "127.0.0.1:9100",
 							"__metrics_path__": "/metrics",
 							"__scheme__":       "http",

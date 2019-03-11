@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
@@ -34,6 +35,8 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	secureServingOptions := apiserveroptions.NewSecureServingOptions()
 	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
 	clientConfigFlags := genericclioptions.NewConfigFlags()
+
+	healthCheck := NewHealthCheck()
 
 	// proxy command
 	cmd := &cobra.Command{
@@ -87,6 +90,9 @@ func newRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			if err := p.Run(stopCh); err != nil {
 				return err
 			}
+
+			time.Sleep(time.Second * 3)
+			healthCheck.Ready()
 
 			<-stopCh
 
