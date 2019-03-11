@@ -31,6 +31,12 @@ spec:
       - image: gcr.io/jetstack-josh/kube-oidc-proxy
         ports:
         - containerPort: 443
+        - containerPort: 8080
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
         name: kube-oidc-proxy
         args:
           - "--secure-port=443"
