@@ -1,4 +1,5 @@
-package main
+// Copyright Jetstack Ltd. See LICENSE for details.
+package proxy
 
 import (
 	"errors"
@@ -34,6 +35,15 @@ type Proxy struct {
 // authHeaderExtractor is used to push a fake request though
 type authHeaderExtractor struct {
 	req *http.Request
+}
+
+func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
+	ssinfo *server.SecureServingInfo) *Proxy {
+	return &Proxy{
+		restConfig:        restConfig,
+		reqAuther:         auther,
+		secureServingInfo: ssinfo,
+	}
 }
 
 func (p *Proxy) Run(stopCh <-chan struct{}) error {

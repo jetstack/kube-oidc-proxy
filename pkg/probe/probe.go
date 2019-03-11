@@ -1,4 +1,5 @@
-package main
+// Copyright Jetstack Ltd. See LICENSE for details.
+package probe
 
 import (
 	"errors"
@@ -13,7 +14,7 @@ type HealthCheck struct {
 	ready   bool
 }
 
-func NewHealthCheck() *HealthCheck {
+func New() *HealthCheck {
 	h := &HealthCheck{
 		handler: healthcheck.NewHandler(),
 	}
@@ -34,14 +35,14 @@ func (h *HealthCheck) Check() error {
 	return nil
 }
 
-func (h *HealthCheck) Ready() {
+func (h *HealthCheck) SetReady() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	h.ready = true
 }
 
-func (h *HealthCheck) NotReady() {
+func (h *HealthCheck) SetNotReady() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

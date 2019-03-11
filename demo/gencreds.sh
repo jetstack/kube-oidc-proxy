@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# Copyright Jetstack Ltd. See LICENSE for details.
+
 set -o errexit
 set -o pipefail
 
