@@ -17,7 +17,7 @@ server once authenticated, impersonation is disabled for user requests to the
 API server.
 
 The following is a diagram of the request flow for a user request.
-![kube-oidc-proxy request flow](/imgs/kube-oidc-proxy.png)
+![kube-oidc-proxy request flow](/img/kube-oidc-proxy.png)
 
 ## Quickstart
 This quickstart demo will assume you have a Kubernetes cluster with OIDC
