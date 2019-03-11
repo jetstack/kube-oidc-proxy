@@ -1,3 +1,7 @@
+required = [
+  "github.com/golang/mock/mockgen"
+]
+
 [[override]]
   name = "k8s.io/api"
   version = "kubernetes-1.13.4"

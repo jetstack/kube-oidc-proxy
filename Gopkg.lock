@@ -331,6 +331,18 @@
   revision = "5b532d6fd5efaf7fa130d4e859a2fde0fc3a9e1b"
 
 [[projects]]
+  digest = "1:530233672f656641b365f8efb38ed9fba80e420baff2ce87633813ab3755ed6d"
+  name = "github.com/golang/mock"
+  packages = [
+    "gomock",
+    "mockgen",
+    "mockgen/model",
+  ]
+  pruneopts = ""
+  revision = "51421b967af1f557f93a59e0057aaf15ca02e29c"
+  version = "v1.2.0"
+
+[[projects]]
   digest = "1:d3d38150b6d77b2aad42a9e105170538b6563518993d43df78a1add6e31cce62"
   name = "github.com/golang/protobuf"
   packages = [
@@ -1711,8 +1723,11 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/golang/mock/gomock",
+    "github.com/golang/mock/mockgen",
     "github.com/heptiolabs/healthcheck",
     "github.com/spf13/cobra",
+    "k8s.io/apiserver/pkg/authentication/authenticator",
     "k8s.io/apiserver/pkg/authentication/request/bearertoken",
     "k8s.io/apiserver/pkg/server",
     "k8s.io/apiserver/pkg/util/flag",

@@ -2,7 +2,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -20,6 +22,10 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 )
 
+const (
+	readinessProbePort = 8080
+)
+
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	// flag option structs
 	oidcOptions := &apiserveroptions.BuiltInAuthenticationOptions{
@@ -29,13 +35,17 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
 	clientConfigFlags := genericclioptions.NewConfigFlags()
 
-	healthCheck := probe.New()
+	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
 
 	// proxy command
 	cmd := &cobra.Command{
 		Use:  "k8s-oidc-proxy",
 		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			if secureServingOptions.SecureServingOptions.BindPort == 8080 {
+				return errors.New("unable to securely serve on port 8080, used by readiness prob")
+			}
 
 			// client rest config
 			restConfig, err := rest.InClusterConfig()
