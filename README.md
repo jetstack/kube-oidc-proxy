@@ -4,13 +4,13 @@ kube-oidc-proxy is a reverse proxy server to authenticate users using OIDC for
 Kubernetes API servers without OIDC authentication available.
 
 This intermediary server takes kubectl requests, authenticates the request using
-the configured OIDC Kubernetes authenticator, attaches impersonation headers
-based on the OIDC response from the configured provider with the users provided
-token. This impersonated request is then sent to the API server on behalf of the
-user and it's response passed back. The server has flag parity with secure
-serving and OIDC authentication that are available with the Kubernetes API
-server as well as client flags provided by kubectl. In cluster client
-authentication is also available when running kube-oidc-proxy in cluster.
+the configured OIDC Kubernetes authenticator, then attaches impersonation
+headers based on the OIDC response from the configured provider. This
+impersonated request is then sent to the API server on behalf of the user and
+it's response passed back. The server has flag parity with secure serving and
+OIDC authentication that are available with the Kubernetes API server as well as
+client flags provided by kubectl. In cluster client authentication is also
+available when running kube-oidc-proxy as a pod.
 
 Since the proxy server utilises impersonation to forward requests to the API
 server once authenticated, impersonation is disabled for user requests to the
@@ -22,13 +22,13 @@ The following is a diagram of the request flow for a user request.
 ## Quickstart
 This quickstart demo will assume you have a Kubernetes cluster with OIDC
 authentication unavailable as well as an OIDC client created with your chosen
-provider. We will be using a Service with type LoadBalancer to expose it to the
-outside world can be changed depending on what is available and what suites your
-set up best.
+provider. We will be using a Service with type `LoadBalancer` to expose it to
+the outside world. This can be changed depending on what is available and what
+suites your set up best.
 
 Firstly deploy `kube-oidc-proxy` and it's related resources into your cluster.
 This will create it's Deployment, Service Account and required permissions into
-the into the newly created `kube-oidc-proxy` namespace.
+the newly created `kube-oidc-proxy` Namespace.
 
 ```
 $ kubectl apply -f ./demo/kube-oidc-porxy.yaml
