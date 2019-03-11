@@ -43,7 +43,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			if secureServingOptions.SecureServingOptions.BindPort == 8080 {
+			if secureServingOptions.SecureServingOptions.BindPort == readinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 

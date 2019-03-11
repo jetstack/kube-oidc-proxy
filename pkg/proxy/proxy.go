@@ -18,10 +18,15 @@ import (
 	authtypes "k8s.io/kubernetes/pkg/apis/authentication"
 )
 
-const (
-	errUnauthorized      = "Unauthorized"
-	errImpersonateHeader = "Impersonate-User in header"
-	errNoName            = "No name in OIDC info"
+var (
+	errUnauthorized      = errors.New("Unauthorized")
+	errImpersonateHeader = errors.New("Impersonate-User in header")
+	errNoName            = errors.New("No name in OIDC info")
+
+	// http headers are case-insensitive
+	impersonateUserHeader  = strings.ToLower(authtypes.ImpersonateUserHeader)
+	impersonateGroupHeader = strings.ToLower(authtypes.ImpersonateGroupHeader)
+	impersonateExtraHeader = strings.ToLower(authtypes.ImpersonateUserExtraHeaderPrefix)
 )
 
 type Proxy struct {
@@ -103,23 +108,23 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	info, ok, err := p.reqAuther.AuthenticateRequest(req)
 	if err != nil {
 		klog.Errorf("unable to authenticate the request due to an error: %v", err)
-		return nil, errors.New(errUnauthorized)
+		return nil, errUnauthorized
 	}
 
 	if !ok {
-		return nil, errors.New(errUnauthorized)
+		return nil, errUnauthorized
 	}
 
 	// check for incoming impersonation headers and reject if any exists
 	if p.hasImpersonation(req.Header) {
-		return nil, errors.New(errImpersonateHeader)
+		return nil, errImpersonateHeader
 	}
 
 	user := info.User
 
 	// no name available so reject request
 	if user.GetName() == "" {
-		return nil, errors.New(errNoName)
+		return nil, errNoName
 	}
 
 	// set impersonation header using authenticated user identity
@@ -135,10 +140,10 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {
-	for h := range header {
-		if h == authtypes.ImpersonateUserHeader ||
-			h == authtypes.ImpersonateGroupHeader ||
-			strings.HasPrefix(h, authtypes.ImpersonateUserExtraHeaderPrefix) {
+	for h, _ := range header {
+		if strings.ToLower(h) == impersonateUserHeader ||
+			strings.ToLower(h) == impersonateGroupHeader ||
+			strings.HasPrefix(strings.ToLower(h), impersonateExtraHeader) {
 
 			return true
 		}
@@ -151,9 +156,10 @@ func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
 	if err == nil {
 		klog.Error("error was called with no error")
 		http.Error(rw, "", http.StatusInternalServerError)
+		return
 	}
 
-	switch err.Error() {
+	switch err {
 
 	// failed auth
 	case errUnauthorized:
