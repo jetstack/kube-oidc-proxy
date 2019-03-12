@@ -3,15 +3,15 @@ package probe
 
 import (
 	"fmt"
-	"net"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 func Test_Check(t *testing.T) {
-	port, err := freePort()
+	port, err := utils.FreePort()
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -54,18 +54,4 @@ func Test_Check(t *testing.T) {
 		t.Errorf("expected ready probe to be responding and not ready, exp=%d got=%d",
 			503, resp.StatusCode)
 	}
-}
-
-func freePort() (string, error) {
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{
-		IP:   net.ParseIP("127.0.0.1"),
-		Port: 0,
-	})
-	if err != nil {
-		return "", err
-	}
-	defer l.Close()
-
-	port := l.Addr().(*net.TCPAddr).Port
-	return strconv.Itoa(port), nil
 }
