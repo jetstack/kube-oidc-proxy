@@ -13,11 +13,15 @@ ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
 	DEP_URL := https://github.com/golang/dep/releases/download/v0.5.1/dep-linux-amd64
 	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
+	KIND_URL := https://github.com/kubernetes-sigs/kind/releases/download/0.1.0/kind-linux-amd64
+	KIND_HASH := 7566c0117d824731be5caee10fef0a88fb65e3508ee22a305dc17507ee87d874
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
 	DEP_URL := https://github.com/golang/dep/releases/download/v0.5.1/dep-darwin-amd64
 	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
+	KIND_URL := https://github.com/kubernetes-sigs/kind/releases/download/0.1.0/kind-darwin-amd64
+	KIND_HASH := ce85d3ed3d03702af0e9c617098249aff2e0811e1202036b260b23df4551f3ad
 endif
 
 $(BINDIR)/mockgen:
@@ -30,7 +34,13 @@ $(BINDIR)/dep:
 	echo "$(DEP_HASH)  $@" | $(SHASUM)
 	chmod +x $@
 
-depend: $(BINDIR)/mockgen $(BINDIR)/dep
+$(BINDIR)/kind:
+	mkdir -p $(BINDIR)
+	curl -sL -o $@ $(KIND_URL)
+	echo "$(KIND_HASH)  $@" | $(SHASUM)
+	chmod +x $@
+
+depend: $(BINDIR)/mockgen $(BINDIR)/dep $(BINDIR)/kind
 
 verify_boilerplate:
 	$(HACK_DIR)/verify-boilerplate.sh
@@ -48,7 +58,7 @@ go_fmt:
 	fi
 
 go_vet:
-	go vet $$(go list ./pkg/... ./cmd/...| grep -v pkg/wing/client/clientset/internalversion/fake | grep -v pkg/wing/client/clientset/versioned/fake)
+	go vet $$(go list ./pkg/... ./cmd/...)
 
 clean: ## clean up created files
 	rm -rf \
@@ -62,7 +72,10 @@ generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)
 
 test: generate verify ## run all go tests
-	go test $$(go list ./pkg/... ./cmd/...)
+	go test $$(go list ./pkg/... ./cmd/... | grep -v cmd/e2e)
+
+e2e: build ## run end to end tests
+	go test ./cmd/e2e/. -v
 
 build: generate ## build kube-oidc-proxy
 	CGO_ENABLED=0 go build
