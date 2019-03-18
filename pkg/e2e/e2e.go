@@ -3,14 +3,8 @@ package e2e
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -19,7 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/client-go/rest"
+	jose "gopkg.in/square/go-jose.v2"
+	"k8s.io/client-go/kubernetes"
 
 	// required to register oidc auth plugin for rest client
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -29,20 +24,22 @@ import (
 )
 
 type E2E struct {
-	apiserverCnf *rest.Config
-	t            *testing.T
+	clientset *kubernetes.Clientset
 
+	signer    jose.Signer
+	wrappedRT *wraperRT
+	issuer    *issuer.Issuer
+	client    *http.Client
+	proxyCmd  *exec.Cmd
+
+	proxyPort       string
 	proxyKubeconfig string
 	tmpDir          string
 }
 
-type token struct {
-	header, payload, sig string
-}
-
 type wraperRT struct {
 	transport http.RoundTripper
-	token     *token
+	token     string
 }
 
 func (w *wraperRT) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -50,237 +47,105 @@ func (w *wraperRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	return w.transport.RoundTrip(r)
 }
 
-func New(t *testing.T, kubeconfig, tmpDir string,
-	apiserverCnf *rest.Config) *E2E {
+func New(kubeconfig, tmpDir string,
+	clientset *kubernetes.Clientset) *E2E {
 	return &E2E{
-		apiserverCnf:    apiserverCnf,
-		t:               t,
+		clientset:       clientset,
 		tmpDir:          tmpDir,
 		proxyKubeconfig: kubeconfig,
 	}
 }
 
-func (e *E2E) Run() {
-	proxyCmd, issuer, proxyTransport, proxyPort, err := e.newIssuerProxyPair()
+func (e *E2E) Run() error {
+	proxyTransport, err := e.newIssuerProxyPair()
 	if err != nil {
-		e.t.Error(err)
-		return
+		return err
 	}
 
-	client := http.DefaultClient
-	wrappedRT := &wraperRT{
+	e.client = http.DefaultClient
+	e.wrappedRT = &wraperRT{
 		transport: proxyTransport,
 	}
-	client.Transport = wrappedRT
+	e.client.Transport = e.wrappedRT
 
-	validToken := &token{
-		header: "some header",
-		payload: fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["test-client-1","kube-oidc-proy_e2e_client-id"],
-"exp":%d,
-"alg":"RS256"
-}`, issuer.Port(), time.Now().Add(time.Minute).Unix()),
-	}
+	return nil
+}
 
-	b, err := ioutil.ReadFile(issuer.KeyPath())
+func (e *E2E) test(t *testing.T, payload []byte, target string, expCode int, expBody []byte) {
+	jwt, err := e.signer.Sign(payload)
 	if err != nil {
-		e.t.Error(err)
+		t.Error(fmt.Errorf("failed to sign jwt: %s", err))
 		return
 	}
 
-	b = bytes.TrimSpace(b)
-	p, rest := pem.Decode(b)
-	if len(rest) != 0 {
-		e.t.Errorf("got rest decoding pem file %s: %s",
-			issuer.KeyPath(), rest)
-		return
-	}
-
-	sk, err := x509.ParsePKCS1PrivateKey(p.Bytes)
+	e.wrappedRT.token, err = jwt.CompactSerialize()
 	if err != nil {
-		e.t.Error(err)
+		t.Error(err)
 		return
 	}
 
-	hashed := sha256.Sum256([]byte(validToken.payload))
-	signature, err := rsa.SignPKCS1v15(rand.Reader, sk, crypto.SHA256, hashed[:])
+	resp, err := e.client.Get(target)
 	if err != nil {
-		e.t.Error(err)
+		t.Error(err)
 		return
 	}
 
-	validToken.sig = fmt.Sprintf(`{
-"signature":"%s"
-}`, validToken.encode(string(signature)))
-
-	wrappedRT.token = validToken
-
-	tests := []struct {
-		header, payload, sig string
-		expCode              int
-		expBody              string
-	}{
-
-		// no bearer token
-		{
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// invalid bearer token
-		{
-			header:  "bad-header",
-			payload: "bad-payload",
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// wrong issuer
-		{
-			header:  "{}",
-			payload: `{"iss":"incorrect issuer"}`,
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// correct issuer, no audience
-		{
-			header:  "{}",
-			payload: fmt.Sprintf(`{"iss":"https://127.0.0.1:%s"}`, issuer.Port()),
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// wrong audience
-		{
-			header: "{}",
-			payload: fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["test-client-1","test-client-2"]
-}`, issuer.Port()),
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// correct audience
-		{
-			header: "{}",
-			payload: fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["test-client-1","kube-oidc-proy_e2e_client-id"]
-}`, issuer.Port()),
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// token expires now
-		{
-			header: "{}",
-			payload: fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["test-client-1","kube-oidc-proy_e2e_client-id"],
-"exp":%d
-}`, issuer.Port(), time.Now().Unix()),
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// token in date
-		{
-			header: "{}",
-			payload: fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["test-client-1","kube-oidc-proy_e2e_client-id"],
-"exp":%d
-}`, issuer.Port(), time.Now().Add(time.Minute).Unix()),
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
-
-		// wrong signature algorithm
-		{
-			header: "{}",
-			payload: fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["test-client-1","kube-oidc-proy_e2e_client-id"],
-"exp":%d,
-"alg":"foo"
-}`, issuer.Port(), time.Now().Add(time.Minute).Unix()),
-			sig:     "bad-sig",
-			expCode: 401,
-			expBody: "Unauthorized\n",
-		},
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Error(err)
+		return
 	}
 
-	for _, test := range tests {
-		wrappedRT.token = &token{
-			header:  test.header,
-			payload: test.payload,
-			sig:     test.sig,
-		}
+	body = bytes.TrimSpace(body)
 
-		resp, err := http.Get(fmt.Sprintf("https://127.0.0.1:%s/api/v1/nodes", proxyPort))
-		if err != nil {
-			e.t.Error(err)
-			return
-		}
+	if resp.StatusCode != expCode {
+		t.Errorf("got unexpected status code (%s), exp=%d got=%d",
+			target, expCode, resp.StatusCode)
 
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			e.t.Error(err)
-			return
-		}
-
-		if resp.StatusCode != test.expCode {
-			e.t.Errorf("unexpected status code from request (%s.%s.%s), exp=%d got=%d",
-				test.header, test.payload, test.sig,
-				test.expCode, resp.StatusCode)
-		}
-
-		if string(b) != test.expBody {
-			e.t.Errorf("unexpected response body from request (%s.%s.%s), exp=%s got=%s",
-				test.header, test.payload, test.sig,
-				test.expBody, string(b))
+		if expBody == nil {
+			t.Errorf("got body='%s'", body)
 		}
 	}
 
-	if err := proxyCmd.Process.Kill(); err != nil {
-		e.t.Errorf("failed to kill proxy command: %s", err)
+	if expBody == nil {
+		return
+	}
+
+	if !bytes.Equal(body, expBody) {
+		t.Errorf("got unexpected response body (%s)\nexp='%s'\ngot='%s'",
+			target, expBody, body)
 	}
 }
 
-func (e *E2E) newIssuerProxyPair() (*exec.Cmd, *issuer.Issuer, *http.Transport, string, error) {
+func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	pairTmpDir, err := ioutil.TempDir(e.tmpDir, "")
 	if err != nil {
-		return nil, nil, nil, "", err
+		return nil, err
 	}
 
-	issuer := issuer.New(e.t, pairTmpDir)
+	issuer := issuer.New(pairTmpDir)
 	if err := issuer.Run(); err != nil {
-		return nil, nil, nil, "", err
+		return nil, err
+	}
+	e.issuer = issuer
+
+	proxyCertPath, proxyKeyPath, _, proxyCert, err := utils.NewTLSSelfSignedCertKey(pairTmpDir, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key pair: %s", err)
 	}
 
-	proxyCertPath, proxyKeyPath, err := utils.NewTLSSelfSignedCertKey(pairTmpDir, "")
+	signer, err := jose.NewSigner(jose.SigningKey{
+		Algorithm: jose.SignatureAlgorithm("RS256"),
+		Key:       issuer.Key(),
+	}, nil)
 	if err != nil {
-		return nil, nil, nil, "", err
+		return nil, fmt.Errorf("failed to initialise new jwt signer: %s", err)
 	}
+	e.signer = signer
 
 	certPool := x509.NewCertPool()
-	proxyCertData, err := ioutil.ReadFile(proxyCertPath)
-	if err != nil {
-		return nil, nil, nil, "", err
-	}
-
-	if ok := certPool.AppendCertsFromPEM(proxyCertData); !ok {
-		return nil, nil, nil, "", fmt.Errorf("failed to append proxy cert data to cert pool %s", proxyCertPath)
+	if ok := certPool.AppendCertsFromPEM(proxyCert); !ok {
+		return nil, fmt.Errorf("failed to append proxy cert data to cert pool %s", proxyCertPath)
 	}
 
 	transport := &http.Transport{
@@ -291,14 +156,17 @@ func (e *E2E) newIssuerProxyPair() (*exec.Cmd, *issuer.Issuer, *http.Transport, 
 
 	proxyPort, err := utils.FreePort()
 	if err != nil {
-		return nil, nil, nil, "", err
+		return nil, err
 	}
+	e.proxyPort = proxyPort
 
 	cmd := exec.Command("../../kube-oidc-proxy",
 		fmt.Sprintf("--oidc-issuer-url=https://127.0.0.1:%s", issuer.Port()),
 		fmt.Sprintf("--oidc-ca-file=%s", issuer.CertPath()),
-		"--oidc-client-id=kube-oidc-proy_e2e_client-id",
+		"--oidc-client-id=kube-oidc-proxy_e2e_client-id",
 		"--oidc-username-claim=e2e-username-claim",
+		"--oidc-groups-claim=e2e-groups-claim",
+		"--oidc-signing-algs=RS256",
 
 		"--bind-address=127.0.0.1",
 		fmt.Sprintf("--secure-port=%s", proxyPort),
@@ -306,24 +174,23 @@ func (e *E2E) newIssuerProxyPair() (*exec.Cmd, *issuer.Issuer, *http.Transport, 
 		fmt.Sprintf("--tls-private-key-file=%s", proxyKeyPath),
 
 		fmt.Sprintf("--kubeconfig=%s", e.proxyKubeconfig),
-
-		"-v=10",
 	)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Start(); err != nil {
-		return nil, nil, nil, "", err
+		return nil, err
 	}
+
+	e.proxyCmd = cmd
 
 	time.Sleep(time.Second * 13)
 
-	return cmd, issuer, transport, proxyPort, nil
+	return transport, nil
 }
 
-func (t *token) encode(part string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(part))
-}
-
-func (t *token) String() string {
-	return t.encode(t.header) + "." + t.encode(t.payload) + "." + t.encode(t.sig)
+func (e *E2E) cleanup() {
+	if e.proxyCmd != nil &&
+		e.proxyCmd.Process != nil {
+		e.proxyCmd.Process.Kill()
+	}
 }

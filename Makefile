@@ -98,7 +98,7 @@ generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)
 
 test: generate verify ## run all go tests
-	go test $$(go list ./pkg/... ./cmd/... | grep -v cmd/e2e)
+	go test $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e)
 
 e2e: e2e-1.14 ## run end to end tests
 

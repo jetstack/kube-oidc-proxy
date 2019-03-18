@@ -99,7 +99,6 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 }
 
 func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
-	fmt.Printf("header>%s<\n", req.Header)
 	// auth request and handle unauthed
 	info, ok, err := p.reqAuther.AuthenticateRequest(req)
 	if err != nil {

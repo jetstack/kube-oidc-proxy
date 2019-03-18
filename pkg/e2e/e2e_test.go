@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/e2e"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 )
@@ -18,13 +18,14 @@ const (
 	defaultNodeImage = "v1.14.0"
 )
 
-func Test_E2E(t *testing.T) {
+var e2eSuite *E2E
+
+func TestMain(m *testing.M) {
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "kube-oidc-proxy")
 	if err != nil {
-		t.Error(err)
-		return
+		fmt.Fprintf(os.Stderr, err.Error())
+		os.Exit(1)
 	}
-	defer cleanup(t, tmpDir)
 
 	nodeImage := os.Getenv("KUBE_OIDC_PROXY_NODE_IMAGE")
 	if nodeImage == "" {
@@ -44,37 +45,56 @@ func Test_E2E(t *testing.T) {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err = cmd.Run(); err != nil {
-		t.Error(err)
-		return
+		fmt.Fprintf(os.Stderr, err.Error())
+		os.Exit(1)
 	}
 
 	cmd = exec.Command("../../bin/kind", "get", "kubeconfig-path", "--name=kube-oidc-proxy-e2e")
 	out, err := cmd.Output()
 	if err != nil {
-		t.Error(err)
-		return
+		fmt.Fprintf(os.Stderr, err.Error())
+		cleanup(tmpDir, 1)
 	}
 
 	kubeconfig := strings.TrimSpace(string(out))
 
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		t.Error(err)
-		return
+		fmt.Fprintf(os.Stderr, err.Error())
+		cleanup(tmpDir, 1)
 	}
 
-	e2eSuite := e2e.New(t, kubeconfig, tmpDir, restConfig)
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, err.Error())
+		cleanup(tmpDir, 1)
+	}
+
+	e2eSuite = New(kubeconfig, tmpDir, kubeClient)
 	e2eSuite.Run()
+
+	runErr := m.Run()
+
+	e2eSuite.cleanup()
+	cleanup(tmpDir, runErr)
 }
 
-func cleanup(t *testing.T, tmpDir string) {
-	if err := os.RemoveAll(tmpDir); err != nil {
-		t.Errorf("failed to delete temp dir %s: %s", tmpDir, err)
+func cleanup(tmpDir string, exitCode int) {
+	err := os.RemoveAll(tmpDir)
+	if err != nil {
+		klog.Errorf("failed to delete temp dir %s: %s", tmpDir, err)
 	}
 
 	klog.Info("cleaning up kind cluster...")
 	cmd := exec.Command("../../bin/kind", "delete", "cluster", "--name=kube-oidc-proxy-e2e")
-	if err := cmd.Run(); err != nil {
-		t.Errorf("failed to delete kind cluster: %s", err)
+	cmdErr := cmd.Run()
+	if cmdErr != nil {
+		klog.Errorf("failed to delete kind cluster: %s", cmdErr)
 	}
+
+	if err != nil || cmdErr != nil {
+		os.Exit(1)
+	}
+
+	os.Exit(exitCode)
 }
