@@ -1,6 +1,6 @@
 locals {
   config = {
-    cert-manager = "${module.dns.config}"
+    cert_manager = "${module.dns.config}"
     externaldns  = "${module.dns.config}"
   }
 }
