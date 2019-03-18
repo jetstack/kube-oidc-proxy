@@ -16,6 +16,12 @@ local namespace = 'auth';
   config:: config,
 
   cert_manager: cert_manager {
+    google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
+      data_+: {
+        'credentials.json': $.config.cert_manager.service_account_credentials,
+      },
+    },
+
     metadata:: {
       metadata+: {
         namespace: 'kube-system',
@@ -23,13 +29,28 @@ local namespace = 'auth';
     },
     letsencrypt_contact_email:: 'simon+letsencrypt@swine.de',
     letsencrypt_environment:: 'prod',
-  },
 
-  cert_manager_google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
-    data_+: {
-      'credentials.json': $.config.externaldns.service_account_credentials,
+    letsencryptStaging+: {
+      spec+: {
+        acme+: {
+          http01: null,
+          dns01: {
+            providers: [{
+              name: 'clouddns',
+              clouddns: {
+                project: $.config.cert_manager.project,
+                serviceAccountSecretRef: {
+                  name: $.cert_manager.google_secret.metadata.name,
+                  key: 'credentials.json',
+                },
+              },
+            }],
+          },
+        },
+      },
     },
   },
+
   cert_manager_google_issuer: cert_manager.Issuer('clouddns') {
   },
 
