@@ -6,10 +6,11 @@ import (
 	"os"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd"
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 func main() {
-	stopCh := make(chan struct{})
+	stopCh := utils.SignalHandler()
 	cmd := cmd.NewRunCommand(stopCh)
 
 	if err := cmd.Execute(); err != nil {
