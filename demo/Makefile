@@ -18,7 +18,7 @@ manifests/config.json:
 
 .PHONY: manifests_apply
 manifests_apply: manifests/config.json ## Use kubecfg to apply manifests into cluster
-	kubecfg update manifests/main.jsonnet --ignore-unknown
+	kubecfg show manifests/main.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
 manifests_validate: manifests/config.json ## Use kubecfg to validate manifests
@@ -26,6 +26,4 @@ manifests_validate: manifests/config.json ## Use kubecfg to validate manifests
 
 .PHONY: manifests_destroy
 manifests_destroy: manifests/config.json ## Use kubecfg to delete manifests
-	kubecfg delete manifests/main.jsonnet
-
-
+	kubecfg show manifests/main.jsonnet | kubectl delete -f - --ignore-not-found
