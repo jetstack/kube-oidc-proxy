@@ -1,5 +1,9 @@
 CLOUD := google
 
+KUBECONFIG := $(CURDIR)/.kubeconfig-$(CLOUD)
+
+export KUBECONFIG
+
 # from https://suva.sh/posts/well-documented-makefiles/
 .PHONY: help
 help:  ## Display this help
@@ -7,7 +11,9 @@ help:  ## Display this help
 
 .PHONY: terraform_apply
 terraform_apply: ## Applies terraform infrastructure
-	cd infrastructure/$(CLOUD) && terraform init && terraform apply && terraform output config > ../../manifests/config.json
+	cd infrastructure/$(CLOUD) && terraform init && terraform apply
+	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/config.json
+	$(shell cd infrastructure/$(CLOUD) && terraform output kubeconfig_command)
 
 .PHONY: terraform_destroy
 terraform_destroy: ## Destroy terraform infrastructure
