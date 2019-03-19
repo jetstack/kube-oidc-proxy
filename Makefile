@@ -83,4 +83,4 @@ build: generate ## build kube-oidc-proxy
 docker_build: generate test build ## build docker image
 	docker build -t kube-oidc-proxy .
 
-all: test build docker_build # runs tests, build and docker build
+all: test build # runs tests and build
