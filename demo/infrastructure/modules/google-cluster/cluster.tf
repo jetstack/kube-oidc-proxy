@@ -26,6 +26,14 @@ resource "google_container_cluster" "cluster" {
 
 data "google_client_config" "default" {}
 
+output "name" {
+ value = "${google_container_cluster.cluster.name}"
+}
+
+output "project" {
+ value = "${google_container_cluster.cluster.project}"
+}
+
 output "kubeconfig" {
   value = <<EOF
 apiVersion: v1
