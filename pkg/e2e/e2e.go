@@ -129,8 +129,8 @@ func (e *E2E) Run() {
 		return
 	}
 
-	fmt.Printf(">>%s\n", b)
-	fmt.Printf(">>%s\n", resp.StatusCode)
+	fmt.Printf(">>%v\n", b)
+	fmt.Printf(">>%v\n", resp.StatusCode)
 
 	tests := []struct {
 		header, payload, sig string
@@ -258,7 +258,7 @@ func (e *E2E) Run() {
 		if resp.StatusCode != test.expCode {
 			e.t.Errorf("unexpected status code from request (%s.%s.%s), exp=%d got=%d",
 				test.header, test.payload, test.sig,
-				test.expCode, resp.Status)
+				test.expCode, resp.StatusCode)
 		}
 
 		if string(b) != test.expBody {

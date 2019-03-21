@@ -2,6 +2,7 @@
 package e2e
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -13,6 +14,10 @@ import (
 	"k8s.io/klog"
 )
 
+const (
+	defaultNodeImage = "v1.13.3"
+)
+
 func Test_E2E(t *testing.T) {
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "kube-oidc-proxy")
 	if err != nil {
@@ -21,8 +26,18 @@ func Test_E2E(t *testing.T) {
 	}
 	defer cleanup(t, tmpDir)
 
+	nodeImage := os.Getenv("KUBE_OIDC_PROXY_NODE_IMAGE")
+	if nodeImage == "" {
+		nodeImage = defaultNodeImage
+	}
+
 	command := "../../bin/kind"
-	args := []string{"create", "cluster", "--name=kube-oidc-proxy-e2e"}
+	args := []string{
+		"create",
+		"cluster",
+		"--name=kube-oidc-proxy-e2e",
+		fmt.Sprintf("--image=kindest/node:%s", nodeImage),
+	}
 
 	klog.Infof("running %s %s", command, args)
 	cmd := exec.Command(command, args...)
