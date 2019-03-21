@@ -87,13 +87,21 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	// wait for oidc auther to become ready
 	time.Sleep(10 * time.Second)
 
-	// securely serve using serving config
-	err = p.secureServingInfo.Serve(proxyHandler, time.Second*120, stopCh)
-	if err != nil {
+	if err := p.serve(proxyHandler, stopCh); err != nil {
 		return err
 	}
 
 	klog.Infof("proxy ready")
+
+	return nil
+}
+
+func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{}) error {
+	// securely serve using serving config
+	err := p.secureServingInfo.Serve(proxyHandler, time.Second*60, stopCh)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

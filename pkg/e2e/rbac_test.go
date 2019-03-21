@@ -4,7 +4,6 @@ package e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -21,8 +20,8 @@ func Test_Rbac(t *testing.T) {
 		return
 	}
 
-	coreclient := e2eSuite.clientset.Core()
-	rbacclient := e2eSuite.clientset.Rbac()
+	coreclient := e2eSuite.kubeclient.Core()
+	rbacclient := e2eSuite.kubeclient.Rbac()
 
 	defer func() {
 		err := coreclient.Namespaces().Delete(namespaceRbacTest, nil)
@@ -37,17 +36,10 @@ func Test_Rbac(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
-	validToken := []byte(fmt.Sprintf(`{
-"iss":"https://127.0.0.1:%s",
-"aud":["kube-oidc-proxy_e2e_client-id","aud-2"],
-"e2e-username-claim":"test-username",
-"e2e-groups-claim":["group-1","group-2"],
-"exp":%d
-}`, e2eSuite.issuer.Port(), time.Now().Add(time.Minute).Unix()))
+	validToken := e2eSuite.validToken()
 
 	urlPods := fmt.Sprintf(
 		"https://127.0.0.1:%s/api/v1/namespaces/%s/pods",
@@ -117,13 +109,12 @@ func Test_Rbac(t *testing.T) {
 			},
 		})
 		if err != nil {
-			t.Error(err)
-			return
+			t.Fatal(err)
 		}
 	}
 
 	// group-1 role-binding should give access to pods
-	_, err = e2eSuite.clientset.Rbac().RoleBindings(namespaceRbacTest).Create(
+	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceRbacTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding-group-1",
@@ -141,8 +132,7 @@ func Test_Rbac(t *testing.T) {
 			},
 		})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	// valid token, group RBAC to pods
@@ -152,7 +142,7 @@ func Test_Rbac(t *testing.T) {
 	e2eSuite.test(t, validToken, urlNodes, 403, nil)
 
 	// group-2 role-binding should give access to services
-	_, err = e2eSuite.clientset.Rbac().RoleBindings(namespaceRbacTest).Create(
+	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceRbacTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding-group-2",
@@ -170,8 +160,7 @@ func Test_Rbac(t *testing.T) {
 			},
 		})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	// valid token, group RBAC to pods and services
@@ -181,7 +170,7 @@ func Test_Rbac(t *testing.T) {
 	e2eSuite.test(t, validToken, urlNodes, 403, nil)
 
 	// aud-2 role-binding should not give access to secrets
-	_, err = e2eSuite.clientset.Rbac().RoleBindings(namespaceRbacTest).Create(
+	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceRbacTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding-aud-2",
@@ -199,8 +188,7 @@ func Test_Rbac(t *testing.T) {
 			},
 		})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	// valid token, group RBAC to pods, svcs
@@ -210,7 +198,7 @@ func Test_Rbac(t *testing.T) {
 	e2eSuite.test(t, validToken, urlNodes, 403, nil)
 
 	// user role-binding should give access to secrets
-	_, err = e2eSuite.clientset.Rbac().RoleBindings(namespaceRbacTest).Create(
+	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceRbacTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding-test-username",
@@ -228,8 +216,7 @@ func Test_Rbac(t *testing.T) {
 			},
 		})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	// valid token, group RBAC to pods, svcs, secrets

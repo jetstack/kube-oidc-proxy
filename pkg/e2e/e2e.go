@@ -15,6 +15,7 @@ import (
 
 	jose "gopkg.in/square/go-jose.v2"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	// required to register oidc auth plugin for rest client
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -24,17 +25,22 @@ import (
 )
 
 type E2E struct {
-	clientset *kubernetes.Clientset
+	kubeRestConfig *rest.Config
+	kubeclient     *kubernetes.Clientset
+	kubeKubeconfig string
 
 	signer    jose.Signer
 	wrappedRT *wraperRT
 	issuer    *issuer.Issuer
-	client    *http.Client
-	proxyCmd  *exec.Cmd
 
-	proxyPort       string
-	proxyKubeconfig string
-	tmpDir          string
+	proxyClient    *http.Client
+	proxyCmd       *exec.Cmd
+	proxyPort      string
+	proxyCert      []byte
+	proxyCertPath  string
+	proxyTransport *http.Transport
+
+	tmpDir string
 }
 
 type wraperRT struct {
@@ -43,48 +49,51 @@ type wraperRT struct {
 }
 
 func (w *wraperRT) RoundTrip(r *http.Request) (*http.Response, error) {
-	r.Header.Set("Authorization", fmt.Sprintf("bearer %s", w.token))
+	r.Header.Add("Authorization", fmt.Sprintf("bearer %s", w.token))
 	return w.transport.RoundTrip(r)
 }
 
 func New(kubeconfig, tmpDir string,
-	clientset *kubernetes.Clientset) *E2E {
+	kubeRestConfig *rest.Config) *E2E {
 	return &E2E{
-		clientset:       clientset,
-		tmpDir:          tmpDir,
-		proxyKubeconfig: kubeconfig,
+		kubeRestConfig: kubeRestConfig,
+		tmpDir:         tmpDir,
+		kubeKubeconfig: kubeconfig,
 	}
 }
 
 func (e *E2E) Run() error {
+	kubeclient, err := kubernetes.NewForConfig(e.kubeRestConfig)
+	if err != nil {
+		return err
+	}
+	e.kubeclient = kubeclient
+
 	proxyTransport, err := e.newIssuerProxyPair()
 	if err != nil {
 		return err
 	}
+	e.proxyTransport = proxyTransport
 
-	e.client = http.DefaultClient
+	e.proxyClient = http.DefaultClient
 	e.wrappedRT = &wraperRT{
 		transport: proxyTransport,
 	}
-	e.client.Transport = e.wrappedRT
+	e.proxyClient.Transport = e.wrappedRT
 
 	return nil
 }
 
 func (e *E2E) test(t *testing.T, payload []byte, target string, expCode int, expBody []byte) {
-	jwt, err := e.signer.Sign(payload)
-	if err != nil {
-		t.Error(fmt.Errorf("failed to sign jwt: %s", err))
-		return
-	}
-
-	e.wrappedRT.token, err = jwt.CompactSerialize()
+	signedToken, err := e.signToken(payload)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	resp, err := e.client.Get(target)
+	e.wrappedRT.token = signedToken
+
+	resp, err := e.proxyClient.Get(target)
 	if err != nil {
 		t.Error(err)
 		return
@@ -133,6 +142,8 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key pair: %s", err)
 	}
+	e.proxyCertPath = proxyCertPath
+	e.proxyCert = proxyCert
 
 	signer, err := jose.NewSigner(jose.SigningKey{
 		Algorithm: jose.SignatureAlgorithm("RS256"),
@@ -173,7 +184,7 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 		fmt.Sprintf("--tls-cert-file=%s", proxyCertPath),
 		fmt.Sprintf("--tls-private-key-file=%s", proxyKeyPath),
 
-		fmt.Sprintf("--kubeconfig=%s", e.proxyKubeconfig),
+		fmt.Sprintf("--kubeconfig=%s", e.kubeKubeconfig),
 	)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
@@ -186,6 +197,30 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	time.Sleep(time.Second * 13)
 
 	return transport, nil
+}
+
+func (e *E2E) validToken() []byte {
+	return []byte(fmt.Sprintf(`{
+	"iss":"https://127.0.0.1:%s",
+	"aud":["kube-oidc-proxy_e2e_client-id","aud-2"],
+	"e2e-username-claim":"test-username",
+	"e2e-groups-claim":["group-1","group-2"],
+	"exp":%d
+	}`, e.issuer.Port(), time.Now().Add(time.Minute).Unix()))
+}
+
+func (e *E2E) signToken(token []byte) (string, error) {
+	jwt, err := e.signer.Sign(token)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign jwt: %s", err)
+	}
+
+	signedToken, err := jwt.CompactSerialize()
+	if err != nil {
+		return "", err
+	}
+
+	return signedToken, nil
 }
 
 func (e *E2E) cleanup() {

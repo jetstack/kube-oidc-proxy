@@ -22,23 +22,22 @@ func Test_Token(t *testing.T) {
 	}
 
 	defer func() {
-		err := e2eSuite.clientset.Core().Namespaces().Delete(namespaceTokenTest, nil)
+		err := e2eSuite.kubeclient.Core().Namespaces().Delete(namespaceTokenTest, nil)
 		if err != nil {
 			t.Errorf("failed to delete test namespace: %s", err)
 		}
 	}()
 
-	_, err := e2eSuite.clientset.Core().Namespaces().Create(&corev1.Namespace{
+	_, err := e2eSuite.kubeclient.Core().Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespaceTokenTest,
 		},
 	})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
-	_, err = e2eSuite.clientset.Rbac().Roles(namespaceTokenTest).Create(&rbacv1.Role{
+	_, err = e2eSuite.kubeclient.Rbac().Roles(namespaceTokenTest).Create(&rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-username-role",
 			Namespace: namespaceTokenTest,
@@ -52,11 +51,10 @@ func Test_Token(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
-	_, err = e2eSuite.clientset.Rbac().RoleBindings(namespaceTokenTest).Create(
+	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceTokenTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding",
@@ -74,17 +72,8 @@ func Test_Token(t *testing.T) {
 			},
 		})
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
-
-	validToken := []byte(fmt.Sprintf(`{
-	"iss":"https://127.0.0.1:%s",
-	"aud":["kube-oidc-proxy_e2e_client-id","aud-2"],
-	"e2e-username-claim":"test-username",
-	"e2e-groups-claim":["group-1","group-2"],
-	"exp":%d
-	}`, e2eSuite.issuer.Port(), time.Now().Add(time.Minute).Unix()))
 
 	url := fmt.Sprintf(
 		"https://127.0.0.1:%s/api/v1/namespaces/%s/pods",
@@ -95,7 +84,7 @@ func Test_Token(t *testing.T) {
 	// valid token
 	e2eSuite.test(
 		t,
-		validToken,
+		e2eSuite.validToken(),
 		url,
 		200,
 		nil)

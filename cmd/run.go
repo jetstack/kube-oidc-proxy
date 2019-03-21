@@ -80,7 +80,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			// oidc auther from config
 			reqAuther := bearertoken.New(oidcAuther)
-			//secure serving info has a Serve( function
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := secureServingOptions.ApplyTo(&secureServingInfo, nil); err != nil {
 				return err
