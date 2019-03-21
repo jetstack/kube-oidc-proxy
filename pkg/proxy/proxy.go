@@ -37,11 +37,6 @@ type Proxy struct {
 	clientTransport http.RoundTripper
 }
 
-// authHeaderExtractor is used to push a fake request though
-type authHeaderExtractor struct {
-	req *http.Request
-}
-
 func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
 	ssinfo *server.SecureServingInfo) *Proxy {
 	return &Proxy{
@@ -141,7 +136,7 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {
-	for h, _ := range header {
+	for h := range header {
 		if strings.ToLower(h) == impersonateUserHeader ||
 			strings.ToLower(h) == impersonateGroupHeader ||
 			strings.HasPrefix(strings.ToLower(h), impersonateExtraHeader) {

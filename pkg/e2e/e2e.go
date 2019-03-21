@@ -61,7 +61,6 @@ func New(t *testing.T, kubeconfig, tmpDir string,
 }
 
 func (e *E2E) Run() {
-	//proxy, issuer, clientKubeconfig, err := e.newIssuerProxyPair()
 	proxyCmd, issuer, proxyTransport, proxyPort, err := e.newIssuerProxyPair()
 	if err != nil {
 		e.t.Error(err)
@@ -116,21 +115,6 @@ func (e *E2E) Run() {
 }`, validToken.encode(string(signature)))
 
 	wrappedRT.token = validToken
-
-	resp, err := http.Get(fmt.Sprintf("https://127.0.0.1:%s/api/v1/nodes", proxyPort))
-	if err != nil {
-		e.t.Error(err)
-		return
-	}
-
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		e.t.Error(err)
-		return
-	}
-
-	fmt.Printf(">>%v\n", b)
-	fmt.Printf(">>%v\n", resp.StatusCode)
 
 	tests := []struct {
 		header, payload, sig string
@@ -268,7 +252,9 @@ func (e *E2E) Run() {
 		}
 	}
 
-	proxyCmd.Process.Kill()
+	if err := proxyCmd.Process.Kill(); err != nil {
+		e.t.Errorf("failed to kill proxy command: %s", err)
+	}
 }
 
 func (e *E2E) newIssuerProxyPair() (*exec.Cmd, *issuer.Issuer, *http.Transport, string, error) {
@@ -332,26 +318,6 @@ func (e *E2E) newIssuerProxyPair() (*exec.Cmd, *issuer.Issuer, *http.Transport, 
 	time.Sleep(time.Second * 13)
 
 	return cmd, issuer, transport, proxyPort, nil
-}
-
-func (e *E2E) clientKubeconfig(caPath, port string) string {
-	return fmt.Sprintf(`apiVersion: v1
-clusters:
-- cluster:
-    certificate-authority: %s
-    server: https://127.0.0.1:%s
-  name: kube-oidc-proxy
-contexts:
-- context:
-    cluster: kube-oidc-proxy
-    user: test-user
-  name: test
-kind: Config
-preferences: {}
-current-context: test
-users:
-- name: test-user
-  user:`, caPath, port)
 }
 
 func (t *token) encode(part string) string {
