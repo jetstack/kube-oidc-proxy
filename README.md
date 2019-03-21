@@ -1,7 +1,8 @@
-# kube-oidc-proxy
+  # kube-oidc-proxy
 
-`kube-oidc-proxy` is a reverse proxy server to authenticate users using OIDC for
-Kubernetes API servers without OIDC authentication available.
+`kube-oidc-proxy` is a reverse proxy server to authenticate users using OIDC to
+Kubernetes API servers where OIDC authentication is not available (i.e. managed 
+Kubernetes providers such as GKE, EKS, etc).
 
 This intermediary server takes `kubectl` requests, authenticates the request using
 the configured OIDC Kubernetes authenticator, then attaches impersonation
