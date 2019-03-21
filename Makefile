@@ -15,6 +15,10 @@ ifeq ($(UNAME_S),Linux)
 	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
 	KIND_URL := https://github.com/kubernetes-sigs/kind/releases/download/0.1.0/kind-linux-amd64
 	KIND_HASH := 7566c0117d824731be5caee10fef0a88fb65e3508ee22a305dc17507ee87d874
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/linux/amd64/kubectl
+	KUBECTL_HASH := f3be209a48394e0e649b30ea376ce5093205fd6769c12e62c7ab39a0827c26fb
+	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-linux-amd64.tar.gz
+	GOLANGCILINT_HASH := f37f4a15eb309578b0546703da5ea96bc5bd472f45f204338051aaca6fbbfc5b
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
@@ -22,6 +26,10 @@ ifeq ($(UNAME_S),Darwin)
 	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
 	KIND_URL := https://github.com/kubernetes-sigs/kind/releases/download/0.1.0/kind-darwin-amd64
 	KIND_HASH := ce85d3ed3d03702af0e9c617098249aff2e0811e1202036b260b23df4551f3ad
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/darwin/amd64/kubectl
+	KUBECTL_HASH := 2ff06345a02636f1e6934f19dbc55452b587e06b2828c775dcdb29229c8da40f
+	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-darwin-amd64.tar.gz
+	GOLANGCILINT_HASH := 083941efa692bfe3c29ba709964e9fe5896889316d51813e523157c96c3153e0
 endif
 
 $(BINDIR)/mockgen:
@@ -40,7 +48,22 @@ $(BINDIR)/kind:
 	echo "$(KIND_HASH)  $@" | $(SHASUM)
 	chmod +x $@
 
-depend: $(BINDIR)/mockgen $(BINDIR)/dep $(BINDIR)/kind
+$(BINDIR)/kubectl:
+	mkdir -p $(BINDIR)
+	curl --fail -sL -o $(BINDIR)/.kubectl $(KUBECTL_URL)
+	echo "$(KUBECTL_HASH)  $(BINDIR)/.kubectl" | $(SHASUM)
+	chmod +x $(BINDIR)/.kubectl
+	mv $(BINDIR)/.kubectl $(BINDIR)/kubectl
+
+$(BINDIR)/golangci-lint:
+	mkdir -p $(BINDIR) $(BINDIR)/.golangci-lint
+	curl --fail -sL -o $(BINDIR)/.golangci-lint.tar.gz $(GOLANGCILINT_URL)
+	echo "$(GOLANGCILINT_HASH)  $(BINDIR)/.golangci-lint.tar.gz" | $(SHASUM)
+	tar xvf $(BINDIR)/.golangci-lint.tar.gz -C $(BINDIR)/.golangci-lint
+	mv $(BINDIR)/.golangci-lint/*/golangci-lint $(BINDIR)/golangci-lint
+	rm -rf $(BINDIR)/.golangci-lint $(BINDIR)/.golangci-lint.tar.gz
+
+depend: $(BINDIR)/mockgen $(BINDIR)/dep $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/golangci-lint
 
 verify_boilerplate:
 	$(HACK_DIR)/verify-boilerplate.sh
@@ -59,6 +82,9 @@ go_fmt:
 
 go_vet:
 	go vet $$(go list ./pkg/... ./cmd/...)
+
+go_lint: $(BINDIR)/golangci-lint ## Lint golang code for problems
+	$(BINDIR)/golangci-lint run
 
 clean: ## clean up created files
 	rm -rf \
