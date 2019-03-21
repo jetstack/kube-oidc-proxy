@@ -31,7 +31,7 @@ This will create it's Deployment, Service Account and required permissions into
 the newly created `kube-oidc-proxy` Namespace.
 
 ```
-$ kubectl apply -f ./demo/kube-oidc-porxy.yaml
+$ kubectl apply -f ./demo/kube-oidc-proxy.yaml
 $ kubectl get all --namespace kube-oidc-proxy
 ```
 
