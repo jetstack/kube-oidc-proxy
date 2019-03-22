@@ -137,7 +137,7 @@ func Test_Upgrade(t *testing.T) {
 			break
 		}
 
-		if i == 10 {
+		if i == 30 {
 			t.Fatalf("echo server failed to become ready: %s",
 				pod.Status.Phase)
 		}
