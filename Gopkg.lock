@@ -317,6 +317,14 @@
   revision = "d6023ce2651d8eafb5c75bb0c7167536102ec9f5"
 
 [[projects]]
+  digest = "1:23a5efa4b272df86a8ebffc942f5e0c1aac4b750836037394cc450b6d91e241a"
+  name = "github.com/fatih/camelcase"
+  packages = ["."]
+  pruneopts = ""
+  revision = "44e46d280b43ec1531bb25252440e34f1b800b65"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:c8052dcf3ec378a9a6bc4f00ecc10d6d5eb3cc1f8faaf6b2f70f047e8881d446"
   name = "github.com/go-openapi/jsonpointer"
   packages = ["."]
@@ -1175,6 +1183,7 @@
     "pkg/util/cache",
     "pkg/util/clock",
     "pkg/util/diff",
+    "pkg/util/duration",
     "pkg/util/errors",
     "pkg/util/framer",
     "pkg/util/httpstream",
@@ -1476,6 +1485,7 @@
     "tools/clientcmd/api/v1",
     "tools/metrics",
     "tools/pager",
+    "tools/portforward",
     "tools/record",
     "tools/reference",
     "tools/remotecommand",
@@ -1683,13 +1693,31 @@
     "pkg/kubeapiserver/authorizer",
     "pkg/kubeapiserver/authorizer/modes",
     "pkg/kubeapiserver/options",
+    "pkg/kubectl",
+    "pkg/kubectl/apps",
     "pkg/kubectl/cmd/exec",
+    "pkg/kubectl/cmd/portforward",
     "pkg/kubectl/cmd/util",
     "pkg/kubectl/cmd/util/openapi",
     "pkg/kubectl/cmd/util/openapi/validation",
+    "pkg/kubectl/describe",
+    "pkg/kubectl/describe/versioned",
+    "pkg/kubectl/generate",
     "pkg/kubectl/generated",
+    "pkg/kubectl/polymorphichelpers",
     "pkg/kubectl/scheme",
+    "pkg/kubectl/util",
+    "pkg/kubectl/util/certificate",
+    "pkg/kubectl/util/deployment",
+    "pkg/kubectl/util/event",
+    "pkg/kubectl/util/fieldpath",
     "pkg/kubectl/util/i18n",
+    "pkg/kubectl/util/podutils",
+    "pkg/kubectl/util/qos",
+    "pkg/kubectl/util/rbac",
+    "pkg/kubectl/util/resource",
+    "pkg/kubectl/util/slice",
+    "pkg/kubectl/util/storage",
     "pkg/kubectl/util/templates",
     "pkg/kubectl/util/term",
     "pkg/kubectl/validation",
@@ -1835,12 +1863,15 @@
     "k8s.io/client-go/rest",
     "k8s.io/client-go/tools/clientcmd",
     "k8s.io/client-go/tools/clientcmd/api",
+    "k8s.io/client-go/tools/portforward",
     "k8s.io/client-go/transport",
+    "k8s.io/client-go/transport/spdy",
     "k8s.io/client-go/util/cert",
     "k8s.io/klog",
     "k8s.io/kubernetes/pkg/apis/authentication",
     "k8s.io/kubernetes/pkg/kubeapiserver/options",
     "k8s.io/kubernetes/pkg/kubectl/cmd/exec",
+    "k8s.io/kubernetes/pkg/kubectl/cmd/portforward",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

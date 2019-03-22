@@ -14,8 +14,11 @@ import (
 	"time"
 
 	jose "gopkg.in/square/go-jose.v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	// required to register oidc auth plugin for rest client
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -37,7 +40,6 @@ type E2E struct {
 	proxyCmd       *exec.Cmd
 	proxyPort      string
 	proxyCert      []byte
-	proxyCertPath  string
 	proxyTransport *http.Transport
 
 	tmpDir string
@@ -142,7 +144,6 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key pair: %s", err)
 	}
-	e.proxyCertPath = proxyCertPath
 	e.proxyCert = proxyCert
 
 	signer, err := jose.NewSigner(jose.SigningKey{
@@ -221,6 +222,36 @@ func (e *E2E) signToken(token []byte) (string, error) {
 	}
 
 	return signedToken, nil
+}
+
+func (e *E2E) proxyRestClient() (*rest.Config, error) {
+	// valid signed token for auth to proxy
+	signedToken, err := e.signToken(e.validToken())
+	if err != nil {
+		return nil, err
+	}
+
+	// rest config pointed to proxy
+	return &rest.Config{
+		Host: fmt.Sprintf("https://127.0.0.1:%s", e.proxyPort),
+		AuthProvider: &clientcmdapi.AuthProviderConfig{
+			Name: "oidc",
+			Config: map[string]string{
+				"client-id":      "kube-oidc-proxy_e2e_client-id",
+				"id-token":       signedToken,
+				"idp-issuer-url": "https://127.0.0.1:" + e.proxyPort,
+			},
+		},
+		TLSClientConfig: rest.TLSClientConfig{
+			CAData: e.proxyCert,
+		},
+
+		APIPath: "/api",
+		ContentConfig: rest.ContentConfig{
+			GroupVersion:         &corev1.SchemeGroupVersion,
+			NegotiatedSerializer: scheme.Codecs,
+		},
+	}, nil
 }
 
 func (e *E2E) cleanup() {

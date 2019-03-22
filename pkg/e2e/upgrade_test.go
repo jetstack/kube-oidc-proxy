@@ -4,6 +4,9 @@ package e2e
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -13,10 +16,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/exec"
+	cmdportforward "k8s.io/kubernetes/pkg/kubectl/cmd/portforward"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 const (
@@ -55,16 +61,11 @@ func Test_Upgrade(t *testing.T) {
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{""},
-				Resources: []string{"pods", "pods/logs"},
+				Resources: []string{
+					"pods", "pods/exec", "pods/portforward",
+				},
 				Verbs: []string{
 					"get", "list", "create",
-				},
-			},
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods/exec"},
-				Verbs: []string{
-					"create",
 				},
 			},
 		},
@@ -94,33 +95,10 @@ func Test_Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// valid signed token for auth to proxy
-	signedToken, err := e2eSuite.signToken(e2eSuite.validToken())
+	// rest config pointed to proxy
+	restConfig, err := e2eSuite.proxyRestClient()
 	if err != nil {
 		t.Fatal(err)
-		return
-	}
-
-	// get rest config pointed to proxy
-	restConfig := &rest.Config{
-		Host: fmt.Sprintf("https://127.0.0.1:%s", e2eSuite.proxyPort),
-		AuthProvider: &clientcmdapi.AuthProviderConfig{
-			Name: "oidc",
-			Config: map[string]string{
-				"client-id":      "kube-oidc-proxy_e2e_client-id",
-				"id-token":       signedToken,
-				"idp-issuer-url": "https://127.0.0.1:" + e2eSuite.proxyPort,
-			},
-		},
-		TLSClientConfig: rest.TLSClientConfig{
-			CAData: e2eSuite.proxyCert,
-		},
-
-		APIPath: "/api",
-		ContentConfig: rest.ContentConfig{
-			GroupVersion:         &corev1.SchemeGroupVersion,
-			NegotiatedSerializer: scheme.Codecs,
-		},
 	}
 
 	// get kubeclient pointed to proxy
@@ -168,14 +146,12 @@ func Test_Upgrade(t *testing.T) {
 		i++
 	}
 
-	var (
-		execOut bytes.Buffer
-		execErr bytes.Buffer
-	)
+	var execOut bytes.Buffer
+	var execErr bytes.Buffer
 
 	// curl echo server from within pod
 	ioStreams := genericclioptions.IOStreams{In: nil, Out: &execOut, ErrOut: &execErr}
-	options := &exec.ExecOptions{
+	execOptions := &exec.ExecOptions{
 		StreamOptions: exec.StreamOptions{
 			IOStreams: ioStreams,
 			PodName:   pod.Name,
@@ -189,8 +165,11 @@ func Test_Upgrade(t *testing.T) {
 		Executor:  &exec.DefaultRemoteExecutor{},
 	}
 
-	err = options.Run()
-	if err != nil {
+	if err := execOptions.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := execOptions.Run(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,4 +183,97 @@ func Test_Upgrade(t *testing.T) {
 		t.Errorf("got unexpected echoserver response: exp=...hello world got=%s",
 			execOut.String())
 	}
+
+	// test we can port forward to the echo server and curl on localhost to it
+
+	var portOut bytes.Buffer
+	var portErr bytes.Buffer
+
+	freePort, err := utils.FreePort()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	RESTClient, err := rest.RESTClientFor(restConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ioStreams = genericclioptions.IOStreams{In: nil, Out: &portOut, ErrOut: &portErr}
+
+	portForwardOptions := &cmdportforward.PortForwardOptions{
+		Namespace:  pod.Namespace,
+		PodName:    pod.Name,
+		RESTClient: RESTClient,
+		Config:     restConfig,
+		PodClient:  kubeclient.Core(),
+		Address:    []string{"127.0.0.1"},
+		Ports:      []string{freePort + ":8080"},
+		PortForwarder: &defaultPortForwarder{
+			IOStreams: ioStreams,
+		},
+		StopChannel:  make(chan struct{}, 1),
+		ReadyChannel: make(chan struct{}),
+	}
+
+	go func() {
+		defer close(portForwardOptions.StopChannel)
+
+		// give a chance to establish a connection
+		time.Sleep(time.Second * 2)
+
+		portInR := bytes.NewReader([]byte("hello world"))
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://127.0.0.1:%s", freePort), "", portInR)
+		if err != nil {
+			t.Errorf("failed to request echoserver from port forward: %s", err)
+			return
+		}
+
+		if resp.StatusCode != 200 {
+			t.Errorf("got unexpected response code from server, exp=200 got=%d",
+				resp.StatusCode)
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Errorf("failed to read body: %s", err)
+			return
+		}
+
+		// should have correct output from echo server
+		if !bytes.HasSuffix(body, []byte("BODY:\nhello world")) {
+			t.Errorf("got unexpected echoserver response: exp=...hello world got=%s",
+				execOut.String())
+		}
+	}()
+
+	if err := portForwardOptions.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := portForwardOptions.RunPortForward(); err != nil {
+		t.Fatal(err)
+	}
 }
+
+/////// taken from k8s.io/kubernetes/pkg/kubectl/cmd/portforward
+type defaultPortForwarder struct {
+	genericclioptions.IOStreams
+}
+
+func (f *defaultPortForwarder) ForwardPorts(method string, url *url.URL, opts cmdportforward.PortForwardOptions) error {
+	transport, upgrader, err := spdy.RoundTripperFor(opts.Config)
+	if err != nil {
+		return err
+	}
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, method, url)
+	fw, err := portforward.NewOnAddresses(dialer, opts.Address, opts.Ports, opts.StopChannel, opts.ReadyChannel, f.Out, f.ErrOut)
+	if err != nil {
+		return err
+	}
+	return fw.ForwardPorts()
+}
+
+///////
