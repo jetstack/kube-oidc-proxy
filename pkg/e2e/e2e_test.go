@@ -2,19 +2,19 @@
 package e2e
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"strings"
 	"testing"
 
 	"k8s.io/client-go/tools/clientcmd"
+
 	"k8s.io/klog"
+	"sigs.k8s.io/kind/pkg/cluster"
+	"sigs.k8s.io/kind/pkg/cluster/config"
 )
 
 const (
-	defaultNodeImage = "v1.14.0"
+	defaultNodeImage = "kindest/node:v1.14.0"
 )
 
 var e2eSuite *E2E
@@ -22,8 +22,7 @@ var e2eSuite *E2E
 func TestMain(m *testing.M) {
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "kube-oidc-proxy")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
-		os.Exit(1)
+		klog.Fatalf("failed to create tmp directory: %s", err)
 	}
 
 	nodeImage := os.Getenv("KUBE_OIDC_PROXY_NODE_IMAGE")
@@ -31,62 +30,57 @@ func TestMain(m *testing.M) {
 		nodeImage = defaultNodeImage
 	}
 
-	//command := "../../bin/kind"
-	//args := []string{
-	//	"create",
-	//	"cluster",
-	//	"--name=kube-oidc-proxy-e2e",
-	//	fmt.Sprintf("--image=kindest/node:%s", nodeImage),
-	//}
+	clusterContext := cluster.NewContext("kube-oidc-proxy-e2e")
 
-	//klog.Infof("running %s %s", command, args)
-	//cmd := exec.Command(command, args...)
-	//cmd.Stderr = os.Stderr
-	//cmd.Stdout = os.Stdout
-	//if err = cmd.Run(); err != nil {
-	//	fmt.Fprintf(os.Stderr, err.Error())
-	//	os.Exit(1)
-	//}
-
-	cmd := exec.Command("../../bin/kind", "get", "kubeconfig-path", "--name=kube-oidc-proxy-e2e")
-	out, err := cmd.Output()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
-		cleanup(tmpDir, 1)
+	// build default config
+	conf := new(config.Cluster)
+	config.SetDefaults_Cluster(conf)
+	if len(conf.Nodes) == 0 {
+		klog.Fatal("kind default config set node count to 0")
 	}
 
-	kubeconfig := strings.TrimSpace(string(out))
+	for i := range conf.Nodes {
+		conf.Nodes[i].Image = nodeImage
+	}
 
+	// create kind cluster
+	klog.Infof("creating kind cluster '%s'", clusterContext.Name())
+	if err := clusterContext.Create(conf); err != nil {
+		klog.Fatalf("error creating cluster: %s", err)
+	}
+
+	// generate rest config to kind cluster
+	kubeconfig := clusterContext.KubeConfigPath()
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
-		cleanup(tmpDir, 1)
+		klog.Errorf("failed to build kind rest client: %s", err)
+		cleanup(tmpDir, clusterContext, 1)
 	}
 
 	e2eSuite = New(kubeconfig, tmpDir, restConfig)
 	e2eSuite.Run()
 
+	// run tests
 	runErr := m.Run()
 
+	// clean up and exit
 	e2eSuite.cleanup()
-	cleanup(tmpDir, runErr)
+	cleanup(tmpDir, clusterContext, runErr)
 }
 
-func cleanup(tmpDir string, exitCode int) {
+func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) {
 	err := os.RemoveAll(tmpDir)
 	if err != nil {
 		klog.Errorf("failed to delete temp dir %s: %s", tmpDir, err)
 	}
 
-	//klog.Info("cleaning up kind cluster...")
-	//cmd := exec.Command("../../bin/kind", "delete", "cluster", "--name=kube-oidc-proxy-e2e")
-	//cmdErr := cmd.Run()
-	//if cmdErr != nil {
-	//	klog.Errorf("failed to delete kind cluster: %s", cmdErr)
-	//}
+	klog.Infof("destroying kind cluster '%s'", clusterContext.Name())
+	kindErr := clusterContext.Delete()
+	if kindErr != nil {
+		klog.Errorf("error destroying kind cluster: %s", err)
+	}
 
-	//if err != nil || cmdErr != nil {
-	if err != nil {
+	if err != nil || kindErr != nil {
 		os.Exit(1)
 	}
 

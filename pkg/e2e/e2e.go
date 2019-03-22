@@ -201,13 +201,14 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 }
 
 func (e *E2E) validToken() []byte {
+	// valid for 5 mins
 	return []byte(fmt.Sprintf(`{
 	"iss":"https://127.0.0.1:%s",
 	"aud":["kube-oidc-proxy_e2e_client-id","aud-2"],
 	"e2e-username-claim":"test-username",
 	"e2e-groups-claim":["group-1","group-2"],
 	"exp":%d
-	}`, e.issuer.Port(), time.Now().Add(time.Minute).Unix()))
+	}`, e.issuer.Port(), time.Now().Add(time.Minute*5).Unix()))
 }
 
 func (e *E2E) signToken(token []byte) (string, error) {

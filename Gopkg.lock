@@ -325,6 +325,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:b13707423743d41665fd23f0c36b2f37bb49c30e94adb813319c44188a51ba22"
+  name = "github.com/ghodss/yaml"
+  packages = ["."]
+  pruneopts = ""
+  revision = "0ca9ea5df5451ffdf184b4428c902747c2c11cd7"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:c8052dcf3ec378a9a6bc4f00ecc10d6d5eb3cc1f8faaf6b2f70f047e8881d446"
   name = "github.com/go-openapi/jsonpointer"
   packages = ["."]
@@ -654,6 +662,14 @@
   pruneopts = ""
   revision = "5f041e8faa004a95c88a202771f4cc3e991971e6"
   version = "v2.0.1"
+
+[[projects]]
+  digest = "1:1d7e1867c49a6dd9856598ef7c3123604ea3daabf5b83f303ff457bcbc410b1d"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = ""
+  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
+  version = "v0.8.1"
 
 [[projects]]
   branch = "master"
@@ -1829,6 +1845,83 @@
   revision = "c2654d5206da6b7b6ace12841e8f359bb89b443c"
 
 [[projects]]
+  digest = "1:1327b919a7eb401541cb40c1e093d7e495101152e8b1625dc5582d923a734668"
+  name = "sigs.k8s.io/kind"
+  packages = [
+    "pkg/cluster",
+    "pkg/cluster/config",
+    "pkg/cluster/config/defaults",
+    "pkg/cluster/config/encoding",
+    "pkg/cluster/config/v1alpha2",
+    "pkg/cluster/config/v1alpha3",
+    "pkg/cluster/constants",
+    "pkg/cluster/create",
+    "pkg/cluster/internal/context",
+    "pkg/cluster/internal/create",
+    "pkg/cluster/internal/create/actions",
+    "pkg/cluster/internal/create/actions/config",
+    "pkg/cluster/internal/create/actions/kubeadminit",
+    "pkg/cluster/internal/create/actions/kubeadmjoin",
+    "pkg/cluster/internal/create/actions/loadbalancer",
+    "pkg/cluster/internal/create/actions/waitforready",
+    "pkg/cluster/internal/delete",
+    "pkg/cluster/internal/haproxy",
+    "pkg/cluster/internal/kubeadm",
+    "pkg/cluster/logs",
+    "pkg/cluster/nodes",
+    "pkg/container/cri",
+    "pkg/container/docker",
+    "pkg/exec",
+    "pkg/fs",
+    "pkg/kustomize",
+    "pkg/log",
+    "pkg/log/fidget",
+    "pkg/util",
+  ]
+  pruneopts = ""
+  revision = "a42ca2f343e43e28266bd32d84c2af453d54e909"
+  version = "0.2.0"
+
+[[projects]]
+  digest = "1:0b2daace3dcced8712072529b621360cf520f3c2ead92d755f35a0ec8dca2714"
+  name = "sigs.k8s.io/kustomize"
+  packages = [
+    "k8sdeps",
+    "k8sdeps/configmapandsecret",
+    "k8sdeps/kunstruct",
+    "k8sdeps/kv",
+    "k8sdeps/transformer",
+    "k8sdeps/transformer/hash",
+    "k8sdeps/transformer/patch",
+    "k8sdeps/validator",
+    "pkg/commands/build",
+    "pkg/constants",
+    "pkg/expansion",
+    "pkg/factory",
+    "pkg/fs",
+    "pkg/git",
+    "pkg/gvk",
+    "pkg/ifc",
+    "pkg/ifc/transformer",
+    "pkg/image",
+    "pkg/internal/error",
+    "pkg/loader",
+    "pkg/patch",
+    "pkg/patch/transformer",
+    "pkg/resid",
+    "pkg/resmap",
+    "pkg/resource",
+    "pkg/target",
+    "pkg/transformers",
+    "pkg/transformers/config",
+    "pkg/transformers/config/defaultconfig",
+    "pkg/types",
+  ]
+  pruneopts = ""
+  revision = "a6f65144121d1955266b0cd836ce954c04122dc8"
+  version = "v2.0.3"
+
+[[projects]]
   digest = "1:321081b4a44256715f2b68411d8eda9a17f17ebfe6f0cc61d2cc52d11c08acfa"
   name = "sigs.k8s.io/yaml"
   packages = ["."]
@@ -1872,6 +1965,8 @@
     "k8s.io/kubernetes/pkg/kubeapiserver/options",
     "k8s.io/kubernetes/pkg/kubectl/cmd/exec",
     "k8s.io/kubernetes/pkg/kubectl/cmd/portforward",
+    "sigs.k8s.io/kind/pkg/cluster",
+    "sigs.k8s.io/kind/pkg/cluster/config",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
