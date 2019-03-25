@@ -18,4 +18,6 @@ do
     sleep 1
 done
 
+echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+
 exec $@
