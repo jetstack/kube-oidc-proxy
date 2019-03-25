@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "kindest/node:v1.14.0"
+	defaultNodeImage = "1.14.0"
 )
 
 var e2eSuite *E2E
@@ -29,6 +29,7 @@ func TestMain(m *testing.M) {
 	if nodeImage == "" {
 		nodeImage = defaultNodeImage
 	}
+	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
 
 	clusterContext := cluster.NewContext("kube-oidc-proxy-e2e")
 
@@ -58,7 +59,10 @@ func TestMain(m *testing.M) {
 	}
 
 	e2eSuite = New(kubeconfig, tmpDir, restConfig)
-	e2eSuite.Run()
+	if err := e2eSuite.Run(); err != nil {
+		klog.Errorf("failed to start e2e suite: %s", err)
+		cleanup(tmpDir, clusterContext, 1)
+	}
 
 	// run tests
 	runErr := m.Run()

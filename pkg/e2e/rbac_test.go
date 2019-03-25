@@ -23,13 +23,6 @@ func Test_Rbac(t *testing.T) {
 	coreclient := e2eSuite.kubeclient.Core()
 	rbacclient := e2eSuite.kubeclient.Rbac()
 
-	defer func() {
-		err := coreclient.Namespaces().Delete(namespaceRbacTest, nil)
-		if err != nil {
-			t.Errorf("failed to delete test namespace: %s", err)
-		}
-	}()
-
 	_, err := coreclient.Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespaceRbacTest,

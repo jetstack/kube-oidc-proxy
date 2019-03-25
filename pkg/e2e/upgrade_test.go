@@ -35,13 +35,6 @@ func Test_Upgrade(t *testing.T) {
 		return
 	}
 
-	defer func() {
-		err := e2eSuite.kubeclient.Core().Namespaces().Delete(namespaceUpgradeTest, nil)
-		if err != nil {
-			t.Errorf("failed to delete test namespace: %s", err)
-		}
-	}()
-
 	// create upgrade namespace
 	_, err := e2eSuite.kubeclient.Core().Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -115,8 +108,9 @@ func Test_Upgrade(t *testing.T) {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:  "echoserver",
-					Image: "gcr.io/google_containers/echoserver:1.4",
+					Name:            "echoserver",
+					Image:           "gcr.io/google_containers/echoserver:1.4",
+					ImagePullPolicy: corev1.PullAlways,
 				},
 			},
 		},
@@ -138,8 +132,29 @@ func Test_Upgrade(t *testing.T) {
 		}
 
 		if i == 30 {
-			t.Fatalf("echo server failed to become ready: %s",
-				pod.Status.Phase)
+			for _, c := range pod.Status.ContainerStatuses {
+				podErr := fmt.Sprintf("pod container %s:", c.Name)
+				if c.State.Running != nil {
+					podErr = fmt.Sprintf("%s\n(ready) %s",
+						podErr, c.State.Running.String())
+				}
+				if c.State.Waiting != nil {
+					podErr = fmt.Sprintf("%s\n(wait) %s,%s",
+						podErr, c.State.Waiting.Message, c.State.Waiting.Reason)
+				}
+				if c.State.Terminated != nil {
+					podErr = fmt.Sprintf("%s\n(term) %s,%s",
+						podErr, c.State.Terminated.Message, c.State.Terminated.Reason)
+				}
+
+				t.Error(podErr)
+				t.Error(c.String())
+			}
+
+			t.Error(pod.String())
+
+			t.Fatalf("echo server failed to become ready (%s): %s",
+				pod.Status.Phase, pod.Status.Reason)
 		}
 
 		time.Sleep(time.Second * 5)
