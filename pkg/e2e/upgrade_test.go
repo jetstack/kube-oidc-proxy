@@ -148,10 +148,7 @@ func Test_Upgrade(t *testing.T) {
 				}
 
 				t.Error(podErr)
-				t.Error(c.String())
 			}
-
-			t.Error(pod.String())
 
 			t.Fatalf("echo server failed to become ready (%s): %s",
 				pod.Status.Phase, pod.Status.Reason)

@@ -2,8 +2,10 @@
 package e2e
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"testing"
 
 	"k8s.io/client-go/tools/clientcmd"
@@ -76,6 +78,23 @@ func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) {
 	err := os.RemoveAll(tmpDir)
 	if err != nil {
 		klog.Errorf("failed to delete temp dir %s: %s", tmpDir, err)
+	}
+
+	if exitCode != 0 {
+		exportCmd := exec.Command(
+			"../../bin/kubectl",
+			"get",
+			"events",
+			"--all-namespaces",
+			fmt.Sprintf("--kubeconfig=%s", clusterContext.KubeConfigPath()),
+		)
+		exportOut, err := exportCmd.Output()
+		if err != nil {
+			klog.Errorf("failed to export events: %s", err)
+		} else {
+			klog.Infof("exported events from failed e2e tests:\n%s",
+				exportOut)
+		}
 	}
 
 	klog.Infof("destroying kind cluster '%s'", clusterContext.Name())
