@@ -17,8 +17,8 @@ fi
 
 mkdir -p $ROOT
 
-CAFILE="${ROOT}/ca.pem"
-CAKEY="${ROOT}/ca-key.pem"
+CAFILE="${ROOT}/ca.crt"
+CAKEY="${ROOT}/ca.key"
 NAME="kube-oidc-proxy"
 
 HOSTNAME=$1
@@ -33,13 +33,13 @@ openssl req -new -x509 -days 365 \
   -key ${CAKEY} \
   -out ${CAFILE}
 
-echo ">> ca.pem ca-key.pem generated"
+echo ">> ca.crt ca.key generated"
 echo ">> generating a keypair for ${NAME}"
 
 openssl genrsa \
-  -out ${ROOT}/${NAME}-key.pem 2048
+  -out ${ROOT}/${NAME}.key 2048
 
-echo ">> keypair generated ${NAME}-key.pem"
+echo ">> keypair generated ${NAME}.key"
 
 cp ${ROOT}/../openssl.cnf ${ROOT}/openssl-${NAME}.cnf
 sed -i -e "s/HOSTNAME/${HOSTNAME}/g" ${ROOT}/openssl-${NAME}.cnf
@@ -54,7 +54,7 @@ echo ">> requesting serving certificate using openssl-${NAME}.cnf"
 
 openssl req -subj "/CN=${HOSTNAME}" -new \
   -batch \
-  -key ${ROOT}/${NAME}-key.pem \
+  -key ${ROOT}/${NAME}.key \
   -out ${ROOT}/${NAME}-req.csr \
   -config ${ROOT}/openssl-${NAME}.cnf
 
@@ -65,9 +65,9 @@ openssl x509 -req -days 365 \
   -CAcreateserial \
   -extensions v3_req \
   -extfile ${ROOT}/openssl-${NAME}.cnf \
-  -out ${ROOT}/${NAME}-cert.pem
+  -out ${ROOT}/${NAME}.crt
 
 rm ${ROOT}/ca.srl ${ROOT}/${NAME}-req.csr ${ROOT}/openssl-${NAME}.cnf
 
 echo "<< self signed certificate and key generated"
-echo "${ROOT}/${NAME}-cert.pem ${ROOT}/${NAME}-key.pem"
+echo "${ROOT}/${NAME}.crt ${ROOT}/${NAME}.key"

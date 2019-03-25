@@ -12,7 +12,8 @@ import (
 func SignalHandler() chan struct{} {
 	stopCh := make(chan struct{})
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(ch,
+		syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	go func() {
 		sig := <-ch

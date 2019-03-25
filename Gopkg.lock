@@ -1731,6 +1731,7 @@
     "k8s.io/apiserver/pkg/authentication/request/bearertoken",
     "k8s.io/apiserver/pkg/authentication/user",
     "k8s.io/apiserver/pkg/server",
+    "k8s.io/apiserver/pkg/server/options",
     "k8s.io/apiserver/pkg/util/flag",
     "k8s.io/apiserver/pkg/util/globalflag",
     "k8s.io/apiserver/plugin/pkg/authenticator/token/oidc",

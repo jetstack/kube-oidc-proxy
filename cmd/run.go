@@ -4,21 +4,24 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
+	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	apiserverflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/globalflag"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
-	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
+	kubeapiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
@@ -28,14 +31,16 @@ const (
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	// flag option structs
-	oidcOptions := &apiserveroptions.BuiltInAuthenticationOptions{
-		OIDC: &apiserveroptions.OIDCAuthenticationOptions{},
+	oidcOptions := &kubeapiserveroptions.BuiltInAuthenticationOptions{
+		OIDC: &kubeapiserveroptions.OIDCAuthenticationOptions{},
 	}
 	secureServingOptions := apiserveroptions.NewSecureServingOptions()
 	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
 	clientConfigFlags := genericclioptions.NewConfigFlags()
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
+
+	var certReload bool
 
 	// proxy command
 	cmd := &cobra.Command{
@@ -46,7 +51,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				version.PrintVersionAndExit()
 			}
 
-			if secureServingOptions.SecureServingOptions.BindPort == readinessProbePort {
+			if secureServingOptions.BindPort == readinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
@@ -80,10 +85,25 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			// oidc auther from config
 			reqAuther := bearertoken.New(oidcAuther)
+
+			if secureServingOptions.Validate(); err != nil {
+				return err
+			}
+
+			if err := secureServingOptions.MaybeDefaultWithSelfSignedCerts(
+				"localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+				return err
+			}
+
 			//secure serving info has a Serve( function
 			secureServingInfo := new(server.SecureServingInfo)
-			if err := secureServingOptions.ApplyTo(&secureServingInfo, nil); err != nil {
+			if err := secureServingOptions.ApplyTo(&secureServingInfo); err != nil {
 				return err
+			}
+
+			if certReload {
+				utils.WatchSecretFiles(restConfig, &oidcOptions.OIDC.CAFile,
+					clientConfigFlags.KubeConfig, secureServingOptions, time.Minute)
 			}
 
 			p := proxy.New(restConfig, reqAuther, secureServingInfo)
@@ -119,6 +139,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 	namedFlagSets.FlagSet("misc").Bool("version",
 		false, "Print version information and quit")
+
+	namedFlagSets.FlagSet("kube-oidc-proxy").BoolVarP(
+		&certReload, "exit-on-certificate-reload", "E", true,
+		"kube-oidc-proxy will exit gracefully when client or serving secrets have changed",
+	)
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
