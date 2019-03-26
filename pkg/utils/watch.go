@@ -30,6 +30,8 @@ func WatchSecretFiles(restConfig *rest.Config,
 		return err
 	}
 
+	klog.Infof("watching for changes in files %s", files)
+
 	return nil
 }
 
@@ -52,18 +54,22 @@ func filesToWatchFromOptions(restConfig *rest.Config,
 		watchFiles = append(watchFiles, restConfig.KeyFile)
 	}
 
-	if kubeconfig != nil {
+	if kubeconfig != nil && len(*kubeconfig) > 0 {
 		watchFiles = append(watchFiles, *kubeconfig)
 	}
 
-	if oidcCAFile != nil {
+	if oidcCAFile != nil && len(*oidcCAFile) > 0 {
 		watchFiles = append(watchFiles, *oidcCAFile)
 	}
 
 	for _, sni := range ssoptions.SNICertKeys {
-		watchFiles = append(watchFiles, sni.KeyFile)
+		if len(sni.KeyFile) > 0 {
+			watchFiles = append(watchFiles, sni.KeyFile)
+		}
 
-		watchFiles = append(watchFiles, sni.CertFile)
+		if len(sni.CertFile) > 0 {
+			watchFiles = append(watchFiles, sni.CertFile)
+		}
 	}
 
 	// watch cert directory if key and cert file not explicitly given

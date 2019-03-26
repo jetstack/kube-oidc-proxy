@@ -3,6 +3,7 @@ package probe
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -16,7 +17,11 @@ func Test_Check(t *testing.T) {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
-	p := New(port)
+	p, err := New(port)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	time.Sleep(time.Second)
 
 	url := fmt.Sprintf("http://0.0.0.0:%s", port)
@@ -53,5 +58,31 @@ func Test_Check(t *testing.T) {
 	if resp.StatusCode != 503 {
 		t.Errorf("expected ready probe to be responding and not ready, exp=%d got=%d",
 			503, resp.StatusCode)
+	}
+}
+
+func Test_New(t *testing.T) {
+	port, err := utils.FreePort()
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	ln, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", port))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := New(port); err == nil {
+		t.Errorf("expected error port taken, got=%s", err)
+	} else {
+		t.Logf("got expected port taken error: %s", err)
+	}
+
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := New(port); err != nil {
+		t.Errorf("unexpected error: %s", err)
 	}
 }

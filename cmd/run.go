@@ -2,7 +2,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -26,7 +25,7 @@ import (
 )
 
 const (
-	readinessProbePort = 8080
+	appName = "kube-oidc-proxy"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -35,12 +34,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		OIDC: &kubeapiserveroptions.OIDCAuthenticationOptions{},
 	}
 	secureServingOptions := apiserveroptions.NewSecureServingOptions()
-	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
+	secureServingOptions.ServerCert.PairName = appName
 	clientConfigFlags := genericclioptions.NewConfigFlags()
 
-	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
-
-	var certReload bool
+	var skipCertReload bool
+	var certReloadDuration, readinessProbePort int
 
 	// proxy command
 	cmd := &cobra.Command{
@@ -51,8 +49,19 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				version.PrintVersionAndExit()
 			}
 
+			if certReloadDuration < 1 {
+				return fmt.Errorf("--secret-watch-refresh-period must be a value of 1 or more seconds, got %ds",
+					certReloadDuration)
+			}
+
 			if secureServingOptions.BindPort == readinessProbePort {
-				return errors.New("unable to securely serve on port 8080, used by readiness prob")
+				return fmt.Errorf("cannot both securely serve and expose readiness probe to same port %d",
+					readinessProbePort)
+			}
+
+			healthCheck, err := probe.New(strconv.Itoa(readinessProbePort))
+			if err != nil {
+				fmt.Errorf("failed to initialise readiness probe: %s", err)
 			}
 
 			// client rest config
@@ -90,6 +99,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
+			// generate self signed certs if required
 			if err := secureServingOptions.MaybeDefaultWithSelfSignedCerts(
 				"localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 				return err
@@ -101,9 +111,13 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			if certReload {
-				utils.WatchSecretFiles(restConfig, &oidcOptions.OIDC.CAFile,
-					clientConfigFlags.KubeConfig, secureServingOptions, time.Minute)
+			if !skipCertReload {
+				// set up secrets watcher
+				if err := utils.WatchSecretFiles(restConfig, &oidcOptions.OIDC.CAFile,
+					clientConfigFlags.KubeConfig, secureServingOptions,
+					time.Second*time.Duration(certReloadDuration)); err != nil {
+					return fmt.Errorf("failed to watch secret files: %s", err)
+				}
 			}
 
 			p := proxy.New(restConfig, reqAuther, secureServingInfo)
@@ -116,7 +130,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			time.Sleep(time.Second * 3)
 			healthCheck.SetReady()
 
+			// stop signal
 			<-stopCh
+
+			// stop accepting traffic
+			healthCheck.SetNotReady()
 
 			return nil
 		},
@@ -136,14 +154,25 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags.ImpersonateGroup = nil
 	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
 
+	// kube-oidc-proxy flags
+	namedFlagSets.FlagSet(appName).BoolVarP(
+		&skipCertReload, "skip-exit-on-secret-reload", "S", false,
+		"If true, kube-oidc-proxy will continue serving when client or serving secrets have changed, instead of exiting gracefully.",
+	)
+	namedFlagSets.FlagSet(appName).IntVarP(
+		&certReloadDuration, "secret-watch-refresh-period", "R", 60,
+		"Duration in seconds between checking changes in secret files. Flag is ignored if --skip-exit-on-secret-reload is provided.",
+	)
+	namedFlagSets.FlagSet(appName).IntVarP(
+		&readinessProbePort, "readiness-probe-port", "P", 8080,
+		"Port to expose Kubernetes readiness probe.",
+	)
+	namedFlagSets.FlagSet(appName).SortFlags = true
+
+	// misc flags
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 	namedFlagSets.FlagSet("misc").Bool("version",
 		false, "Print version information and quit")
-
-	namedFlagSets.FlagSet("kube-oidc-proxy").BoolVarP(
-		&certReload, "exit-on-certificate-reload", "E", true,
-		"kube-oidc-proxy will exit gracefully when client or serving secrets have changed",
-	)
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
