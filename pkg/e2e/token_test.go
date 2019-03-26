@@ -75,31 +75,31 @@ func Test_Token(t *testing.T) {
 	)
 
 	// valid token
-	e2eSuite.test(
+	e2eSuite.testToken(
 		t,
 		e2eSuite.validToken(),
 		url,
 		200,
-		nil)
+		"")
 
 	for _, test := range []struct {
 		token   []byte
 		expCode int
-		expBody []byte
+		expBody string
 	}{
 
 		// no bearer token
 		{
 			token:   nil,
 			expCode: 401,
-			expBody: []byte("Unauthorized"),
+			expBody: "Unauthorized",
 		},
 
 		//	 invalid bearer token
 		{
 			token:   []byte("bad-payload"),
 			expCode: 401,
-			expBody: []byte("Unauthorized"),
+			expBody: "Unauthorized",
 		},
 
 		// wrong issuer
@@ -112,7 +112,7 @@ func Test_Token(t *testing.T) {
 	"exp":%d
 	}`, time.Now().Add(time.Minute).Unix())),
 			expCode: 401,
-			expBody: []byte("Unauthorized"),
+			expBody: "Unauthorized",
 		},
 
 		// no audience
@@ -125,7 +125,7 @@ func Test_Token(t *testing.T) {
 	"exp":%d
 	}`, e2eSuite.issuer.Port(), time.Now().Add(time.Minute).Unix())),
 			expCode: 401,
-			expBody: []byte("Unauthorized"),
+			expBody: "Unauthorized",
 		},
 
 		// wrong audience
@@ -138,7 +138,7 @@ func Test_Token(t *testing.T) {
 	"exp":%d
 	}`, e2eSuite.issuer.Port(), time.Now().Add(time.Minute).Unix())),
 			expCode: 401,
-			expBody: []byte("Unauthorized"),
+			expBody: "Unauthorized",
 		},
 
 		// token expires now
@@ -151,9 +151,9 @@ func Test_Token(t *testing.T) {
 	"exp":%d
 	}`, e2eSuite.issuer.Port(), time.Now().Unix())),
 			expCode: 401,
-			expBody: []byte("Unauthorized"),
+			expBody: "Unauthorized",
 		},
 	} {
-		e2eSuite.test(t, test.token, url, test.expCode, test.expBody)
+		e2eSuite.testToken(t, test.token, url, test.expCode, test.expBody)
 	}
 }

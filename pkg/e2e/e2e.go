@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"testing"
 	"time"
 
@@ -86,7 +87,7 @@ func (e *E2E) Run() error {
 	return nil
 }
 
-func (e *E2E) test(t *testing.T, payload []byte, target string, expCode int, expBody []byte) {
+func (e *E2E) testToken(t *testing.T, payload []byte, target string, expCode int, expBody string) {
 	signedToken, err := e.signToken(payload)
 	if err != nil {
 		t.Error(err)
@@ -113,16 +114,22 @@ func (e *E2E) test(t *testing.T, payload []byte, target string, expCode int, exp
 		t.Errorf("got unexpected status code (%s), exp=%d got=%d",
 			target, expCode, resp.StatusCode)
 
-		if expBody == nil {
+		if len(expBody) > 0 {
 			t.Errorf("got body='%s'", body)
 		}
 	}
 
-	if expBody == nil {
+	if len(expBody) == 0 {
 		return
 	}
 
-	if !bytes.Equal(body, expBody) {
+	r, err := regexp.Compile(expBody)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if !r.Match(body) {
 		t.Errorf("got unexpected response body (%s)\nexp='%s'\ngot='%s'",
 			target, expBody, body)
 	}

@@ -270,7 +270,7 @@ func Test_Upgrade(t *testing.T) {
 	}
 }
 
-/////// taken from k8s.io/kubernetes/pkg/kubectl/cmd/portforward
+// taken from k8s.io/kubernetes/pkg/kubectl/cmd/portforward
 type defaultPortForwarder struct {
 	genericclioptions.IOStreams
 }
@@ -288,4 +288,4 @@ func (f *defaultPortForwarder) ForwardPorts(method string, url *url.URL, opts cm
 	return fw.ForwardPorts()
 }
 
-///////
+//
