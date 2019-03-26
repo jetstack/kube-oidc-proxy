@@ -129,15 +129,18 @@ func watchFiles(refreshTimer time.Duration, files []string) error {
 					continue
 				}
 
+				// file has been updated
 				if info.ModTime().After(f.modTime) {
 					klog.Infof("detected change in file %s, exiting", f.name)
 
+					// find self process
 					p, err := os.FindProcess(os.Getpid())
 					if err != nil {
 						klog.Errorf("failed to get current pid: %s", err)
 						continue
 					}
 
+					// send SIGHUP to self
 					if err := p.Signal(syscall.SIGHUP); err != nil {
 						klog.Errorf("failed to signal current process: %s", err)
 						continue

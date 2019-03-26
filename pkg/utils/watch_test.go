@@ -2,6 +2,7 @@
 package utils
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -15,7 +16,7 @@ import (
 )
 
 func Test_fileToWatchFromOptions(t *testing.T) {
-	files, deferFunc, err := testFiles(t, 8)
+	files, dir, deferFunc, err := genTestFiles(t, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,21 +52,21 @@ func Test_fileToWatchFromOptions(t *testing.T) {
 			files, retFiles)
 	}
 
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "cert-pairs")
+	certDir, err := ioutil.TempDir(dir, "cert-pairs")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	// create paired key-cert
-	f, err := os.Create(filepath.Join(tmpDir, "pair-name.key"))
+	f, err := os.Create(filepath.Join(certDir, "pair-name.key"))
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	pairKey := f.Name()
 
-	f, err = os.Create(filepath.Join(tmpDir, "pair-name.crt"))
+	f, err = os.Create(filepath.Join(certDir, "pair-name.crt"))
 	if err != nil {
 		t.Error(err)
 		return
@@ -88,7 +89,7 @@ func Test_fileToWatchFromOptions(t *testing.T) {
 
 		&apiserveroptions.SecureServingOptions{
 			ServerCert: apiserveroptions.GeneratableKeyCert{
-				CertDirectory: tmpDir,
+				CertDirectory: certDir,
 				PairName:      "pair-name",
 				CertKey: apiserveroptions.CertKey{
 					CertFile: files[6],
@@ -119,7 +120,7 @@ func Test_fileToWatchFromOptions(t *testing.T) {
 
 		&apiserveroptions.SecureServingOptions{
 			ServerCert: apiserveroptions.GeneratableKeyCert{
-				CertDirectory: tmpDir,
+				CertDirectory: certDir,
 				PairName:      "pair-name",
 				CertKey: apiserveroptions.CertKey{
 					CertFile: files[6],
@@ -149,7 +150,7 @@ func Test_fileToWatchFromOptions(t *testing.T) {
 
 		&apiserveroptions.SecureServingOptions{
 			ServerCert: apiserveroptions.GeneratableKeyCert{
-				CertDirectory: tmpDir,
+				CertDirectory: certDir,
 				PairName:      "pair-name",
 				CertKey: apiserveroptions.CertKey{
 					KeyFile: files[6],
@@ -179,7 +180,7 @@ func Test_fileToWatchFromOptions(t *testing.T) {
 
 		&apiserveroptions.SecureServingOptions{
 			ServerCert: apiserveroptions.GeneratableKeyCert{
-				CertDirectory: tmpDir,
+				CertDirectory: certDir,
 				PairName:      "pair-name",
 			},
 		},
@@ -192,25 +193,44 @@ func Test_fileToWatchFromOptions(t *testing.T) {
 }
 
 func Test_watchFiles(t *testing.T) {
-	files, deferFunc, err := testFiles(t, 4)
+	files, dir, deferFunc, err := genTestFiles(t, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer deferFunc()
 
+	syms := make([]string, 2)
+
+	// should also work through symbolic links
+	for i := range syms {
+		symDir, err := ioutil.TempDir(dir, "WatchSecretFiles")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		syms[i] = filepath.Join(symDir, fmt.Sprintf("symlink-%d", i))
+		if err := os.Symlink(files[i+1], syms[i]); err != nil {
+			t.Errorf("failed to create symlink: %s", err)
+		}
+	}
+
 	ch := make(chan os.Signal, 4)
 	signal.Notify(ch, syscall.SIGHUP)
 
 	for _, f := range files {
-		watchFiles(time.Second/2, files)
-		testWatchFileChange(t, f, ch)
+		watchFiles(time.Second/2,
+			// mix of actual paths and symbolic links
+			[]string{files[0], syms[0], syms[1], files[3]})
+
+		expectWatchFileChange(t, f, ch)
 	}
 }
 
-func testFiles(t *testing.T, count int) ([]string, func(), error) {
+func genTestFiles(t *testing.T, count int) ([]string, string, func(), error) {
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "WatchSecretFiles")
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 	deferFunc := func() {
 		if err := os.RemoveAll(tmpDir); err != nil {
@@ -224,16 +244,16 @@ func testFiles(t *testing.T, count int) ([]string, func(), error) {
 		f, err := ioutil.TempFile(tmpDir, "")
 		if err != nil {
 			deferFunc()
-			return nil, nil, err
+			return nil, "", nil, err
 		}
 
 		files[i] = f.Name()
 	}
 
-	return files, deferFunc, nil
+	return files, tmpDir, deferFunc, nil
 }
 
-func testWatchFileChange(t *testing.T, f string, ch chan os.Signal) {
+func expectWatchFileChange(t *testing.T, f string, ch chan os.Signal) {
 	ticker := time.NewTicker(time.Second)
 
 	// no change
