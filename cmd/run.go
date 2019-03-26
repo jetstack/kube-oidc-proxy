@@ -61,7 +61,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			healthCheck, err := probe.New(strconv.Itoa(readinessProbePort))
 			if err != nil {
-				fmt.Errorf("failed to initialise readiness probe: %s", err)
+				return fmt.Errorf("failed to initialise readiness probe: %s", err)
 			}
 
 			// client rest config
