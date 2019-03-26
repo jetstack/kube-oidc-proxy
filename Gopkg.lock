@@ -1641,7 +1641,6 @@
     "pkg/util/tolerations",
     "pkg/util/workqueue/prometheus",
     "pkg/version",
-    "pkg/version/verflag",
     "pkg/volume",
     "pkg/volume/util",
     "pkg/volume/util/fs",
@@ -1727,6 +1726,7 @@
     "github.com/golang/mock/mockgen",
     "github.com/heptiolabs/healthcheck",
     "github.com/spf13/cobra",
+    "k8s.io/apimachinery/pkg/version",
     "k8s.io/apiserver/pkg/authentication/authenticator",
     "k8s.io/apiserver/pkg/authentication/request/bearertoken",
     "k8s.io/apiserver/pkg/authentication/user",
@@ -1743,7 +1743,6 @@
     "k8s.io/klog",
     "k8s.io/kubernetes/pkg/apis/authentication",
     "k8s.io/kubernetes/pkg/kubeapiserver/options",
-    "k8s.io/kubernetes/pkg/version/verflag",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

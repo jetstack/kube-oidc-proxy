@@ -112,7 +112,7 @@ e2e-1.11: build ## run end to end tests for kubernetes version 1.11
 	KUBE_OIDC_PROXY_NODE_IMAGE=v1.11.3 go test ./cmd/e2e/. -v
 
 build: generate ## build kube-oidc-proxy
-	CGO_ENABLED=0 go build
+	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'
 
 docker_build: generate test build ## build docker image
 	docker build -t kube-oidc-proxy .
