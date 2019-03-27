@@ -16,10 +16,10 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
-	"k8s.io/kubernetes/pkg/version/verflag"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
+	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
 const (
@@ -42,6 +42,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Use:  "k8s-oidc-proxy",
 		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flag("version").Value.String() == "true" {
+				version.PrintVersionAndExit()
+			}
 
 			if secureServingOptions.SecureServingOptions.BindPort == readinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
@@ -113,8 +116,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags.ImpersonateGroup = nil
 	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
 
-	verflag.AddFlags(namedFlagSets.FlagSet("misc"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
+	namedFlagSets.FlagSet("misc").Bool("version",
+		false, "Print version information and quit")
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
