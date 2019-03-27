@@ -62,7 +62,9 @@ func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	switch r.URL.String() {
 	case "/.well-known/openid-configuration":
 		rw.Header().Set("Content-Type", "application/json")
-		rw.Write(i.wellKnownResponse())
+		if _, err := rw.Write(i.wellKnownResponse()); err != nil {
+			i.t.Errorf("failed to write openid-configuration response: %s", err)
+		}
 
 	default:
 		i.t.Errorf("unexpected URL request: %s", r.URL)

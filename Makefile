@@ -92,7 +92,7 @@ clean: ## clean up created files
 		kube-oidc-proxy \
 		pkg/mocks/authenticator.go
 
-verify: verify_boilerplate verify_vendor go_fmt go_vet ## verify code and vendor
+verify: verify_boilerplate verify_vendor go_fmt go_vet go_lint ## verify code and vendor
 
 generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)
