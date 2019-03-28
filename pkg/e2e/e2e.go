@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/klog"
 
 	// required to register oidc auth plugin for rest client
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -258,6 +259,11 @@ func (e *E2E) proxyRestClient() (*rest.Config, error) {
 func (e *E2E) cleanup() {
 	if e.proxyCmd != nil &&
 		e.proxyCmd.Process != nil {
-		e.proxyCmd.Process.Kill()
+
+		if err := e.proxyCmd.Process.Kill(); err != nil {
+			klog.Errorf("failed to kill kube-oidc-proxy process: %s",
+				err)
+		}
+
 	}
 }
