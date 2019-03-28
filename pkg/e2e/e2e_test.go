@@ -2,14 +2,18 @@
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-
 	"k8s.io/klog"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/config"
@@ -60,7 +64,18 @@ func TestMain(m *testing.M) {
 		cleanup(tmpDir, clusterContext, 1)
 	}
 
-	e2eSuite = New(kubeconfig, tmpDir, restConfig)
+	kubeclient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		klog.Errorf("failed to build kind kubernetes client: %s", err)
+		cleanup(tmpDir, clusterContext, 1)
+	}
+
+	if err := waitOnCoreDNS(kubeclient); err != nil {
+		klog.Errorf("failed to wait for CoreDNS to become ready: %s", err)
+		cleanup(tmpDir, clusterContext, 1)
+	}
+
+	e2eSuite = New(kubeconfig, tmpDir, kubeclient)
 	if err := e2eSuite.Run(); err != nil {
 		klog.Errorf("failed to start e2e suite: %s", err)
 		cleanup(tmpDir, clusterContext, 1)
@@ -108,4 +123,29 @@ func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) {
 	}
 
 	os.Exit(exitCode)
+}
+
+func waitOnCoreDNS(kubeclient *kubernetes.Clientset) error {
+	// ensure pods are deployed
+	time.Sleep(time.Second * 15)
+
+	pods, err := kubeclient.Core().Pods("kube-system").List(metav1.ListOptions{
+		LabelSelector: "k8s-app=kube-dns",
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(pods.Items) == 0 {
+		return errors.New("failed to find pods with label k8s-app=kube-dns")
+	}
+
+	for _, pod := range pods.Items {
+		err := utils.WaitForPodReady(kubeclient, pod.Name, pod.Namespace)
+		if err != nil {
+			return fmt.Errorf("failed to wait for dns pods to become ready: %s", err)
+		}
+	}
+
+	return nil
 }

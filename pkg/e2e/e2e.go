@@ -29,7 +29,6 @@ import (
 )
 
 type E2E struct {
-	kubeRestConfig *rest.Config
 	kubeclient     *kubernetes.Clientset
 	kubeKubeconfig string
 
@@ -57,21 +56,15 @@ func (w *wraperRT) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func New(kubeconfig, tmpDir string,
-	kubeRestConfig *rest.Config) *E2E {
+	kubeclient *kubernetes.Clientset) *E2E {
 	return &E2E{
-		kubeRestConfig: kubeRestConfig,
+		kubeclient:     kubeclient,
 		tmpDir:         tmpDir,
 		kubeKubeconfig: kubeconfig,
 	}
 }
 
 func (e *E2E) Run() error {
-	kubeclient, err := kubernetes.NewForConfig(e.kubeRestConfig)
-	if err != nil {
-		return err
-	}
-	e.kubeclient = kubeclient
-
 	proxyTransport, err := e.newIssuerProxyPair()
 	if err != nil {
 		return err

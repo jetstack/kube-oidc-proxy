@@ -119,43 +119,10 @@ func Test_Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// wait for pod to be ready
-	i := 0
-	for {
-		pod, err = kubeclient.Core().Pods(namespaceUpgradeTest).Get("echoserver", metav1.GetOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if pod.Status.Phase == corev1.PodRunning {
-			break
-		}
-
-		if i == 30 {
-			for _, c := range pod.Status.ContainerStatuses {
-				podErr := fmt.Sprintf("pod container %s:", c.Name)
-				if c.State.Running != nil {
-					podErr = fmt.Sprintf("%s\n(ready) %s",
-						podErr, c.State.Running.String())
-				}
-				if c.State.Waiting != nil {
-					podErr = fmt.Sprintf("%s\n(wait) %s,%s",
-						podErr, c.State.Waiting.Message, c.State.Waiting.Reason)
-				}
-				if c.State.Terminated != nil {
-					podErr = fmt.Sprintf("%s\n(term) %s,%s",
-						podErr, c.State.Terminated.Message, c.State.Terminated.Reason)
-				}
-
-				t.Error(podErr)
-			}
-
-			t.Fatalf("echo server failed to become ready (%s): %s",
-				pod.Status.Phase, pod.Status.Reason)
-		}
-
-		time.Sleep(time.Second * 5)
-		i++
+	err = utils.WaitForPodReady(e2eSuite.kubeclient,
+		"echoserver", namespaceUpgradeTest)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	var execOut bytes.Buffer
