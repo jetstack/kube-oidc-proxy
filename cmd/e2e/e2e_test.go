@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "v1.13.3"
+	defaultNodeImage = "v1.14.0"
 )
 
 func Test_E2E(t *testing.T) {
