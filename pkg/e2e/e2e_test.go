@@ -86,10 +86,12 @@ func TestMain(m *testing.M) {
 
 	// clean up and exit
 	e2eSuite.cleanup()
-	cleanup(tmpDir, clusterContext, runErr)
+	exitCode := cleanup(tmpDir, clusterContext, runErr)
+
+	os.Exit(exitCode)
 }
 
-func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) {
+func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) int {
 	err := os.RemoveAll(tmpDir)
 	if err != nil {
 		klog.Errorf("failed to delete temp dir %s: %s", tmpDir, err)
@@ -119,17 +121,17 @@ func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) {
 	}
 
 	if err != nil || kindErr != nil {
-		os.Exit(1)
+		return 1
 	}
 
-	os.Exit(exitCode)
+	return exitCode
 }
 
 func waitOnCoreDNS(kubeclient *kubernetes.Clientset) error {
 	// ensure pods are deployed
 	time.Sleep(time.Second * 15)
 
-	pods, err := kubeclient.Core().Pods("kube-system").List(metav1.ListOptions{
+	pods, err := kubeclient.CoreV1().Pods("kube-system").List(metav1.ListOptions{
 		LabelSelector: "k8s-app=kube-dns",
 	})
 	if err != nil {

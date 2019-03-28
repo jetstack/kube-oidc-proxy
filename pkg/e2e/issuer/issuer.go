@@ -71,7 +71,9 @@ func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
 
 		discCerts := i.CertsDisc()
-		rw.Write(discCerts)
+		if _, err := rw.Write(discCerts); err != nil {
+			klog.Errorf("failed to write certificate discovery response: %s", err)
+		}
 
 	default:
 		klog.Errorf("unexpected URL request: %s", r.URL)

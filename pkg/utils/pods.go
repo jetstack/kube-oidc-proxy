@@ -15,7 +15,7 @@ func WaitForPodReady(kubeclient *kubernetes.Clientset,
 	i := 0
 
 	for {
-		pod, err := kubeclient.Core().Pods(namespace).Get(name, metav1.GetOptions{})
+		pod, err := kubeclient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}

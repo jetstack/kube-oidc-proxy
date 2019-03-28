@@ -21,7 +21,7 @@ func Test_Token(t *testing.T) {
 		return
 	}
 
-	_, err := e2eSuite.kubeclient.Core().Namespaces().Create(&corev1.Namespace{
+	_, err := e2eSuite.kubeclient.CoreV1().Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespaceTokenTest,
 		},
@@ -30,7 +30,7 @@ func Test_Token(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = e2eSuite.kubeclient.Rbac().Roles(namespaceTokenTest).Create(&rbacv1.Role{
+	_, err = e2eSuite.kubeclient.RbacV1().Roles(namespaceTokenTest).Create(&rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-username-role",
 			Namespace: namespaceTokenTest,
@@ -47,7 +47,7 @@ func Test_Token(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceTokenTest).Create(
+	_, err = e2eSuite.kubeclient.RbacV1().RoleBindings(namespaceTokenTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding",

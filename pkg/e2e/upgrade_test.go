@@ -36,7 +36,7 @@ func Test_Upgrade(t *testing.T) {
 	}
 
 	// create upgrade namespace
-	_, err := e2eSuite.kubeclient.Core().Namespaces().Create(&corev1.Namespace{
+	_, err := e2eSuite.kubeclient.CoreV1().Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespaceUpgradeTest,
 		},
@@ -46,7 +46,7 @@ func Test_Upgrade(t *testing.T) {
 	}
 
 	// create auth for user in namespace
-	_, err = e2eSuite.kubeclient.Rbac().Roles(namespaceUpgradeTest).Create(&rbacv1.Role{
+	_, err = e2eSuite.kubeclient.RbacV1().Roles(namespaceUpgradeTest).Create(&rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-username-role",
 			Namespace: namespaceUpgradeTest,
@@ -67,7 +67,7 @@ func Test_Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = e2eSuite.kubeclient.Rbac().RoleBindings(namespaceUpgradeTest).Create(
+	_, err = e2eSuite.kubeclient.RbacV1().RoleBindings(namespaceUpgradeTest).Create(
 		&rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-username-binding",
@@ -101,7 +101,7 @@ func Test_Upgrade(t *testing.T) {
 	}
 
 	// deploy echo server
-	pod, err := kubeclient.Core().Pods(namespaceUpgradeTest).Create(&corev1.Pod{
+	pod, err := kubeclient.CoreV1().Pods(namespaceUpgradeTest).Create(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "echoserver",
 		},
@@ -139,7 +139,7 @@ func Test_Upgrade(t *testing.T) {
 		Command: []string{
 			"curl", "127.0.0.1:8080", "-s", "-d", "hello world",
 		},
-		PodClient: kubeclient.Core(),
+		PodClient: kubeclient.CoreV1(),
 		Config:    restConfig,
 		Executor:  &exec.DefaultRemoteExecutor{},
 	}
@@ -185,7 +185,7 @@ func Test_Upgrade(t *testing.T) {
 		PodName:    pod.Name,
 		RESTClient: RESTClient,
 		Config:     restConfig,
-		PodClient:  kubeclient.Core(),
+		PodClient:  kubeclient.CoreV1(),
 		Address:    []string{"127.0.0.1"},
 		Ports:      []string{freePort + ":8080"},
 		PortForwarder: &defaultPortForwarder{
