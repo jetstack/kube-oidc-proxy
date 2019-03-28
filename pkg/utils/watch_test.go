@@ -219,9 +219,12 @@ func Test_watchFiles(t *testing.T) {
 	signal.Notify(ch, syscall.SIGHUP)
 
 	for _, f := range files {
-		watchFiles(time.Second/2,
+		err := watchFiles(time.Second/2,
 			// mix of actual paths and symbolic links
 			[]string{files[0], syms[0], syms[1], files[3]})
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		expectWatchFileChange(t, f, ch)
 	}
