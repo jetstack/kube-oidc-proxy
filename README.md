@@ -1,16 +1,17 @@
-# kube-oidc-proxy
+  # kube-oidc-proxy
 
-kube-oidc-proxy is a reverse proxy server to authenticate users using OIDC for
-Kubernetes API servers without OIDC authentication available.
+`kube-oidc-proxy` is a reverse proxy server to authenticate users using OIDC to
+Kubernetes API servers where OIDC authentication is not available (i.e. managed 
+Kubernetes providers such as GKE, EKS, etc).
 
-This intermediary server takes kubectl requests, authenticates the request using
+This intermediary server takes `kubectl` requests, authenticates the request using
 the configured OIDC Kubernetes authenticator, then attaches impersonation
 headers based on the OIDC response from the configured provider. This
 impersonated request is then sent to the API server on behalf of the user and
 it's response passed back. The server has flag parity with secure serving and
 OIDC authentication that are available with the Kubernetes API server as well as
-client flags provided by kubectl. In cluster client authentication is also
-available when running kube-oidc-proxy as a pod.
+client flags provided by kubectl. In-cluster client authentication is also
+available when running `kube-oidc-proxy` as a pod.
 
 Since the proxy server utilises impersonation to forward requests to the API
 server once authenticated, impersonation is disabled for user requests to the
@@ -20,8 +21,8 @@ The following is a diagram of the request flow for a user request.
 ![kube-oidc-proxy request flow](/img/kube-oidc-proxy.png)
 
 ## Quickstart
-This quickstart demo will assume you have a Kubernetes cluster with OIDC
-authentication unavailable as well as an OIDC client created with your chosen
+This quickstart demo will assume you have a Kubernetes cluster without OIDC
+authentication, as well as an OIDC client created with your chosen
 provider. We will be using a Service with type `LoadBalancer` to expose it to
 the outside world. This can be changed depending on what is available and what
 suites your set up best.
@@ -31,12 +32,12 @@ This will create it's Deployment, Service Account and required permissions into
 the newly created `kube-oidc-proxy` Namespace.
 
 ```
-$ kubectl apply -f ./demo/kube-oidc-porxy.yaml
+$ kubectl apply -f ./demo/kube-oidc-proxy.yaml
 $ kubectl get all --namespace kube-oidc-proxy
 ```
 
 This deployment will fail until we create the required secrets. Notice we have
-also not provided any client flags as we are using the in cluster config with
+also not provided any client flags as we are using the in-cluster config with
 it's Service Account.
 
 We now wait until we have an external IP address provisioned.
@@ -45,10 +46,10 @@ We now wait until we have an external IP address provisioned.
 $ kubectl get service --namespace kube-oidc-proxy
 ```
 
-We need to generate certificates for the kube-oidc-proxy to securely serve.
-We will be creating self signed certificates which are tied to either it's IP
+We need to generate certificates for the `kube-oidc-proxy` to securely serve.
+We will be creating self-signed certificates which are tied to either it's IP
 address or a domain name that has been configured to point to this address.
-These certificates could also be generated through cert-manager, more
+These certificates could also be generated through `cert-manager`, more
 information about this project found
 [here](https://github.com/jetstack/cert-manager).
 
@@ -63,7 +64,7 @@ $ ./demo/gencreds.sh k8s.my-domain.com
 ```
 
 This should generate a certificate authority along with a signed key pair for
-use by kube-oidc-proxy in `./demo/generated`. Enter the TLS key and certificate
+use by `kube-oidc-proxy` in `./demo/generated`. Enter the TLS key and certificate
 into the secure serving Kubernetes Secret manifest.
 
 ```
@@ -94,7 +95,7 @@ now they are available.
 kubectl delete pod --namespace kube-oidc-proxy kube-oidc-proxy-*
 ```
 
-Finally, create a Kubeconfig to now point to kube-oidc-proxy as well as setting
+Finally, create a Kubeconfig to now point to `kube-oidc-proxy` as well as setting
 up your OIDC authenticated Kubernetes user.
 
 ```
