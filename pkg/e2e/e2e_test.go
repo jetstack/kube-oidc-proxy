@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Masterminds/semver"
 	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -35,6 +36,18 @@ func TestMain(m *testing.M) {
 	if nodeImage == "" {
 		nodeImage = defaultNodeImage
 	}
+
+	v13, err := semver.NewVersion("1.13")
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	v, err := semver.NewVersion(nodeImage)
+	if err != nil {
+		klog.Fatalf("failed to parse not image version %s: %s",
+			nodeImage, err)
+	}
+
 	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
 
 	clusterContext := cluster.NewContext("kube-oidc-proxy-e2e")
@@ -44,6 +57,26 @@ func TestMain(m *testing.M) {
 	config.SetDefaults_Cluster(conf)
 	if len(conf.Nodes) == 0 {
 		klog.Fatal("kind default config set node count to 0")
+	}
+
+	if v.Compare(v13) >= 0 {
+		conf.KubeadmConfigPatches = []string{
+			`apiVersion: kubeadm.k8s.io/v1beta1
+kind: ClusterConfiguration
+metadata:
+  name: config
+networking:
+  serviceSubnet: 10.0.0.0/16`,
+		}
+	} else {
+		conf.KubeadmConfigPatches = []string{
+			`apiVersion: kubeadm.k8s.io/v1alpha3
+kind: ClusterConfiguration
+metadata:
+  name: config
+networking:
+  serviceSubnet: 10.0.0.0/16`,
+		}
 	}
 
 	for i := range conf.Nodes {
