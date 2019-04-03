@@ -33,14 +33,14 @@ manifests/config.json:
 .PHONY: manifests_apply
 manifests_apply: manifests/config.json ## Use kubecfg to apply manifests into cluster
 	# apply all CRDs
-	kubecfg show manifests/main.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
+	kubecfg show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
 	# apply everything
-	kubecfg show manifests/main.jsonnet | kubectl apply -f -
+	kubecfg show config.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
 manifests_validate: manifests/config.json ## Use kubecfg to validate manifests
-	kubecfg validate manifests/main.jsonnet
+	kubecfg validate config.jsonnet
 
 .PHONY: manifests_destroy
 manifests_destroy: manifests/config.json ## Use kubecfg to delete manifests
-	kubecfg show manifests/main.jsonnet | kubectl delete -f - --ignore-not-found
+	kubecfg show config.jsonnet | kubectl delete -f - --ignore-not-found
