@@ -31,7 +31,7 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
 
   namespace:: 'auth',
 
-  base_domain:: 'dex.example.net',
+  base_domain:: 'example.net',
 
   app:: 'dex',
   domain:: $.app + '.' + $.base_domain,

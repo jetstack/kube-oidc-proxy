@@ -6,6 +6,7 @@ local externaldns = import './vendor/kube-prod-runtime/components/externaldns.js
 local contour = import './components/contour.jsonnet';
 local dex = import './components/dex.jsonnet';
 local gangway = import './components/gangway.jsonnet';
+local kube_oidc_proxy = import './components/kube-oidc-proxy.jsonnet';
 
 local config = import './config.json';
 
@@ -26,7 +27,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
       services: [
         {
           name: serviceName,
-          port: 5556,
+          port: servicePort,
         },
       ],
     },
@@ -184,4 +185,21 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 8080),
   },
 
+  kube_oidc_proxy: kube_oidc_proxy {
+    local this = self,
+    base_domain:: $.base_domain,
+    metadata:: {
+      metadata+: {
+        namespace: namespace,
+      },
+    },
+
+    certificate: cert_manager.Certificate(
+      namespace,
+      this.app,
+      $.cert_manager.letsencryptProd,
+      [this.domain]
+    ),
+    ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 443),
+  },
 }
