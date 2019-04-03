@@ -1,6 +1,6 @@
 local kube = import './vendor/kube-prod-runtime/lib/kube.libsonnet';
 
-local cert_manager = import './vendor/kube-prod-runtime/components/cert-manager.jsonnet';
+local cert_manager = import './components/cert-manager.jsonnet';
 local externaldns = import './vendor/kube-prod-runtime/components/externaldns.jsonnet';
 
 local contour = import './components/contour.jsonnet';
@@ -85,9 +85,6 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
   },
 
-  cert_manager_google_issuer: cert_manager.Issuer('clouddns') {
-  },
-
   externaldns: externaldns {
     metadata:: {
       metadata+: {
@@ -146,6 +143,12 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     namespace:: namespace,
     base_domain:: $.base_domain,
 
+    certificate: cert_manager.Certificate(
+      namespace,
+      this.app,
+      $.cert_manager.letsencryptProd,
+      [this.domain]
+    ),
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 5556),
   },
 
@@ -159,6 +162,13 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
         namespace: namespace,
       },
     },
+
+    certificate: cert_manager.Certificate(
+      namespace,
+      this.app,
+      $.cert_manager.letsencryptProd,
+      [this.domain]
+    ),
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 8080),
   },
 
