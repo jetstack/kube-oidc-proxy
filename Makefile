@@ -86,13 +86,16 @@ go_vet:
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 	$(BINDIR)/golangci-lint run
 
+manifests_validate:
+	cd ./demo && make manifests_validate
+
 clean: ## clean up created files
 	rm -rf \
 		$(BINDIR) \
 		kube-oidc-proxy \
 		pkg/mocks/authenticator.go
 
-verify: verify_boilerplate verify_vendor go_fmt go_vet go_lint ## verify code and vendor
+verify: verify_boilerplate verify_vendor go_fmt go_vet go_lint manifest_validate ## verify code and vendor
 
 generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)

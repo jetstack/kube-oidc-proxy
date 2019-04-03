@@ -22,6 +22,8 @@ endif
 	cd infrastructure/$(CLOUD) && terraform init && terraform apply
 	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/config.json
 	$(shell cd infrastructure/$(CLOUD) && terraform output kubeconfig_command)
+	mkdir -p secrets
+	cd infrastructure/$(CLOUD) && terraform output secrets > ../../secrets/secrets.json
 
 .PHONY: terraform_destroy
 terraform_destroy: ## Destroy terraform infrastructure
