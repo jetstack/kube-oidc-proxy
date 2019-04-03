@@ -15,7 +15,7 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
   domain:: $.app + '.' + $.base_domain,
 
   oidc_issuer_url:: 'https://dex.' + $.base_domain,
-  oidc_client_id:: ''
+  oidc_client_id:: '',
   oidc_username_claim:: 'Username',
   oidc_ca:: '',
   oidc_ca_file:: CONFIG_PATH + '/oidc/ca.pem',
