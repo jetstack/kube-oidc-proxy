@@ -9,7 +9,7 @@ local DEX_CONFIG_PATH = DEX_CONFIG_VOLUME_PATH + '/config.yaml';
 local dexAPIGroup = 'dex.coreos.com';
 local dexAPIVersion = 'v1';
 
-local dexCRD(kind) = kube.CustomResourceDefinition('dex.coreos.com', 'v1beta1', kind) {
+local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, kind) {
   spec+: {
     scope: 'Cluster',
   },
@@ -168,40 +168,37 @@ local dexCRD(kind) = kube.CustomResourceDefinition('dex.coreos.com', 'v1beta1', 
     },
   },
 
-  /* Dex creates them with no way of stopping it
-    crds: std.map(
-      (function(o) $.labels + o),
-      [
-        dexCRD('AuthCode'),
-        dexCRD('AuthRequest'),
-        dexCRD('Connector'),
-        dexCRD('OfflineSessions') + {
-          metadata+: {
-            name: 'offlinesessionses.dex.coreos.com',
-          },
-          spec+: {
-            names+: {
-              plural: 'offlinesessionses',
-            },
+  crds: std.map(
+    (function(o) $.labels + o),
+    [
+      dexCRD('AuthCode'),
+      dexCRD('AuthRequest'),
+      dexCRD('Connector'),
+      dexCRD('OfflineSessions') + {
+        metadata+: {
+          name: 'offlinesessionses.dex.coreos.com',
+        },
+        spec+: {
+          names+: {
+            plural: 'offlinesessionses',
           },
         },
-        dexCRD('OfflineSessions'),
-        dexCRD('OAuth2Client'),
-        dexCRD('Password'),
-        dexCRD('RefreshToken'),
-        dexCRD('SigningKey') + {
-          metadata+: {
-            name: 'signingkeies.dex.coreos.com',
-          },
-          spec+: {
-            names+: {
-              plural: 'signingkeies',
-            },
+      },
+      dexCRD('OAuth2Client'),
+      dexCRD('Password'),
+      dexCRD('RefreshToken'),
+      dexCRD('SigningKey') + {
+        metadata+: {
+          name: 'signingkeies.dex.coreos.com',
+        },
+        spec+: {
+          names+: {
+            plural: 'signingkeies',
           },
         },
-      ]
-    )
-    */
+      },
+    ]
+  ),
 
   svc: kube.Service($.p + 'dex') + $.metadata {
     target_pod: $.deployment.spec.template,
