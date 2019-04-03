@@ -4,6 +4,7 @@ local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 local DEX_IMAGE = 'quay.io/dexidp/dex:v2.10.0';
 local DEX_HTTPS_PORT = 5556;
 local DEX_CONFIG_VOLUME_PATH = '/etc/dex/config';
+local DEX_TLS_VOLUME_PATH = '/etc/dex/tls';
 local DEX_CONFIG_PATH = DEX_CONFIG_VOLUME_PATH + '/config.yaml';
 
 local dexAPIGroup = 'dex.coreos.com';
@@ -154,11 +155,10 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
               },
               volumeMounts_+: {
                 config: { mountPath: DEX_CONFIG_VOLUME_PATH },
+                tls: { mountPath: DEX_TLS_VOLUME_PATH },
               },
               readinessProbe: {
-                httpGet: { path: '/_cluster/health?local=true', port: 'db' },
-                // don't allow rolling updates to kill containers until the cluster is green
-                // ...meaning it's not allocating replicas or relocating any shards
+                httpGet: { path: '/.well-known/openid-configuration', port: DEX_HTTPS_PORT, scheme: 'HTTPS' },
                 initialDelaySeconds: 120,
                 periodSeconds: 30,
                 failureThreshold: 4,
