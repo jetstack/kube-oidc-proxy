@@ -136,6 +136,18 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
         namespace: namespace,
       },
     },
+
+    svc+: {
+      metadata+: {
+        annotations+: {
+          // this add a final dot to the domain name and joins the list
+          'external-dns.alpha.kubernetes.io/hostname': std.join(',', std.map(
+            (function(o) o + '.'),
+            [$.dex.domain, $.gangway.domain],
+          )),
+        },
+      },
+    },
   },
 
   dex: dex {
