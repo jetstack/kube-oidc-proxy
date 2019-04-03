@@ -2,6 +2,10 @@ CLOUD := google
 
 KUBECONFIG := $(CURDIR)/.kubeconfig-$(CLOUD)
 
+ifeq ($(CLOUD),google)
+GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
+endif
+
 export KUBECONFIG
 
 # from https://suva.sh/posts/well-documented-makefiles/
@@ -11,6 +15,10 @@ help:  ## Display this help
 
 .PHONY: terraform_apply
 terraform_apply: ## Applies terraform infrastructure
+	echo '' > infrastructure/$(CLOUD)/terraform.tfvars
+ifeq ($(CLOUD),google)
+	echo 'google_project = "$(GOOGLE_PROJECT)"' > infrastructure/$(CLOUD)/terraform.tfvars
+endif
 	cd infrastructure/$(CLOUD) && terraform init && terraform apply
 	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/config.json
 	$(shell cd infrastructure/$(CLOUD) && terraform output kubeconfig_command)
