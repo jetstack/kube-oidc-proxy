@@ -32,10 +32,13 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
 
   base_domain:: 'dex.example.net',
 
+  app:: 'dex',
+  domain:: $.app + '.' + $.base_domain,
+
   labels:: {
     metadata+: {
       labels+: {
-        app: 'dex',
+        app: $.app,
       },
     },
   },
@@ -46,10 +49,10 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
     },
   },
 
-  serviceAccount: kube.ServiceAccount($.p + 'dex') + $.metadata {
+  serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata {
   },
 
-  role: kube.Role($.p + 'dex') + $.metadata {
+  role: kube.Role($.p + $.app) + $.metadata {
     rules: [
       {
         apiGroups: [''],
@@ -59,7 +62,7 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
     ],
   },
 
-  clusterRole: kube.ClusterRole($.p + 'dex') + $.metadata {
+  clusterRole: kube.ClusterRole($.p + $.app) + $.metadata {
     rules: [
       {
         apiGroups: ['dex.coreos.com'],  // API group created by dex
@@ -74,26 +77,26 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
     ],
   },
 
-  roleBinding: kube.RoleBinding($.p + 'dex') + $.metadata {
+  roleBinding: kube.RoleBinding($.p + $.app) + $.metadata {
     roleRef_: $.role,
     subjects_+: [$.serviceAccount],
   },
 
-  clusterRoleBinding: kube.ClusterRoleBinding($.p + 'dex') + $.metadata {
+  clusterRoleBinding: kube.ClusterRoleBinding($.p + $.app) + $.metadata {
     roleRef_: $.clusterRole,
     subjects_+: [$.serviceAccount],
   },
 
-  disruptionBudget: kube.PodDisruptionBudget($.p + 'dex') + $.metadata {
+  disruptionBudget: kube.PodDisruptionBudget($.p + $.app) + $.metadata {
     target_pod: $.deployment.spec.template,
     spec+: { maxUnavailable: 1 },
   },
 
   // ConfigMap for additional Java security properties
-  config: kube.ConfigMap($.p + 'dex') + $.metadata {
+  config: kube.ConfigMap($.p + $.app) + $.metadata {
     data+: {
       'config.yaml': std.manifestJsonEx({
-        issuer: 'https://' + $.base_domain,
+        issuer: 'https://' + $.domain,
         storage: {
           type: 'kubernetes',
           config: {
@@ -101,15 +104,15 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
           },
         },
         web: {
-          https: '0.0.0.0:5556',
-          tlsCert: '/etc/dex/tls/tls.crt',
-          tlsKey: '/etc/dex/tls/tls.key',
+          https: '0.0.0.0:' + DEX_HTTPS_PORT,
+          tlsCert: DEX_TLS_VOLUME_PATH + '/tls.crt',
+          tlsKey: DEX_TLS_VOLUME_PATH + '/tls.key',
         },
         enablePasswordDB: true,
       }, '  '),
     },
   },
-  deployment: kube.Deployment($.p + 'dex') + $.metadata {
+  deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
     spec+: {
       replicas: 1,
@@ -122,15 +125,20 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
         spec+: {
           serviceAccountName: $.serviceAccount.metadata.name,
           affinity: kube.PodZoneAntiAffinityAnnotation(this.spec.template),
-          default_container: 'dex',
+          default_container: $.app,
           volumes_+: {
             config: kube.ConfigMapVolume($.config),
+            tls: {
+              secret: {
+                secretName: $.p + 'dex-tls',
+              },
+            },
           },
           securityContext: {
             fsGroup: 1001,
           },
           containers_+: {
-            dex: kube.Container('dex') {
+            dex: kube.Container($.app) {
               local container = self,
               image: DEX_IMAGE,
               command: ['/usr/local/bin/dex', 'serve', DEX_CONFIG_PATH],
@@ -200,7 +208,7 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
     ]
   ),
 
-  svc: kube.Service($.p + 'dex') + $.metadata {
+  svc: kube.Service($.p + $.app) + $.metadata {
     target_pod: $.deployment.spec.template,
     spec+: {
       sessionAffinity: 'None',

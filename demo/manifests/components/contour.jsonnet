@@ -7,6 +7,9 @@ local contour_crds = import 'contour-crds.json';
 local CONTOUR_IMAGE = 'gcr.io/heptio-images/contour:v0.10.0';
 local ENVOY_IMAGE = 'docker.io/envoyproxy/envoy-alpine:v1.9.0';
 
+local apiGroup = 'contour.heptio.com';
+local apiVersion = 'v1beta1';
+
 {
   p:: '',
 
@@ -135,4 +138,13 @@ local ENVOY_IMAGE = 'docker.io/envoyproxy/envoy-alpine:v1.9.0';
       ],
     },
   },
+
+  // create ingress route
+  IngressRoute(namespace, name):: kube._Object(apiGroup + '/' + apiVersion, 'IngressRoute', name) + {
+    metadata+: {
+      namespace: namespace,
+      name: name,
+    },
+  },
+
 }
