@@ -9,11 +9,12 @@ local gangway = import './components/gangway.jsonnet';
 
 local config = import './config.json';
 
-local base_domain = 'lab.christian-gcp.jetstack.net';
 local namespace = 'auth';
 
 {
   config:: config,
+
+  base_domain:: error 'base_domain is undefined',
 
   cert_manager: cert_manager {
     google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
@@ -68,7 +69,7 @@ local namespace = 'auth';
     },
 
     deploy+: {
-      ownerId: base_domain,
+      ownerId: $.base_domain,
       spec+: {
         template+: {
           spec+: {
@@ -98,6 +99,8 @@ local namespace = 'auth';
   namespace: kube.Namespace(namespace),
 
   contour: contour {
+    base_domain:: $.base_domain,
+
     metadata:: {
       metadata+: {
         namespace: namespace,
@@ -107,12 +110,13 @@ local namespace = 'auth';
 
   dex: dex {
     namespace:: namespace,
-    base_domain:: base_domain,
+    base_domain:: $.base_domain,
   },
   dexPasswordChristian: dex.Password('christian', 'simon@swine.de', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
   dexIngress: {},
 
   gangway: gangway {
+    base_domain:: $.base_domain,
     metadata:: {
       metadata+: {
         namespace: namespace,

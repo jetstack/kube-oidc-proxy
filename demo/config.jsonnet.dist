@@ -1,0 +1,3 @@
+(import './manifests/main.jsonnet') {
+  base_domain: 'kubernetes.example.net',
+}
