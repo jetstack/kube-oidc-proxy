@@ -117,14 +117,14 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
               volumeMounts_+: {
                 oidc: { mountPath: CONFIG_PATH + '/oidc', readOnly: true },
-                secureServing: { mountPath: CONFIG_PATH + '/tls', readOnly: true },
+                serving: { mountPath: CONFIG_PATH + '/tls', readOnly: true },
               },
             },
           },
 
           volumes_+: {
             oidc: kube.SecretVolume($.oidc_secret),
-            secureServing: {
+            serving: {
               secret: {
                 secretName: $.p + $.app + '-tls',
               },
@@ -137,7 +137,14 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
   svc: kube.Service($.p + $.app) + $.metadata {
     target_pod: $.deployment.spec.template,
+    port: $.secure_serving_port,
+
     spec+: {
+      ports: [{
+        port: $.secure_serving_port,
+        targetPort: $.secure_serving_port,
+      }],
+
       sessionAffinity: 'None',
     },
   },
