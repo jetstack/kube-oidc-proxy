@@ -32,6 +32,9 @@ manifests/config.json:
 
 .PHONY: manifests_apply
 manifests_apply: manifests/config.json ## Use kubecfg to apply manifests into cluster
+	# apply all CRDs
+	kubecfg show manifests/main.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
+	# apply everything
 	kubecfg show manifests/main.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
