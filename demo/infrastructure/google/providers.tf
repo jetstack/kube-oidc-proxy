@@ -6,9 +6,7 @@ variable "google_zone" {
   default = "europe-west1-d"
 }
 
-variable "google_project" {
-  default = "jetstack-christian"
-}
+variable "google_project" {}
 
 provider "google" {
   region      = "${var.google_region}"
