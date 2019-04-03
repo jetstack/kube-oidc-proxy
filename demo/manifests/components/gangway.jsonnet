@@ -8,17 +8,20 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
 
   base_domain:: 'cluster.local',
 
+  app:: 'gangway',
+  domain:: $.app + '.' + $.base_domain,
+
   cluster_name:: 'mycluster',
 
   namespace:: 'gangway',
 
-  gangway_url:: 'https://gangway.' + $.base_domain,
+  gangway_url:: 'https://' + $.domain,
   kubernetes_url:: 'https://kubernetes-api.' + $.base_domain,
 
   labels:: {
     metadata+: {
       labels+: {
-        app: 'gangway',
+        app: $.app,
       },
     },
   },
@@ -37,13 +40,13 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
   },
 
 
-  configMap: kube.ConfigMap($.p + 'gangway') + $.metadata {
+  configMap: kube.ConfigMap($.p + $.app) + $.metadata {
     data+: {
       'gangway.yaml': std.manifestJsonEx($.config, '  '),
     },
   },
 
-  deployment: kube.Deployment($.p + 'gangway') + $.metadata {
+  deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
     spec+: {
       replicas: 3,
@@ -55,14 +58,14 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
         },
         spec+: {
           affinity: kube.PodZoneAntiAffinityAnnotation(this.spec.template),
-          default_container: 'gangway',
+          default_container: $.app,
           volumes_+: {
             config: kube.ConfigMapVolume($.configMap),
           },
           containers_+: {
-            gangway: kube.Container('gangway') {
+            gangway: kube.Container($.app) {
               image: GANGWAY_IMAGE,
-              command: ['gangway'],
+              command: [$.app],
               args: [
                 '-config',
                 '/config/gangway.yaml',
@@ -92,7 +95,7 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
     },
   },
 
-  svc: kube.Service($.p + 'gangway') + $.metadata {
+  svc: kube.Service($.p + $.app) + $.metadata {
     target_pod: $.deployment.spec.template,
   },
 }

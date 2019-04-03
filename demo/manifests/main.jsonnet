@@ -11,6 +11,39 @@ local config = import './config.json';
 
 local namespace = 'auth';
 
+local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePort) = contour.IngressRoute(
+  namespace,
+  name,
+) {
+  spec+: {
+    virtualhost: {
+      fqdn: domain,
+      tls: {
+        passthrough: true,
+      },
+    },
+    tcpproxy: {
+      services: [
+        {
+          name: serviceName,
+          port: 5556,
+        },
+      ],
+    },
+    routes: [
+      {
+        match: '/',
+        services: [
+          {
+            name: 'fake',
+            port: 6666,
+          },
+        ],
+      },
+    ],
+  },
+};
+
 {
   config:: config,
 
@@ -109,19 +142,24 @@ local namespace = 'auth';
   },
 
   dex: dex {
+    local this = self,
     namespace:: namespace,
     base_domain:: $.base_domain,
+
+    ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 5556),
   },
+
   dexPasswordChristian: dex.Password('christian', 'simon@swine.de', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
-  dexIngress: {},
 
   gangway: gangway {
+    local this = self,
     base_domain:: $.base_domain,
     metadata:: {
       metadata+: {
         namespace: namespace,
       },
     },
+    ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 8080),
   },
 
 }
