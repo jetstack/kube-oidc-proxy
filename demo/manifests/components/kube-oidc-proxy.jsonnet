@@ -5,6 +5,7 @@ local kube_oidc_proxy_clusterrole = import 'kube-oidc-proxy-clusterrole.json';
 
 local KUBE_OIDC_PROXY_IMAGE = 'docker.io/simonswine/kube-oidc-proxy';
 local CONFIG_PATH = '/etc/kube-oidc-proxy';
+local READINESS_PORT = 8080;
 
 {
   p:: '',
@@ -13,17 +14,6 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
   app:: 'kube-oidc-proxy',
   domain:: $.app + '.' + $.base_domain,
-
-  oidc_issuer_url:: 'https://dex.' + $.base_domain,
-  oidc_client_id:: '',
-  oidc_username_claim:: 'Username',
-  oidc_ca:: '',
-  oidc_ca_file:: CONFIG_PATH + '/oidc/ca.pem',
-
-  tls_cert_file:: CONFIG_PATH + '/tls/tls.crt',
-  tls_key_file:: CONFIG_PATH + '/tls/tls.key',
-  secure_serving_port:: 443,
-  readiness_port:: 8080,
 
   namespace:: 'kube-oidc-proxy',
 
@@ -43,17 +33,15 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
   config:: {
     secureServing+: {
-      tlsCertFile: $.tls_cert_file,
-      tlsKeyFile: $.tls_key_file,
-      port: $.secure_serving_port,
+      tlsCertFile: CONFIG_PATH + '/tls/tls.crt',
+      tlsKeyFile: CONFIG_PATH + '/tls/tls.key',
+      port: 443,
     },
 
     oidc+: {
-      clientID: $.oidc_client_id,
-      issuerURL: $.oidc_issuer_url,
-      usernameClaim: $.oidc_username_claim,
-      caFile: $.oidc_ca_file,
-      ca: $.oidc_ca,
+      clientID: 'kube-oidc-proxy',
+      usernameClaim: 'email',
+      issuerURL: 'https://myprovider',
     },
   },
 
@@ -69,11 +57,12 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
   oidc_secret: kube.Secret($.p + 'kube-oidc-proxy-config') + $.metadata {
     data_+: {
-      'oidc.client-id': $.config.oidc.clientID,
-      'oidc.issuer-url': $.config.oidc.issuerURL,
-      'oidc.username-claim': $.config.oidc.usernameClaim,
-      'oidc.ca-pem': $.config.oidc.ca,
-    },
+              'oidc.client-id': $.config.oidc.clientID,
+              'oidc.issuer-url': $.config.oidc.issuerURL,
+            } +
+            if std.objectHas($.config.oidc, 'ca') then
+              { 'oidc.ca-pem': $.config.oidc.ca }
+            else {},
   },
 
   deployment: kube.Deployment($.p + $.app) + $.metadata {
@@ -90,29 +79,33 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
               ports_+: {
                 serving: { containerPort: $.config.secureServing.port },
-                probe: { containerPort: $.readiness_port },
+                probe: { containerPort: READINESS_PORT },
               },
 
               readinessProbe: {
-                tcpSocket: { port: $.readiness_port },
+                tcpSocket: { port: READINESS_PORT },
                 initialDelaySeconds: 15,
                 periodSeconds: 10,
               },
-
-              args: [
+              command: [
+                'kube-oidc-proxy',
                 '--secure-port=' + $.config.secureServing.port,
                 '--tls-cert-file=' + $.config.secureServing.tlsCertFile,
                 '--tls-private-key-file=' + $.config.secureServing.tlsKeyFile,
                 '--oidc-client-id=$(OIDC_CLIENT_ID)',
                 '--oidc-issuer-url=$(OIDC_ISSUER_URL)',
-                '--oidc-username-claim=$(OIDC_USERNAME_CLAIM)',
-                '--oidc-ca-file=' + $.config.oidc.caFile,
-              ],
+              ] + if std.objectHas($.config.oidc, 'caFile') then
+                ['--oidc-ca-file=' + $.config.oidc.caFile]
+              else
+                [] + if std.objectHas($.config.oidc, 'usernameClaim') then
+                  ['--oidc-username-claim=' + $.config.oidc.usernameClaim]
+                else
+                  []
+              ,
 
               env_+: {
-                OIDC_CLIENT_ID: kube.SecretKeyRef($.oidc_secret, "oidc.client-id"),
-                OIDC_ISSUER_URL: kube.SecretKeyRef($.oidc_secret, "oidc.issuer-url"),
-                OIDC_USERNAME_CLAIM: kube.SecretKeyRef($.oidc_secret, "oidc.username-claim"),
+                OIDC_CLIENT_ID: kube.SecretKeyRef($.oidc_secret, 'oidc.client-id'),
+                OIDC_ISSUER_URL: kube.SecretKeyRef($.oidc_secret, 'oidc.issuer-url'),
               },
 
               volumeMounts_+: {
@@ -137,12 +130,12 @@ local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
   svc: kube.Service($.p + $.app) + $.metadata {
     target_pod: $.deployment.spec.template,
-    port: $.secure_serving_port,
+    port: $.config.secureServing.port,
 
     spec+: {
       ports: [{
-        port: $.secure_serving_port,
-        targetPort: $.secure_serving_port,
+        port: $.config.secureServing.port,
+        targetPort: $.config.secureServing.port,
       }],
 
       sessionAffinity: 'None',

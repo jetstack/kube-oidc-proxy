@@ -144,7 +144,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
           // this add a final dot to the domain name and joins the list
           'external-dns.alpha.kubernetes.io/hostname': std.join(',', std.map(
             (function(o) o + '.'),
-            [$.dex.domain, $.gangway.domain],
+            [$.dex.domain, $.gangway.domain, $.kube_oidc_proxy.domain],
           )),
         },
       },
@@ -187,9 +187,10 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     config+: {
       authorizeURL: 'https://' + $.dex.domain + '/auth',
       tokenURL: 'https://' + $.dex.domain + '/token',
-      clientID: 'xxxxxx',
-      clientSecret: 'yyyyyy',
-      sessionSecurityKey: 'HcYfz42H5jtTQhROmgnViA==',
+      apiServerURL: 'https://' + $.kube_oidc_proxy,
+      clientID: $.config.gangway.client_id,
+      clientSecret: $.config.gangway.client_secret,
+      sessionSecurityKey: $.config.gangway.session_security_key,
     },
 
     dexClient: dex.Client(this.config.clientID) {
@@ -206,6 +207,13 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     metadata:: {
       metadata+: {
         namespace: namespace,
+      },
+    },
+
+    config+: {
+      oidc+: {
+        issuerURL: 'https://' + $.dex.domain,
+        clientID: $.config.gangway.client_id,
       },
     },
 

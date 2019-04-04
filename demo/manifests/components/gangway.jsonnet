@@ -11,13 +11,10 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
 
   app:: 'gangway',
   domain:: $.app + '.' + $.base_domain,
-
-  cluster_name:: 'mycluster',
+  gangway_url:: 'https://' + $.domain,
 
   namespace:: 'gangway',
 
-  gangway_url:: 'https://' + $.domain,
-  kubernetes_url:: 'https://kubernetes-api.' + $.base_domain,
 
   labels:: {
     metadata+: {
@@ -35,9 +32,8 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
 
   config:: {
     usernameClaim: 'sub',
-    apiServerURL: $.kubernetes_url,
     redirectURL: $.gangway_url + '/callback',
-    clusterName: $.cluster_name,
+    clusterName: 'cluster-name',
     serveTLS: true,
     certFile: GANGWAY_TLS_VOLUME_PATH + '/tls.crt',
     keyFile: GANGWAY_TLS_VOLUME_PATH + '/tls.key',
