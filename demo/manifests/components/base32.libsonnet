@@ -1,4 +1,3 @@
-local offset64 = std.stringChars('cbf29ce484222325');  //uint64 14695981039346656037
 {
   local base32_table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
   local base32_inv = { [base32_table[i]]: i for i in std.range(0, 31) },

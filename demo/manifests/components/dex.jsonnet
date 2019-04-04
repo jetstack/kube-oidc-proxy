@@ -19,8 +19,7 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
 
 // This a broken hash method dex is using
 local fakeHashFNV(input) =
-  local offset64 = std.stringChars('cbf29ce484222325');  //uint64 14695981039346656037
-  local offset64Chars = std.map((function(o) std.parseHex(offset64[2 * o] + offset64[2 * o + 1])), std.range(0, 7));
+  local offset64Chars = [203, 242, 156, 228, 33, 35, 37];
 
   local bytes =
     if std.type(input) == 'string' then
