@@ -3,7 +3,7 @@ local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
 local kube_oidc_proxy_clusterrole = import 'kube-oidc-proxy-clusterrole.json';
 
-local KUBE_OIDC_PROXY_IMAGE = 'quay.io/jetstack/kube-oidc-proxy';
+local KUBE_OIDC_PROXY_IMAGE = 'docker.io/simonswine/kube-oidc-proxy';
 local CONFIG_PATH = '/etc/kube-oidc-proxy';
 
 {

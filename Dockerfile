@@ -1,6 +1,8 @@
 # Copyright Jetstack Ltd. See LICENSE for details.
-from alpine:latest
+FROM alpine:3.9
 
-COPY kube-oidc-proxy /
+RUN apk --no-cache --update add ca-certificates
 
-ENTRYPOINT ["/kube-oidc-proxy"]
+COPY kube-oidc-proxy /usr/bin/
+
+CMD ["/usr/bin/kube-oidc-proxy"]
