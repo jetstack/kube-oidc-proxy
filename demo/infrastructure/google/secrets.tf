@@ -1,4 +1,4 @@
-module "secrets" {
-  source = "../modules/secrets"
-  length = 64
+module "gangway" {
+  source = "../modules/gangway"
+  length = 32
 }

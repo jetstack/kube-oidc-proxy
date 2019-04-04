@@ -2,9 +2,7 @@ locals {
   config = {
     cert_manager = "${module.dns.config}"
     externaldns  = "${module.dns.config}"
-
-    oidc_client_secret = "${module.secrets.oidc_client_secret}"
-    gangway_key        = "${module.secrets.gangway_key}"
+    gangway      = "${module.gangway.config}"
   }
 }
 
