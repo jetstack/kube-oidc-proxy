@@ -165,7 +165,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 5556),
   },
 
-  dexPasswordChristian: dex.Password('christian', 'simon@swine.de', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
+  dexPasswordChristian: dex.Password('simon@swine.de', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
 
   gangway: gangway {
     local this = self,
@@ -183,6 +183,21 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
       [this.domain]
     ),
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 8080),
+
+    config+: {
+      authorizeURL: 'https://' + $.dex.domain + '/auth',
+      tokenURL: 'https://' + $.dex.domain + '/token',
+      clientID: 'xxxxxx',
+      clientSecret: 'yyyyyy',
+      sessionSecurityKey: 'HcYfz42H5jtTQhROmgnViA==',
+    },
+
+    dexClient: dex.Client(this.config.clientID) {
+      secret: this.config.clientSecret,
+      redirectURIs: [
+        this.config.redirectURL,
+      ],
+    },
   },
 
   kube_oidc_proxy: kube_oidc_proxy {

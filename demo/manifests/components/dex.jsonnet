@@ -1,7 +1,8 @@
 local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
+local base32 = import 'base32.libsonnet';
 
-local DEX_IMAGE = 'quay.io/dexidp/dex:v2.10.0';
+local DEX_IMAGE = 'quay.io/dexidp/dex:v2.15.0';
 local DEX_HTTPS_PORT = 5556;
 local DEX_CONFIG_VOLUME_PATH = '/etc/dex/config';
 local DEX_TLS_VOLUME_PATH = '/etc/dex/tls';
@@ -12,21 +13,46 @@ local dexAPIVersion = 'v1';
 
 local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, kind) {
   spec+: {
-    scope: 'Cluster',
+    scope: 'Namespaced',
   },
 };
+
+// This a broken hash method dex is using
+local fakeHashFNV(input) =
+  local offset64 = std.stringChars('cbf29ce484222325');  //uint64 14695981039346656037
+  local offset64Chars = std.map((function(o) std.parseHex(offset64[2 * o] + offset64[2 * o + 1])), std.range(0, 7));
+
+  local bytes =
+    if std.type(input) == 'string' then
+      std.map(function(c) std.codepoint(c), input)
+    else
+      input;
+
+  (bytes + offset64Chars);
+
+// This hashes clientIDs and emails to metadata names for dex crds
+local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s)), '=', ''));
 
 
 {
   // Create a entry in the password DB
-  Password(name, email, hash):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Password', name) + {
+  Password(email, hash):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Password', dexNameHash(email)) + {
     metadata+: {
       namespace: $.namespace,
     },
     email: email,
-    hash: hash,
-    username: name,
+    hash: std.base64(hash),
+    username: email,
   },
+
+  // Create a client configuration for dex
+  Client(name):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'OAuth2Client', dexNameHash(name)) + {
+    metadata+: {
+      namespace: $.namespace,
+    },
+    id: name,
+  },
+
   p:: '',
 
   namespace:: 'auth',
@@ -50,6 +76,24 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
     },
   },
 
+  config:: {
+    issuer: 'https://' + $.domain,
+    storage: {
+      type: 'kubernetes',
+      config: {
+        inCluster: true,
+      },
+    },
+    logger: {
+      level: 'debug',
+    },
+    web: {
+      https: '0.0.0.0:' + DEX_HTTPS_PORT,
+      tlsCert: DEX_TLS_VOLUME_PATH + '/tls.crt',
+      tlsKey: DEX_TLS_VOLUME_PATH + '/tls.key',
+    },
+    enablePasswordDB: true,
+  },
   serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata {
   },
 
@@ -93,24 +137,11 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
     spec+: { maxUnavailable: 1 },
   },
 
+
   // ConfigMap for additional Java security properties
-  config: kube.ConfigMap($.p + $.app) + $.metadata {
+  configMap: kube.ConfigMap($.p + $.app) + $.metadata {
     data+: {
-      'config.yaml': std.manifestJsonEx({
-        issuer: 'https://' + $.domain,
-        storage: {
-          type: 'kubernetes',
-          config: {
-            inCluster: true,
-          },
-        },
-        web: {
-          https: '0.0.0.0:' + DEX_HTTPS_PORT,
-          tlsCert: DEX_TLS_VOLUME_PATH + '/tls.crt',
-          tlsKey: DEX_TLS_VOLUME_PATH + '/tls.key',
-        },
-        enablePasswordDB: true,
-      }, '  '),
+      'config.yaml': std.manifestJsonEx($.config, '  '),
     },
   },
   deployment: kube.Deployment($.p + $.app) + $.metadata {
@@ -120,7 +151,7 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
       template+: {
         metadata+: {
           annotations+: {
-            'config/hash': std.md5(std.escapeStringJson($.config)),
+            'config/hash': std.md5(std.escapeStringJson($.configMap)),
           },
         },
         spec+: {
@@ -128,7 +159,7 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
           affinity: kube.PodZoneAntiAffinityAnnotation(this.spec.template),
           default_container: $.app,
           volumes_+: {
-            config: kube.ConfigMapVolume($.config),
+            config: kube.ConfigMapVolume($.configMap),
             tls: {
               secret: {
                 secretName: $.p + 'dex-tls',
@@ -159,15 +190,11 @@ local dexCRD(kind) = kube.CustomResourceDefinition(dexAPIGroup, dexAPIVersion, k
               },
               readinessProbe: {
                 httpGet: { path: '/.well-known/openid-configuration', port: DEX_HTTPS_PORT, scheme: 'HTTPS' },
-                initialDelaySeconds: 120,
-                periodSeconds: 30,
-                failureThreshold: 4,
-                successThreshold: 2,  // Minimum consecutive successes for the probe to be considered successful after having failed.
               },
               livenessProbe: self.readinessProbe {
                 // elasticsearch_logging_discovery has a 5min timeout on cluster bootstrap
-                initialDelaySeconds: 5 * 60,
-                successThreshold: 1,  // Minimum consecutive successes for the probe to be considered successful after having failed.
+                initialDelaySeconds: 2 * 60,
+                failureThreshold: 4,
               },
             },
           },
