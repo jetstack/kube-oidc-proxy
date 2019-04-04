@@ -2,6 +2,7 @@ local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
 local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
+local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
 
 {
   p:: '',
@@ -37,6 +38,9 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
     apiServerURL: $.kubernetes_url,
     redirectURL: $.gangway_url + '/callback',
     clusterName: $.cluster_name,
+    serveTLS: true,
+    certFile: GANGWAY_TLS_VOLUME_PATH + '/tls.crt',
+    keyFile: GANGWAY_TLS_VOLUME_PATH + '/tls.key',
   },
 
 
@@ -61,6 +65,11 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
           default_container: $.app,
           volumes_+: {
             config: kube.ConfigMapVolume($.configMap),
+            tls: {
+              secret: {
+                secretName: $.app + '-tls',
+              },
+            },
           },
           containers_+: {
             gangway: kube.Container($.app) {
@@ -77,16 +86,17 @@ local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
                 GANGWAY_PORT: '8080',
               },
               readinessProbe: {
-                httpGet: { path: '/', port: 8080 },
+                httpGet: { path: '/', port: 8080, scheme: 'HTTPS' },
                 periodSeconds: 10,
               },
               livenessProbe: {
-                httpGet: { path: '/', port: 8080 },
+                httpGet: { path: '/', port: 8080, scheme: 'HTTPS' },
                 initialDelaySeconds: 20,
                 periodSeconds: 10,
               },
               volumeMounts_+: {
                 config: { mountPath: '/config' },
+                tls: { mountPath: GANGWAY_TLS_VOLUME_PATH },
               },
             },
           },

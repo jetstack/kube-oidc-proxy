@@ -87,6 +87,12 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
     logger: {
       level: 'debug',
     },
+    grpc: {
+      addr: '127.0.0.1:5557',
+      tlsCert: DEX_TLS_VOLUME_PATH + '/tls.crt',
+      tlsKey: DEX_TLS_VOLUME_PATH + '/tls.key',
+      tlsClientCA: DEX_TLS_VOLUME_PATH + '/tls.crt',
+    },
     web: {
       https: '0.0.0.0:' + DEX_HTTPS_PORT,
       tlsCert: DEX_TLS_VOLUME_PATH + '/tls.crt',
