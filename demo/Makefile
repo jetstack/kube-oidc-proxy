@@ -1,3 +1,4 @@
+# Copyright Jetstack Ltd. See LICENSE for details.
 BINDIR ?= $(CURDIR)/bin
 CLOUD  := google
 
