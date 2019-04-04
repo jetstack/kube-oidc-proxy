@@ -1,7 +1,7 @@
 variable "length" {}
 
 resource "random_id" "session_security_key" {
-  byte_length = "16"
+  byte_length = "32"
 }
 
 module "oauth2" {

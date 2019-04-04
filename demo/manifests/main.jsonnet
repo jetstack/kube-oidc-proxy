@@ -184,13 +184,14 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     ),
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 8080),
 
+    sessionSecurityKey: $.config.gangway.session_security_key,
+
     config+: {
       authorizeURL: 'https://' + $.dex.domain + '/auth',
       tokenURL: 'https://' + $.dex.domain + '/token',
       apiServerURL: 'https://' + $.kube_oidc_proxy,
       clientID: $.config.gangway.client_id,
       clientSecret: $.config.gangway.client_secret,
-      sessionSecurityKey: $.config.gangway.session_security_key,
     },
 
     dexClient: dex.Client(this.config.clientID) {

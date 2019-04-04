@@ -7,6 +7,8 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
 {
   p:: '',
 
+  sessionSecurityKey:: error 'sessionSecurityKey is undefined',
+
   base_domain:: 'cluster.local',
 
   app:: 'gangway',
@@ -46,6 +48,12 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
     },
   },
 
+  secret: kube.Secret($.p + $.app) + $.metadata {
+    data_+: {
+      'session-security-key': $.sessionSecurityKey,
+    },
+  },
+
   deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
     spec+: {
@@ -54,6 +62,7 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
         metadata+: {
           annotations+: {
             'config/hash': std.md5(std.escapeStringJson($.configMap)),
+            'secret/hash': std.md5(std.escapeStringJson($.secret)),
           },
         },
         spec+: {
@@ -79,6 +88,7 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
                 http: { containerPort: 8080 },
               },
               env_+: {
+                GANGWAY_SESSION_SECURITY_KEY: kube.SecretKeyRef($.secret, 'session-security-key'),
                 GANGWAY_PORT: '8080',
               },
               readinessProbe: {

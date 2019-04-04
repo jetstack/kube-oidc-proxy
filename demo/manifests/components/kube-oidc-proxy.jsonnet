@@ -55,7 +55,7 @@ local READINESS_PORT = 8080;
     subjects_+: [$.serviceAccount],
   },
 
-  oidc_secret: kube.Secret($.p + 'kube-oidc-proxy-config') + $.metadata {
+  oidcSecret: kube.Secret($.p + 'kube-oidc-proxy-config') + $.metadata {
     data_+: {
               'oidc.client-id': $.config.oidc.clientID,
               'oidc.issuer-url': $.config.oidc.issuerURL,
@@ -67,6 +67,12 @@ local READINESS_PORT = 8080;
 
   deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
+
+    metadata+: {
+      annotations+: {
+        'secret/hash': std.md5(std.escapeStringJson($.oidcSecret)),
+      },
+    },
 
     spec+: {
       replicas: 3,
@@ -104,8 +110,8 @@ local READINESS_PORT = 8080;
               ,
 
               env_+: {
-                OIDC_CLIENT_ID: kube.SecretKeyRef($.oidc_secret, 'oidc.client-id'),
-                OIDC_ISSUER_URL: kube.SecretKeyRef($.oidc_secret, 'oidc.issuer-url'),
+                OIDC_CLIENT_ID: kube.SecretKeyRef($.oidcSecret, 'oidc.client-id'),
+                OIDC_ISSUER_URL: kube.SecretKeyRef($.oidcSecret, 'oidc.issuer-url'),
               },
 
               volumeMounts_+: {
@@ -116,7 +122,7 @@ local READINESS_PORT = 8080;
           },
 
           volumes_+: {
-            oidc: kube.SecretVolume($.oidc_secret),
+            oidc: kube.SecretVolume($.oidcSecret),
             serving: {
               secret: {
                 secretName: $.p + $.app + '-tls',
