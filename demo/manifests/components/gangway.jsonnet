@@ -2,7 +2,7 @@ local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
 local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
-local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
+local GANGWAY_CONFIG_PATH = '/etc/gangway';
 
 {
   p:: '',
@@ -13,10 +13,19 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
 
   app:: 'gangway',
   domain:: $.app + '.' + $.base_domain,
-  gangway_url:: 'https://' + $.domain,
 
   namespace:: 'gangway',
 
+  secret_key:: '',
+  client_secret:: '',
+
+  gangway_url:: 'https://' + $.domain,
+  kubernetes_url:: 'https://kubernetes-api.' + $.base_domain,
+  authorize_url:: 'https://' + $.domain + '/dex/auth',
+  token_url:: 'https://' + $.domain + '/dex/token',
+  cluster_name:: 'my-cluster',
+
+  port:: 8080,
 
   labels:: {
     metadata+: {
@@ -35,10 +44,13 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
   config:: {
     usernameClaim: 'sub',
     redirectURL: $.gangway_url + '/callback',
-    clusterName: 'cluster-name',
+    clusterName: $.cluster_name,
+    authorizeURL: $.authorize_url,
+    tokenURL: $.token_url,
+    clientID: 'gangway',
     serveTLS: true,
-    certFile: GANGWAY_TLS_VOLUME_PATH + '/tls.crt',
-    keyFile: GANGWAY_TLS_VOLUME_PATH + '/tls.key',
+    certFile: GANGWAY_CONFIG_PATH + '/tls/tls.crt',
+    keyFile: GANGWAY_CONFIG_PATH + '/tls/tls.key',
   },
 
 
@@ -49,8 +61,9 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
   },
 
   secret: kube.Secret($.p + $.app) + $.metadata {
-    data_+: {
-      'session-security-key': $.sessionSecurityKey,
+    data+: {
+      'session-security-key': $.secret_key,
+      'client-secret': $.client_secret,
     },
   },
 
@@ -69,10 +82,11 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
           affinity: kube.PodZoneAntiAffinityAnnotation(this.spec.template),
           default_container: $.app,
           volumes_+: {
+            secret: kube.SecretVolume($.secret),
             config: kube.ConfigMapVolume($.configMap),
             tls: {
               secret: {
-                secretName: $.app + '-tls',
+                secretName: $.p + $.app + '-tls',
               },
             },
           },
@@ -82,27 +96,33 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
               command: [$.app],
               args: [
                 '-config',
-                '/config/gangway.yaml',
+                GANGWAY_CONFIG_PATH + '/gangway.yaml',
               ],
               ports_+: {
-                http: { containerPort: 8080 },
+                http: { containerPort: $.port },
               },
               env_+: {
-                GANGWAY_SESSION_SECURITY_KEY: kube.SecretKeyRef($.secret, 'session-security-key'),
-                GANGWAY_PORT: '8080',
+                GANGWAY_PORT: $.port,
+                GANGWAY_SESSION_SECURITY_KEY: kube.SecretKeyRef($.secret, "session-security-key"),
+                GANGWAY_CLIENT_SECRET: kube.SecretKeyRef($.secret, "client-secret"),
               },
               readinessProbe: {
-                httpGet: { path: '/', port: 8080, scheme: 'HTTPS' },
+                httpGet: { path: '/', port: $.port, scheme: "HTTPS" },
                 periodSeconds: 10,
+                failureThreshold: 3,
+                timeoutSeconds: 1,
               },
               livenessProbe: {
-                httpGet: { path: '/', port: 8080, scheme: 'HTTPS' },
+                httpGet: { path: '/', port: $.port, scheme: "HTTPS" },
                 initialDelaySeconds: 20,
-                periodSeconds: 10,
+                timeoutSeconds: 1,
+                periodSeconds: 60,
+                failureThreshold: 3,
               },
               volumeMounts_+: {
-                config: { mountPath: '/config' },
-                tls: { mountPath: GANGWAY_TLS_VOLUME_PATH },
+                config: { mountPath: GANGWAY_CONFIG_PATH, readOnly: true },
+                #secret: { mountPath: GANGWAY_CONFIG_PATH + '/secrets', readOnly: true },
+                tls: { mountPath: GANGWAY_CONFIG_PATH + '/tls' , readOnly: true },
               },
             },
           },

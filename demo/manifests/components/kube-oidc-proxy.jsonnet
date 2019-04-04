@@ -17,6 +17,8 @@ local READINESS_PORT = 8080;
 
   namespace:: 'kube-oidc-proxy',
 
+  client_secret:: '',
+
   labels:: {
     metadata+: {
       labels+: {
@@ -55,18 +57,25 @@ local READINESS_PORT = 8080;
     subjects_+: [$.serviceAccount],
   },
 
-  oidcSecret: kube.Secret($.p + 'kube-oidc-proxy-config') + $.metadata {
+  secret: kube.Secret($.p + $.app) + $.metadata {
     data_+: {
-              'oidc.client-id': $.config.oidc.clientID,
-              'oidc.issuer-url': $.config.oidc.issuerURL,
-            } +
-            if std.objectHas($.config.oidc, 'ca') then
-              { 'oidc.ca-pem': $.config.oidc.ca }
-            else {},
+      'client-id': $.config.oidc.clientID,
+      'issuer-url': $.config.oidc.issuerURL,
+      'username-claim': $.config.oidc.usernameClaim,
+      } +
+      if std.objectHas($.config.oidc, 'ca') then
+        { 'ca-pem': $.config.oidc.ca }
+      else {},
   },
 
   deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
+
+    metadata+: {
+      annotations+: {
+        'secret/hash': std.md5(std.escapeStringJson($.client_secret)),
+      },
+    },
 
     spec+: {
       replicas: 3,
@@ -109,23 +118,22 @@ local READINESS_PORT = 8080;
               ,
 
               env_+: {
-                OIDC_CLIENT_ID: kube.SecretKeyRef($.oidcSecret, 'oidc.client-id'),
-                OIDC_ISSUER_URL: kube.SecretKeyRef($.oidcSecret, 'oidc.issuer-url'),
+                OIDC_CLIENT_ID: kube.SecretKeyRef($.secret, "client-id"),
+                OIDC_ISSUER_URL: kube.SecretKeyRef($.secret, "issuer-url"),
+                OIDC_USERNAME_CLAIM: kube.SecretKeyRef($.secret, "username-claim"),
               },
 
               volumeMounts_+: {
                 oidc: { mountPath: CONFIG_PATH + '/oidc', readOnly: true },
-                serving: { mountPath: CONFIG_PATH + '/tls', readOnly: true },
+                tls: { mountPath: CONFIG_PATH + '/tls', readOnly: true },
               },
             },
           },
 
           volumes_+: {
-            oidc: kube.SecretVolume($.oidcSecret),
-            serving: {
-              secret: {
-                secretName: $.p + $.app + '-tls',
-              },
+            oidc: kube.SecretVolume($.secret),
+            tls: {
+              secret: { secretName: $.p + $.app + '-tls', },
             },
           },
         },

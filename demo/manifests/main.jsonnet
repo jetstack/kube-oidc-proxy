@@ -50,6 +50,8 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
 
   base_domain:: error 'base_domain is undefined',
 
+  namespace: kube.Namespace(namespace),
+
   cert_manager: cert_manager {
     google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
       data_+: {
@@ -127,8 +129,6 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
   },
 
-  namespace: kube.Namespace(namespace),
-
   contour: contour {
     base_domain:: $.base_domain,
 
@@ -155,6 +155,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     local this = self,
     namespace:: namespace,
     base_domain:: $.base_domain,
+    client_secret:: $.config.gangway.client_secret,
 
     certificate: cert_manager.Certificate(
       namespace,
@@ -170,6 +171,8 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   gangway: gangway {
     local this = self,
     base_domain:: $.base_domain,
+    secret_key:: $.config.gangway.session_security_key,
+    client_secret:: $.config.gangway.client_secret,
     metadata:: {
       metadata+: {
         namespace: namespace,
@@ -217,6 +220,8 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
         clientID: $.config.gangway.client_id,
       },
     },
+
+    client_secret:: $.config.gangway.client_secret,
 
     certificate: cert_manager.Certificate(
       namespace,

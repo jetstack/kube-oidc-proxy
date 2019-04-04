@@ -70,6 +70,8 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
   app:: 'dex',
   domain:: $.app + '.' + $.base_domain,
 
+  client_secret:: '',
+
   labels:: {
     metadata+: {
       labels+: {
@@ -107,6 +109,15 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
       tlsKey: DEX_TLS_VOLUME_PATH + '/tls.key',
     },
     enablePasswordDB: true,
+    staticClients:
+    [{
+      id: 'gangway',
+      redirectURIs: [
+        'https://gangway.' + $.base_domain + '/callback',
+      ],
+      name: 'Heptio Gangway',
+      secret: $.client_secret,
+     }],
   },
   serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata {
   },
