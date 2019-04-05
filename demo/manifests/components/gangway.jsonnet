@@ -2,7 +2,9 @@ local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
 local GANGWAY_IMAGE = 'gcr.io/heptio-images/gangway:v3.0.0';
-local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
+local GANGWAY_PORT = 8080;
+local GANGWAY_CONFIG_VOLUME_PATH = '/etc/gangway';
+local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
 
 {
   p:: '',
@@ -36,6 +38,9 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
     usernameClaim: 'sub',
     redirectURL: $.gangway_url + '/callback',
     clusterName: 'cluster-name',
+    authorize_url: 'https://' + $.domain + '/auth',
+    clientID: 'client-id',
+    tokenURL: 'https://' + $.domain + '/token',
     serveTLS: true,
     certFile: GANGWAY_TLS_VOLUME_PATH + '/tls.crt',
     keyFile: GANGWAY_TLS_VOLUME_PATH + '/tls.key',
@@ -72,7 +77,7 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
             config: kube.ConfigMapVolume($.configMap),
             tls: {
               secret: {
-                secretName: $.app + '-tls',
+                secretName: $.p + $.app + '-tls',
               },
             },
           },
@@ -82,26 +87,26 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
               command: [$.app],
               args: [
                 '-config',
-                '/config/gangway.yaml',
+                GANGWAY_CONFIG_VOLUME_PATH + '/gangway.yaml',
               ],
               ports_+: {
-                http: { containerPort: 8080 },
+                http: { containerPort: GANGWAY_PORT },
               },
               env_+: {
                 GANGWAY_SESSION_SECURITY_KEY: kube.SecretKeyRef($.secret, 'session-security-key'),
-                GANGWAY_PORT: '8080',
+                GANGWAY_PORT: GANGWAY_PORT,
               },
               readinessProbe: {
-                httpGet: { path: '/', port: 8080, scheme: 'HTTPS' },
+                httpGet: { path: '/', port: GANGWAY_PORT, scheme: 'HTTPS' },
                 periodSeconds: 10,
               },
               livenessProbe: {
-                httpGet: { path: '/', port: 8080, scheme: 'HTTPS' },
+                httpGet: { path: '/', port: GANGWAY_PORT, scheme: 'HTTPS' },
                 initialDelaySeconds: 20,
                 periodSeconds: 10,
               },
               volumeMounts_+: {
-                config: { mountPath: '/config' },
+                config: { mountPath: GANGWAY_CONFIG_VOLUME_PATH },
                 tls: { mountPath: GANGWAY_TLS_VOLUME_PATH },
               },
             },
