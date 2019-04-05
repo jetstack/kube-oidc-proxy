@@ -189,7 +189,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     config+: {
       authorizeURL: 'https://' + $.dex.domain + '/auth',
       tokenURL: 'https://' + $.dex.domain + '/token',
-      apiServerURL: 'https://' + $.kube_oidc_proxy,
+      apiServerURL: 'https://' + $.kube_oidc_proxy.domain,
       clientID: $.config.gangway.client_id,
       clientSecret: $.config.gangway.client_secret,
     },
