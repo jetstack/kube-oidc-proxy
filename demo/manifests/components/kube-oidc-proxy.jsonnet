@@ -40,6 +40,8 @@ local READINESS_PORT = 8080;
       clientID: 'kube-oidc-proxy',
       usernameClaim: 'email',
       issuerURL: 'https://myprovider',
+      groupsClaim: 'groups',
+      groupsPrefix: 'dex:',
     },
   },
 
@@ -107,6 +109,8 @@ local READINESS_PORT = 8080;
                 '--secure-port=' + $.config.secureServing.port,
                 '--tls-cert-file=' + $.config.secureServing.tlsCertFile,
                 '--tls-private-key-file=' + $.config.secureServing.tlsKeyFile,
+                '--oidc-groups-prefix=' + $.config.oidc.groupsPrefix,
+                '--oidc-groups-claim=' + $.config.oidc.groupsClaim,
                 '--oidc-client-id=$(OIDC_CLIENT_ID)',
                 '--oidc-issuer-url=$(OIDC_ISSUER_URL)',
               ] + if std.objectHas($.config.oidc, 'caFile') then
