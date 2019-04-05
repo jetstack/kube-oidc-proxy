@@ -62,7 +62,6 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
         namespace: 'kube-system',
       },
     },
-    letsencrypt_contact_email:: 'simon+letsencrypt@swine.de',
     letsencrypt_environment:: 'prod',
 
     letsencryptStaging+: {
@@ -164,8 +163,6 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     ),
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 5556),
   },
-
-  dexPasswordChristian: dex.Password('simon@swine.de', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
 
   gangway: gangway {
     local this = self,
