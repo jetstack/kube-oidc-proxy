@@ -49,6 +49,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   config:: config,
 
   base_domain:: error 'base_domain is undefined',
+  letsencrypt_contact_email:: error 'letsencrypt_contact_email is undefined',
 
   namespace: kube.Namespace(namespace),
 
@@ -64,7 +65,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
         namespace: 'kube-system',
       },
     },
-    letsencrypt_contact_email:: 'simon+letsencrypt@swine.de',
+    letsencrypt_contact_email:: $.letsencrypt_contact_email,
     letsencrypt_environment:: 'prod',
 
     letsencryptStaging+: {

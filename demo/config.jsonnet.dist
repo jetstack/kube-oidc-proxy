@@ -1,3 +1,4 @@
 (import './manifests/main.jsonnet') {
   base_domain: 'kubernetes.example.net',
+  letsencrypt_contact_email:: 'example@example.com',
 }

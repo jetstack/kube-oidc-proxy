@@ -82,7 +82,7 @@ local READINESS_PORT = 8080;
       template+: {
         metadata+: {
           annotations+: {
-            'secret/hash': std.md5(std.escapeStringJson($.oidcSecret)),
+            'secret/hash': std.md5(std.escapeStringJson($.secret)),
           },
         },
         spec+: {
