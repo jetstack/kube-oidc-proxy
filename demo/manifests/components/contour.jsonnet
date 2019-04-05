@@ -47,7 +47,7 @@ local apiVersion = 'v1beta1';
   deployment: kube.Deployment($.p + 'contour') + $.metadata {
     local this = self,
     spec+: {
-      replicas: 3,
+      replicas: 1,
       template+: {
         metadata+: {
           annotations+: {

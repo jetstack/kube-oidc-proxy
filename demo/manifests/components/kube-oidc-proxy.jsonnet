@@ -79,7 +79,7 @@ local READINESS_PORT = 8080;
     local this = self,
 
     spec+: {
-      replicas: 3,
+      replicas: 1,
       template+: {
         metadata+: {
           annotations+: {
