@@ -1,8 +1,6 @@
 local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
-local kube_oidc_proxy_clusterrole = import 'kube-oidc-proxy-clusterrole.json';
-
 local KUBE_OIDC_PROXY_IMAGE = 'docker.io/simonswine/kube-oidc-proxy';
 local CONFIG_PATH = '/etc/kube-oidc-proxy';
 local READINESS_PORT = 8080;
@@ -45,10 +43,22 @@ local READINESS_PORT = 8080;
     },
   },
 
-  clusterRole: kube_oidc_proxy_clusterrole + $.labels,
-
-  serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata {
+  clusterRole: kube.ClusterRole($.p + $.app) + $.metadata {
+    rules: [
+      {
+        apiGroups: [''],
+        resources: ['users', 'groups', 'serviceaccounts'],
+        verbs: ['impersonate'],
+      },
+      {
+        apiGroups: ['authentication.k8s.io'],
+        resources: ['userextras/scopes'],
+        verbs: ['impersonate'],
+      },
+    ],
   },
+
+  serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata,
 
   clusterRoleBinding: kube.ClusterRoleBinding($.p + $.app) + $.metadata {
     roleRef_: $.clusterRole,
