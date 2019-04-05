@@ -59,6 +59,15 @@ manifests_validate: depend manifests/config.json ## Use kubecfg to validate mani
 manifests_destroy: depend manifests/config.json ## Use kubecfg to delete manifests
 	$(BINDIR)/kubecfg show config.jsonnet | kubectl delete -f - --ignore-not-found
 
+.PHONY: manifests_backup_certificates
+manifests_backup_certificates:
+	kubectl get secrets --all-namespaces -l certmanager.k8s.io/certificate-name -o yaml > .backup-certificates.yaml
+
+.PHONY: manifests_restore_certificates
+manifests_restore_certificates:
+	kubectl create ns auth --dry-run -o yaml | kubectl apply -f -
+	kubectl apply -f .backup-certificates.yaml
+
 .PHONY: verify
 verify: manifests_validate
 
