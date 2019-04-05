@@ -57,7 +57,7 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
   deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
     spec+: {
-      replicas: 3,
+      replicas: 1,
       template+: {
         metadata+: {
           annotations+: {
