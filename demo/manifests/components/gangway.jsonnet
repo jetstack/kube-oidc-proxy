@@ -121,7 +121,6 @@ local GANGWAY_CONFIG_PATH = '/etc/gangway';
               },
               volumeMounts_+: {
                 config: { mountPath: GANGWAY_CONFIG_PATH, readOnly: true },
-                #secret: { mountPath: GANGWAY_CONFIG_PATH + '/secrets', readOnly: true },
                 tls: { mountPath: GANGWAY_CONFIG_PATH + '/tls' , readOnly: true },
               },
             },

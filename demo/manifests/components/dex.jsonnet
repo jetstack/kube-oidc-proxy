@@ -41,7 +41,6 @@ local fakeHashFNV(input) =
 // This hashes clientIDs and emails to metadata names for dex crds
 local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s)), '=', ''));
 
-
 {
   // Create a entry in the password DB
   Password(email, hash):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Password', dexNameHash(email)) + {

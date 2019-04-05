@@ -1,4 +1,10 @@
 (import './manifests/main.jsonnet') {
   base_domain: 'kubernetes.example.net',
-  letsencrypt_contact_email:: 'example@example.com',
+  letsencrypt_contact_email:: 'example@example.net',
+  users:: [
+    {
+      email: 'example@example.net',
+      hashedPassword: '$2y$10$bCPg0QnQ0Ffo2cO.nCgogu8EAzA/U07aG2jO/gQiTLsF23WkD.AeW', // Password123
+    },
+  ],
 }

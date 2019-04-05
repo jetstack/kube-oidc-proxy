@@ -50,6 +50,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
 
   base_domain:: error 'base_domain is undefined',
   letsencrypt_contact_email:: error 'letsencrypt_contact_email is undefined',
+  users:: [],
 
   namespace: kube.Namespace(namespace),
 
@@ -167,7 +168,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 5556),
   },
 
-  dexPasswordChristian: dex.Password('simon@swine.de', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
+  passwords: [dex.Password(user.email, user.hashedPassword) for user in $.users],
 
   gangway: gangway {
     local this = self,
