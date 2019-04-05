@@ -11,7 +11,7 @@ local READINESS_PORT = 8080;
   base_domain:: 'example.net',
 
   app:: 'kube-oidc-proxy',
-  domain:: $.app + '.' + $.base_domain,
+  domain:: $.p + $.app + '.' + $.base_domain,
 
   namespace:: 'kube-oidc-proxy',
 

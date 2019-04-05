@@ -68,7 +68,7 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
   base_domain:: 'example.net',
 
   app:: 'dex',
-  domain:: $.app + '.' + $.base_domain,
+  domain:: $.p + $.app + '.' + $.base_domain,
 
   labels:: {
     metadata+: {

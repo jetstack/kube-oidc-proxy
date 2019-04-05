@@ -12,7 +12,7 @@ local GANGWAY_TLS_VOLUME_PATH = '/etc/dex/tls';
   base_domain:: 'cluster.local',
 
   app:: 'gangway',
-  domain:: $.app + '.' + $.base_domain,
+  domain:: $.p + $.app + '.' + $.base_domain,
   gangway_url:: 'https://' + $.domain,
 
   namespace:: 'gangway',
