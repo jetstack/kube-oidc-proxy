@@ -134,7 +134,7 @@ local READINESS_PORT = 8080;
             oidc: kube.SecretVolume($.oidcSecret),
             serving: {
               secret: {
-                secretName: $.p + $.app + '-tls',
+                secretName: $.app + '-tls',
               },
             },
           },

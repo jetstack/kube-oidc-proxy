@@ -176,7 +176,7 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
             config: kube.ConfigMapVolume($.configMap),
             tls: {
               secret: {
-                secretName: $.p + 'dex-tls',
+                secretName: 'dex-tls',
               },
             },
           },
