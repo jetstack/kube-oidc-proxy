@@ -1,4 +1,4 @@
 module "gangway" {
   source = "../modules/gangway"
-  length = 32
+  length = 24
 }
