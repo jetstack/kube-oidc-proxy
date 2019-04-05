@@ -68,15 +68,14 @@ local READINESS_PORT = 8080;
   deployment: kube.Deployment($.p + $.app) + $.metadata {
     local this = self,
 
-    metadata+: {
-      annotations+: {
-        'secret/hash': std.md5(std.escapeStringJson($.oidcSecret)),
-      },
-    },
-
     spec+: {
       replicas: 3,
       template+: {
+        metadata+: {
+          annotations+: {
+            'secret/hash': std.md5(std.escapeStringJson($.oidcSecret)),
+          },
+        },
         spec+: {
           serviceAccountName: $.serviceAccount.metadata.name,
           containers_+: {
