@@ -61,6 +61,19 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
     id: name,
   },
 
+  // Create a connector configuration for dex
+  Connector(id, name, type, config):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Connector', id) + {
+    metadata+: {
+      namespace: $.namespace,
+    },
+    id: id,
+    name: name,
+    type: type,
+    config: std.base64(std.manifestJsonEx({
+      redirectURI: 'https://' + $.domain + '/callback',
+    } + config, '  ')),
+  },
+
   p:: '',
 
   namespace:: 'auth',
