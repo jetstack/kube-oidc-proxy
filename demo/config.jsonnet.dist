@@ -1,0 +1,11 @@
+(import './manifests/main.jsonnet') {
+  base_domain: 'kubernetes.example.net',
+  cert_manager+: {
+    letsencrypt_contact_email:: 'certificates@example.net',
+  },
+  dex+: {
+    users: [
+      $.dex.Password('admin@example.net', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
+    ],
+  },
+}

@@ -1,0 +1,14 @@
+{
+    "dependencies": [
+        {
+            "name": "kube-prod-runtime",
+            "source": {
+                "git": {
+                    "remote": "https://github.com/bitnami/kube-prod-runtime.git",
+                    "subdir": "manifests"
+                }
+            },
+            "version": "v1.1.2"
+        }
+    ]
+}
