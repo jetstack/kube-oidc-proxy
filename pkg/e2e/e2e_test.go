@@ -64,34 +64,26 @@ func TestMain(m *testing.M) {
 		klog.Fatal("kind default config set node count to 0")
 	}
 
+	kubeadmConfig := `metadata:
+  name: config
+networking:
+  serviceSubnet: 10.0.0.0/16`
+
 	if v.Compare(v13) >= 0 {
-		conf.KubeadmConfigPatches = []string{
-			`apiVersion: kubeadm.k8s.io/v1beta1
+		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1beta1
 kind: ClusterConfiguration
-metadata:
-  name: config
-networking:
-  serviceSubnet: 10.0.0.0/16`,
-		}
+`, kubeadmConfig)
 	} else if v.Compare(v12) < 0 {
-		conf.KubeadmConfigPatches = []string{
-			`apiVersion: kubeadm.k8s.io/v1alpha2
+		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha2
 kind: MasterConfiguration
-metadata:
-  name: config
-networking:
-  serviceSubnet: 10.0.0.0/16`,
-		}
+`, kubeadmConfig)
 	} else {
-		conf.KubeadmConfigPatches = []string{
-			`apiVersion: kubeadm.k8s.io/v1alpha3
+		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha3
 kind: ClusterConfiguration
-metadata:
-  name: config
-networking:
-  serviceSubnet: 10.0.0.0/16`,
-		}
+`, kubeadmConfig)
 	}
+
+	conf.KubeadmConfigPatches = []string{kubeadmConfig}
 
 	for i := range conf.Nodes {
 		conf.Nodes[i].Image = nodeImage
