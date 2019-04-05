@@ -67,6 +67,22 @@
   version = "v11.5.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:6b250e53b3b7b9abd7e62f55875c234d2f8b77b846bff200fecafa2dc09af09a"
+  name = "github.com/MakeNowJust/heredoc"
+  packages = ["."]
+  pruneopts = ""
+  revision = "e9091a26100e9cfb2b6a8f470085bfa541931a91"
+
+[[projects]]
+  digest = "1:b856d8248663c39265a764561c1a1a149783f6cc815feb54a1f3a591b91f6eca"
+  name = "github.com/Masterminds/semver"
+  packages = ["."]
+  pruneopts = ""
+  revision = "c7af12943936e8c39859482e61f0574c2fd7fc75"
+  version = "v1.4.2"
+
+[[projects]]
   digest = "1:ee35b514b6826a6e65bc24795873020d86570e5252c30c7e136581d0fa4ebdb0"
   name = "github.com/NYTimes/gziphandler"
   packages = ["."]
@@ -159,6 +175,19 @@
   version = "v0.1.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:9c19f8c33e635e0439c8afc167d6d02e3aa6eea5b69d64880244fd354a99edc4"
+  name = "github.com/chai2010/gettext-go"
+  packages = [
+    "gettext",
+    "gettext/mo",
+    "gettext/plural",
+    "gettext/po",
+  ]
+  pruneopts = ""
+  revision = "bf70f2a70fb1b1f36d90d671a72795984eab0fcb"
+
+[[projects]]
   digest = "1:0bc9fe59e23786a6d5f5b65d2676904d29aafcc79fa9fca4472fe0d15ee15656"
   name = "github.com/coreos/etcd"
   packages = [
@@ -244,6 +273,16 @@
   revision = "a9fbbdc8dd8794b20af358382ab780559bca589d"
 
 [[projects]]
+  digest = "1:59be0b37b12a8cdb8fedd44f6ccdd4aec6735ad4fb10bf19bb99ae5d1c701dda"
+  name = "github.com/docker/spdystream"
+  packages = [
+    ".",
+    "spdy",
+  ]
+  pruneopts = ""
+  revision = "449fdfce4d962303d702fec724ef0ad181c92528"
+
+[[projects]]
   digest = "1:044b2f1eea2f5cfb0d3678baf60892734f59d5c2ea3932cb6ed894a97ccba15c"
   name = "github.com/elazarl/go-bindata-assetfs"
   packages = ["."]
@@ -276,6 +315,30 @@
   packages = ["."]
   pruneopts = ""
   revision = "5858425f75500d40c52783dce87d085a483ce135"
+
+[[projects]]
+  branch = "master"
+  digest = "1:549f95037fea25e00a5341ac6a169a5b3e5306be107f45260440107b779b74f9"
+  name = "github.com/exponent-io/jsonpath"
+  packages = ["."]
+  pruneopts = ""
+  revision = "d6023ce2651d8eafb5c75bb0c7167536102ec9f5"
+
+[[projects]]
+  digest = "1:23a5efa4b272df86a8ebffc942f5e0c1aac4b750836037394cc450b6d91e241a"
+  name = "github.com/fatih/camelcase"
+  packages = ["."]
+  pruneopts = ""
+  revision = "44e46d280b43ec1531bb25252440e34f1b800b65"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:b13707423743d41665fd23f0c36b2f37bb49c30e94adb813319c44188a51ba22"
+  name = "github.com/ghodss/yaml"
+  packages = ["."]
+  pruneopts = ""
+  revision = "0ca9ea5df5451ffdf184b4428c902747c2c11cd7"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:c8052dcf3ec378a9a6bc4f00ecc10d6d5eb3cc1f8faaf6b2f70f047e8881d446"
@@ -545,6 +608,14 @@
   version = "v1.0.1"
 
 [[projects]]
+  digest = "1:713b341855f1480e4baca1e7c5434e1d266441340685ecbde32d59bdc065fb3f"
+  name = "github.com/mitchellh/go-wordwrap"
+  packages = ["."]
+  pruneopts = ""
+  revision = "9e67c67572bc5dd02aef930e2b0ae3c02a4b5a5c"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:bcc46a0fbd9e933087bef394871256b5c60269575bb661935874729c65bbbf60"
   name = "github.com/mitchellh/mapstructure"
   packages = ["."]
@@ -599,6 +670,14 @@
   pruneopts = ""
   revision = "5f041e8faa004a95c88a202771f4cc3e991971e6"
   version = "v2.0.1"
+
+[[projects]]
+  digest = "1:1d7e1867c49a6dd9856598ef7c3123604ea3daabf5b83f303ff457bcbc410b1d"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = ""
+  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
+  version = "v0.8.1"
 
 [[projects]]
   branch = "master"
@@ -665,12 +744,27 @@
   revision = "0bfd3b39853cdde5762efda92289f14b0ac0491b"
 
 [[projects]]
+  digest = "1:67d5130351f71fe24139c6168dd2f8ab5fde543a1230754403d84173bb25a097"
+  name = "github.com/russross/blackfriday"
+  packages = ["."]
+  pruneopts = ""
+  revision = "300106c228d52c8941d4b3de6054a6062a86dda3"
+
+[[projects]]
   digest = "1:7f569d906bdd20d906b606415b7d794f798f91a62fcfb6a4daa6d50690fb7a3f"
   name = "github.com/satori/go.uuid"
   packages = ["."]
   pruneopts = ""
   revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
   version = "v1.2.0"
+
+[[projects]]
+  digest = "1:42a59e0ee70c485f96de4a30f86f88266d50b50f918053dec798f0cb2b4b7a88"
+  name = "github.com/shurcooL/sanitized_anchor_name"
+  packages = ["."]
+  pruneopts = ""
+  revision = "7bfe4c7ecddb3666a94b053b422cdd8f5aaa3615"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:9a3c631555e0351fdc4e696577bb63afd90c399d782a8462dba9d100d7021db3"
@@ -1113,8 +1207,11 @@
     "pkg/util/cache",
     "pkg/util/clock",
     "pkg/util/diff",
+    "pkg/util/duration",
     "pkg/util/errors",
     "pkg/util/framer",
+    "pkg/util/httpstream",
+    "pkg/util/httpstream/spdy",
     "pkg/util/initialization",
     "pkg/util/intstr",
     "pkg/util/json",
@@ -1122,6 +1219,7 @@
     "pkg/util/naming",
     "pkg/util/net",
     "pkg/util/rand",
+    "pkg/util/remotecommand",
     "pkg/util/runtime",
     "pkg/util/sets",
     "pkg/util/strategicpatch",
@@ -1135,6 +1233,7 @@
     "pkg/version",
     "pkg/watch",
     "third_party/forked/golang/json",
+    "third_party/forked/golang/netutil",
     "third_party/forked/golang/reflect",
   ]
   pruneopts = ""
@@ -1271,6 +1370,7 @@
   packages = [
     "discovery",
     "discovery/cached",
+    "dynamic",
     "informers",
     "informers/admissionregistration",
     "informers/admissionregistration/v1alpha1",
@@ -1392,6 +1492,14 @@
     "rest",
     "rest/watch",
     "restmapper",
+    "scale",
+    "scale/scheme",
+    "scale/scheme/appsint",
+    "scale/scheme/appsv1beta1",
+    "scale/scheme/appsv1beta2",
+    "scale/scheme/autoscalingv1",
+    "scale/scheme/extensionsint",
+    "scale/scheme/extensionsv1beta1",
     "third_party/forked/golang/template",
     "tools/auth",
     "tools/cache",
@@ -1401,13 +1509,17 @@
     "tools/clientcmd/api/v1",
     "tools/metrics",
     "tools/pager",
+    "tools/portforward",
     "tools/record",
     "tools/reference",
+    "tools/remotecommand",
     "tools/watch",
     "transport",
+    "transport/spdy",
     "util/buffer",
     "util/cert",
     "util/connrotation",
+    "util/exec",
     "util/flowcontrol",
     "util/homedir",
     "util/integer",
@@ -1457,6 +1569,7 @@
     "pkg/handler",
     "pkg/util",
     "pkg/util/proto",
+    "pkg/util/proto/validation",
   ]
   pruneopts = ""
   revision = "c59034cc13d587f5ef4e85ca0ade0c1866ae8e1d"
@@ -1604,6 +1717,34 @@
     "pkg/kubeapiserver/authorizer",
     "pkg/kubeapiserver/authorizer/modes",
     "pkg/kubeapiserver/options",
+    "pkg/kubectl",
+    "pkg/kubectl/apps",
+    "pkg/kubectl/cmd/exec",
+    "pkg/kubectl/cmd/portforward",
+    "pkg/kubectl/cmd/util",
+    "pkg/kubectl/cmd/util/openapi",
+    "pkg/kubectl/cmd/util/openapi/validation",
+    "pkg/kubectl/describe",
+    "pkg/kubectl/describe/versioned",
+    "pkg/kubectl/generate",
+    "pkg/kubectl/generated",
+    "pkg/kubectl/polymorphichelpers",
+    "pkg/kubectl/scheme",
+    "pkg/kubectl/util",
+    "pkg/kubectl/util/certificate",
+    "pkg/kubectl/util/deployment",
+    "pkg/kubectl/util/event",
+    "pkg/kubectl/util/fieldpath",
+    "pkg/kubectl/util/i18n",
+    "pkg/kubectl/util/podutils",
+    "pkg/kubectl/util/qos",
+    "pkg/kubectl/util/rbac",
+    "pkg/kubectl/util/resource",
+    "pkg/kubectl/util/slice",
+    "pkg/kubectl/util/storage",
+    "pkg/kubectl/util/templates",
+    "pkg/kubectl/util/term",
+    "pkg/kubectl/validation",
     "pkg/kubelet/apis",
     "pkg/kubelet/types",
     "pkg/master/ports",
@@ -1628,6 +1769,7 @@
     "pkg/serviceaccount",
     "pkg/util/file",
     "pkg/util/hash",
+    "pkg/util/interrupt",
     "pkg/util/io",
     "pkg/util/maps",
     "pkg/util/mount",
@@ -1711,6 +1853,83 @@
   revision = "c2654d5206da6b7b6ace12841e8f359bb89b443c"
 
 [[projects]]
+  digest = "1:1327b919a7eb401541cb40c1e093d7e495101152e8b1625dc5582d923a734668"
+  name = "sigs.k8s.io/kind"
+  packages = [
+    "pkg/cluster",
+    "pkg/cluster/config",
+    "pkg/cluster/config/defaults",
+    "pkg/cluster/config/encoding",
+    "pkg/cluster/config/v1alpha2",
+    "pkg/cluster/config/v1alpha3",
+    "pkg/cluster/constants",
+    "pkg/cluster/create",
+    "pkg/cluster/internal/context",
+    "pkg/cluster/internal/create",
+    "pkg/cluster/internal/create/actions",
+    "pkg/cluster/internal/create/actions/config",
+    "pkg/cluster/internal/create/actions/kubeadminit",
+    "pkg/cluster/internal/create/actions/kubeadmjoin",
+    "pkg/cluster/internal/create/actions/loadbalancer",
+    "pkg/cluster/internal/create/actions/waitforready",
+    "pkg/cluster/internal/delete",
+    "pkg/cluster/internal/haproxy",
+    "pkg/cluster/internal/kubeadm",
+    "pkg/cluster/logs",
+    "pkg/cluster/nodes",
+    "pkg/container/cri",
+    "pkg/container/docker",
+    "pkg/exec",
+    "pkg/fs",
+    "pkg/kustomize",
+    "pkg/log",
+    "pkg/log/fidget",
+    "pkg/util",
+  ]
+  pruneopts = ""
+  revision = "a42ca2f343e43e28266bd32d84c2af453d54e909"
+  version = "0.2.0"
+
+[[projects]]
+  digest = "1:0b2daace3dcced8712072529b621360cf520f3c2ead92d755f35a0ec8dca2714"
+  name = "sigs.k8s.io/kustomize"
+  packages = [
+    "k8sdeps",
+    "k8sdeps/configmapandsecret",
+    "k8sdeps/kunstruct",
+    "k8sdeps/kv",
+    "k8sdeps/transformer",
+    "k8sdeps/transformer/hash",
+    "k8sdeps/transformer/patch",
+    "k8sdeps/validator",
+    "pkg/commands/build",
+    "pkg/constants",
+    "pkg/expansion",
+    "pkg/factory",
+    "pkg/fs",
+    "pkg/git",
+    "pkg/gvk",
+    "pkg/ifc",
+    "pkg/ifc/transformer",
+    "pkg/image",
+    "pkg/internal/error",
+    "pkg/loader",
+    "pkg/patch",
+    "pkg/patch/transformer",
+    "pkg/resid",
+    "pkg/resmap",
+    "pkg/resource",
+    "pkg/target",
+    "pkg/transformers",
+    "pkg/transformers/config",
+    "pkg/transformers/config/defaultconfig",
+    "pkg/types",
+  ]
+  pruneopts = ""
+  revision = "a6f65144121d1955266b0cd836ce954c04122dc8"
+  version = "v2.0.3"
+
+[[projects]]
   digest = "1:321081b4a44256715f2b68411d8eda9a17f17ebfe6f0cc61d2cc52d11c08acfa"
   name = "sigs.k8s.io/yaml"
   packages = ["."]
@@ -1722,10 +1941,15 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/Masterminds/semver",
     "github.com/golang/mock/gomock",
     "github.com/golang/mock/mockgen",
     "github.com/heptiolabs/healthcheck",
     "github.com/spf13/cobra",
+    "gopkg.in/square/go-jose.v2",
+    "k8s.io/api/core/v1",
+    "k8s.io/api/rbac/v1",
+    "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/version",
     "k8s.io/apiserver/pkg/authentication/authenticator",
     "k8s.io/apiserver/pkg/authentication/request/bearertoken",
@@ -1735,14 +1959,23 @@
     "k8s.io/apiserver/pkg/util/globalflag",
     "k8s.io/apiserver/plugin/pkg/authenticator/token/oidc",
     "k8s.io/cli-runtime/pkg/genericclioptions",
+    "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/oidc",
     "k8s.io/client-go/rest",
     "k8s.io/client-go/tools/clientcmd",
+    "k8s.io/client-go/tools/clientcmd/api",
+    "k8s.io/client-go/tools/portforward",
     "k8s.io/client-go/transport",
+    "k8s.io/client-go/transport/spdy",
     "k8s.io/client-go/util/cert",
     "k8s.io/klog",
     "k8s.io/kubernetes/pkg/apis/authentication",
     "k8s.io/kubernetes/pkg/kubeapiserver/options",
+    "k8s.io/kubernetes/pkg/kubectl/cmd/exec",
+    "k8s.io/kubernetes/pkg/kubectl/cmd/portforward",
+    "sigs.k8s.io/kind/pkg/cluster",
+    "sigs.k8s.io/kind/pkg/cluster/config",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

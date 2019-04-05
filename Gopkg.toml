@@ -39,6 +39,10 @@ required = [
   revision = "a9fbbdc8dd8794b20af358382ab780559bca589d"
 
 [[override]]
+  name = "github.com/docker/spdystream"
+  revision = "449fdfce4d962303d702fec724ef0ad181c92528"
+
+[[override]]
   name = "github.com/gophercloud/gophercloud"
   revision = "781450b3c4fcb4f5182bcc5133adb4b2e4a09d1d"
 
@@ -61,3 +65,7 @@ required = [
 [[override]]
   name = "github.com/evanphx/json-patch"
   revision = "5858425f75500d40c52783dce87d085a483ce135"
+
+[[override]]
+  name = "github.com/russross/blackfriday"
+  revision = "300106c228d52c8941d4b3de6054a6062a86dda3"
