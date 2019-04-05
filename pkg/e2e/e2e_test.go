@@ -42,6 +42,11 @@ func TestMain(m *testing.M) {
 		klog.Fatal(err)
 	}
 
+	v12, err := semver.NewVersion("1.12")
+	if err != nil {
+		klog.Fatal(err)
+	}
+
 	v, err := semver.NewVersion(nodeImage)
 	if err != nil {
 		klog.Fatalf("failed to parse not image version %s: %s",
@@ -63,6 +68,15 @@ func TestMain(m *testing.M) {
 		conf.KubeadmConfigPatches = []string{
 			`apiVersion: kubeadm.k8s.io/v1beta1
 kind: ClusterConfiguration
+metadata:
+  name: config
+networking:
+  serviceSubnet: 10.0.0.0/16`,
+		}
+	} else if v.Compare(v12) < 0 {
+		conf.KubeadmConfigPatches = []string{
+			`apiVersion: kubeadm.k8s.io/v1alpha2
+kind: MasterConfiguration
 metadata:
   name: config
 networking:
