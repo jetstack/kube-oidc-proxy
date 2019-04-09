@@ -52,8 +52,8 @@ manifests_apply: depend manifests/config.json ## Use kubecfg to apply manifests 
 	$(BINDIR)/kubecfg show config.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
-manifests_validate: depend manifests/config.json ## Use kubecfg to validate manifests
-	$(BINDIR)/kubecfg validate config.jsonnet
+manifests_validate: depend ## Use kubecfg to validate manifests
+	$(BINDIR)/kubecfg validate config.dist.jsonnet
 
 .PHONY: manifests_destroy
 manifests_destroy: depend manifests/config.json ## Use kubecfg to delete manifests
