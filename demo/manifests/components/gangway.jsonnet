@@ -14,7 +14,10 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
   base_domain:: 'cluster.local',
 
   app:: 'gangway',
-  domain:: $.app + '.' + $.base_domain,
+
+  name:: $.p + $.app,
+
+  domain:: $.name + '.' + $.base_domain,
   gangway_url:: 'https://' + $.domain,
 
   namespace:: 'gangway',
@@ -55,19 +58,19 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
   },
 
 
-  configMap: kube.ConfigMap($.p + $.app) + $.metadata {
+  configMap: kube.ConfigMap($.name) + $.metadata {
     data+: {
       'gangway.yaml': std.manifestJsonEx($.config, '  '),
     },
   },
 
-  secret: kube.Secret($.p + $.app) + $.metadata {
+  secret: kube.Secret($.name) + $.metadata {
     data_+: {
       'session-security-key': $.sessionSecurityKey,
     },
   },
 
-  deployment: kube.Deployment($.p + $.app) + $.metadata {
+  deployment: kube.Deployment($.name) + $.metadata {
     local this = self,
     spec+: {
       replicas: 1,
@@ -85,7 +88,7 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
             config: kube.ConfigMapVolume($.configMap),
             tls: {
               secret: {
-                secretName: $.p + $.app + '-tls',
+                secretName: $.name + '-tls',
               },
             },
           },
@@ -124,7 +127,7 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
     },
   },
 
-  svc: kube.Service($.p + $.app) + $.metadata {
+  svc: kube.Service($.name) + $.metadata {
     target_pod: $.deployment.spec.template,
   },
 }
