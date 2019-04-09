@@ -19,6 +19,8 @@ ifeq ($(UNAME_S),Darwin)
 	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.9.1/kubecfg-darwin-amd64
 	KUBECFG_HASH := 9b6772abc3e2da5add51aa57a2944f77f4c05be49df56087056837aa640fb9c9
 endif
+JSONNET_URL := https://github.com/google/jsonnet/archive/v0.12.1.tar.gz
+JSONNET_HASH := 257c6de988f746cc90486d9d0fbd49826832b7a2f0dbdb60a515cc8a2596c950
 
 export KUBECONFIG
 
@@ -55,6 +57,10 @@ manifests_apply: depend manifests/config.json ## Use kubecfg to apply manifests 
 manifests_validate: depend manifests/config.json ## Use kubecfg to validate manifests
 	$(BINDIR)/kubecfg validate config.jsonnet
 
+.PHONY: manifests_validate
+jsonnet_fmt: depend ## validate formatting of jsonnet files
+	$(BINDIR)/jsonnet fmt --test $(shell find manifests/components/. manifests/main.jsonnet -name "*.jsonnet")
+
 .PHONY: manifests_destroy
 manifests_destroy: depend manifests/config.json ## Use kubecfg to delete manifests
 	$(BINDIR)/kubecfg show config.jsonnet | kubectl delete -f - --ignore-not-found
@@ -69,13 +75,26 @@ manifests_restore_certificates:
 	kubectl apply -f .backup-certificates.yaml
 
 .PHONY: verify
-verify: manifests_validate
+verify: jsonnet_fmt ## verify code and vendor
 
 .PHONY: depend
-depend: $(BINDIR)/kubecfg
+depend: $(BINDIR)/kubecfg $(BINDIR)/jsonnet
+
+.PHONY: clean
+clean: ## clean up created files
+	rm -rf $(BINDIR)
 
 $(BINDIR)/kubecfg:
 	mkdir -p $(BINDIR)
 	curl -sL -o $@ $(KUBECFG_URL)
 	echo "$(KUBECFG_HASH)  $@" | $(SHASUM)
 	chmod +x $@
+
+$(BINDIR)/jsonnet:
+	mkdir -p $(BINDIR)
+	curl -sL -o $@.tar.gz $(JSONNET_URL)
+	echo "$(JSONNET_HASH)  $@.tar.gz" | $(SHASUM)
+	cd $(BINDIR) && tar xf jsonnet.tar.gz && rm jsonnet.tar.gz
+	make -C $(BINDIR)/jsonnet-0.12.1
+	mv $(BINDIR)/jsonnet-0.12.1/jsonnet $(BINDIR)/jsonnet
+	rm -rf $(BINDIR)/jsonnet-0.12.1
