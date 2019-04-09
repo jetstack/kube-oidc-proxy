@@ -19,6 +19,7 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
 
   namespace:: 'gangway',
 
+  config_path:: GANGWAY_CONFIG_VOLUME_PATH,
 
   labels:: {
     metadata+: {
@@ -35,12 +36,19 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
   },
 
   config:: {
-    usernameClaim: 'sub',
+    usernameClaim: 'name',
     redirectURL: $.gangway_url + '/callback',
     clusterName: 'cluster-name',
     authorize_url: 'https://' + $.domain + '/auth',
     clientID: 'client-id',
     tokenURL: 'https://' + $.domain + '/token',
+    scopes: [
+      'openid',
+      'email',
+      'profile',
+      'groups',
+      'offline_access',
+    ],
     serveTLS: true,
     certFile: GANGWAY_TLS_VOLUME_PATH + '/tls.crt',
     keyFile: GANGWAY_TLS_VOLUME_PATH + '/tls.key',
