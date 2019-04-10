@@ -3,11 +3,12 @@ data "aws_availability_zones" "available" {}
 resource "aws_vpc" "cluster" {
   cidr_block = "10.0.0.0/16"
 
-  tags = {
-    Name = "cluster-${var.suffix}"
-
-    "kubernetes.io/cluster/cluster-${var.suffix}" = "shared"
-  }
+  tags = "${
+    map(
+     "Name", "cluster-${var.suffix}",
+     "kubernetes.io/cluster/cluster-${var.suffix}", "shared",
+    )
+  }"
 }
 
 resource "aws_subnet" "cluster" {
@@ -17,11 +18,12 @@ resource "aws_subnet" "cluster" {
   cidr_block        = "10.0.${count.index}.0/24"
   vpc_id            = "${aws_vpc.cluster.id}"
 
-  tags = {
-    Name = "cluster-${var.suffix}"
-
-    "kubernetes.io/cluster/cluster-${var.suffix}" = "shared"
-  }
+  tags = "${
+    map(
+     "Name", "cluster-${var.suffix}",
+     "kubernetes.io/cluster/cluster-${var.suffix}", "shared",
+    )
+  }"
 }
 
 resource "aws_internet_gateway" "cluster" {

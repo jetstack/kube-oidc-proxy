@@ -36,11 +36,12 @@ resource "aws_security_group" "cluster-node" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "cluster-${var.suffix}"
-
-    "kubernetes.io/cluster/cluster-${var.suffix}" = "owned"
-  }
+  tags = "${
+    map(
+     "Name", "cluster-${var.suffix}",
+     "kubernetes.io/cluster/cluster-${var.suffix}", "owned",
+    )
+  }"
 }
 
 resource "aws_security_group_rule" "cluster-node-ingress-self" {
@@ -58,11 +59,20 @@ resource "aws_security_group_rule" "cluster-node-ingress-cluster" {
   from_port                = 1025
   protocol                 = "tcp"
   security_group_id        = "${aws_security_group.cluster-node.id}"
-  source_security_group_id = "${aws_security_group.cluster-node.id}"
+  source_security_group_id = "${aws_security_group.cluster.id}"
   to_port                  = 65535
   type                     = "ingress"
 }
 
+resource "aws_security_group_rule" "cluster-ingress-node-https" {
+  description              = "Allow pods to communicate with the cluster API Server"
+  from_port                = 443
+  protocol                 = "tcp"
+  security_group_id        = "${aws_security_group.cluster.id}"
+  source_security_group_id = "${aws_security_group.cluster-node.id}"
+  to_port                  = 443
+  type                     = "ingress"
+}
 
 resource "aws_security_group_rule" "cluster-ingress-workstation-https" {
   cidr_blocks       = ["${local.workstation-external-cidr}"]
