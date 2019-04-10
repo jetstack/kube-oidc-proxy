@@ -12,7 +12,7 @@ output "config" {
 }
 
 output "kubeconfig_command" {
-  value = "${module.cluster.config_map_aws_auth} | kubectl apply -f -"
+  value = "eksctl utils write-kubeconfig --name=cluster-${random_id.suffix.hex} --kubeconfig=$KUBECONFIG --set-kubeconfig-context=true --region=${var.aws_region} && cat infrastructure/amazon/aws-auth.yaml | sed -e \"s~{{ROLE_ARN}}~${module.cluster.cluster_node_arn}~g\" | kubectl apply -f -"
 }
 
 output "kubeconfig" {

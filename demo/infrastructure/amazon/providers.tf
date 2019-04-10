@@ -1,9 +1,12 @@
+variable "aws_region" {
+  default = "eu-west-1"
+}
+
 provider "aws" {
-  region = "eu-west-1"
+  region = "${var.aws_region}"
 }
 
 module "cluster" {
   source = "../modules/amazon-cluster"
   suffix = "${random_id.suffix.hex}"
-  #region = "${var.google_zone}"
 }
