@@ -9,9 +9,9 @@ GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
 endif
 
 ifeq ($(CLOUD),google)
-EXT_VARS ?= "deploy_dex=true"
+EXT_VARS ?= "master=true"
 else
-EXT_VARS ?= "deploy_dex=false"
+EXT_VARS ?= "master=false"
 endif
 
 UNAME_S := $(shell uname -s)
