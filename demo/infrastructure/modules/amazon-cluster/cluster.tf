@@ -1,76 +1,105 @@
 variable "suffix" {}
 
-data "aws_region" "current" {}
+data "aws_availability_zones" "available" {}
 
-resource "aws_eks_cluster" "cluster" {
-  name     = "cluster-${var.suffix}"
-  role_arn = "${aws_iam_role.cluster.arn}"
+locals {
+  cluster_name = "cluster-${var.suffix}"
 
-  vpc_config {
-    security_group_ids = ["${aws_security_group.cluster.id}"]
-    subnet_ids         = ["${aws_subnet.cluster.*.id}"]
+  worker_groups = [
+    {
+      instance_type        = "t2.large"
+      subnets              = "${join(",", module.vpc.private_subnets)}"
+      asg_desired_capacity = "2"
+    },
+  ]
+  tags = {
+    Workspace   = "${terraform.workspace}"
   }
-
-  depends_on = [
-    "aws_iam_role_policy_attachment.cluster-AmazonEKSClusterPolicy",
-    "aws_iam_role_policy_attachment.cluster-AmazonEKSServicePolicy",
+  worker_groups_launch_template = [
+    {
+      # This will launch an autoscaling group with only Spot Fleet instances
+      instance_type                            = "t2.small"
+      additional_userdata                      = "echo foo bar"
+      subnets                                  = "${join(",", module.vpc.private_subnets)}"
+      additional_security_group_ids            = "${aws_security_group.worker_group_mgmt_one.id},${aws_security_group.worker_group_mgmt_two.id}"
+      override_instance_type                   = "t3.small"
+      asg_desired_capacity                     = "2"
+      spot_instance_pools                      = 10
+      on_demand_percentage_above_base_capacity = "0"
+    },
   ]
 }
 
-data "aws_ami" "eks-worker" {
-  filter {
-    name   = "name"
-    values = ["amazon-eks-node-${aws_eks_cluster.cluster.version}-v*"]
-  }
+resource "aws_security_group" "worker_group_mgmt_one" {
+  name_prefix = "worker_group_mgmt_one"
+  description = "SG to be applied to all *nix machines"
+  vpc_id      = "${module.vpc.vpc_id}"
 
-  most_recent = true
-  owners      = ["602401143452"] # Amazon EKS AMI Account ID
-}
+  ingress {
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
 
-# EKS currently documents this required userdata for EKS worker nodes to
-# properly configure Kubernetes applications on the EC2 instance.
-# We utilize a Terraform local here to simplify Base64 encoding this
-# information into the AutoScaling Launch Configuration.
-# More information: https://docs.aws.amazon.com/eks/latest/userguide/launch-workers.html
-locals {
-  cluster-node-userdata = <<USERDATA
-#!/bin/bash
-set -o xtrace
-/etc/eks/bootstrap.sh --apiserver-endpoint '${aws_eks_cluster.cluster.endpoint}' --b64-cluster-ca '${aws_eks_cluster.cluster.certificate_authority.0.data}' 'cluster-${var.suffix}'
-USERDATA
-}
-
-resource "aws_launch_configuration" "cluster" {
-  associate_public_ip_address = true
-  iam_instance_profile        = "${aws_iam_instance_profile.cluster-node.name}"
-  image_id                    = "${data.aws_ami.eks-worker.id}"
-  instance_type               = "m4.large"
-  name_prefix                 = "cluster-${var.suffix}"
-  security_groups             = ["${aws_security_group.cluster-node.id}"]
-  user_data_base64            = "${base64encode(local.cluster-node-userdata)}"
-
-  lifecycle {
-    create_before_destroy = true
+    cidr_blocks = [
+      "10.0.0.0/8",
+    ]
   }
 }
 
-resource "aws_autoscaling_group" "cluster" {
-  desired_capacity     = 2
-  launch_configuration = "${aws_launch_configuration.cluster.id}"
-  max_size             = 2
-  min_size             = 1
-  name                 = "terraform-eks-cluster"
-  vpc_zone_identifier  = ["${aws_subnet.cluster.*.id}"]
+resource "aws_security_group" "worker_group_mgmt_two" {
+  name_prefix = "worker_group_mgmt_two"
+  vpc_id      = "${module.vpc.vpc_id}"
 
-  tag {
-    key                 = "Name"
-    value               = "cluster-${var.suffix}"
-    propagate_at_launch = true
-  }
+  ingress {
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
 
-  tag {
-    key                 = "kubernetes.io/cluster/cluster-${var.suffix}"
-    value               = "owned"
-    propagate_at_launch = true
+    cidr_blocks = [
+      "192.168.0.0/16",
+    ]
   }
+}
+
+resource "aws_security_group" "all_worker_mgmt" {
+  name_prefix = "all_worker_management"
+  vpc_id      = "${module.vpc.vpc_id}"
+
+  ingress {
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
+
+    cidr_blocks = [
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16",
+    ]
+  }
+}
+
+module "vpc" {
+  source             = "terraform-aws-modules/vpc/aws"
+  version            = "1.60.0"
+  name               = "test-vpc"
+  cidr               = "10.0.0.0/16"
+  azs                = ["${data.aws_availability_zones.available.names[0]}", "${data.aws_availability_zones.available.names[1]}", "${data.aws_availability_zones.available.names[2]}"]
+  private_subnets    = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  public_subnets     = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
+  enable_nat_gateway = true
+  single_nat_gateway = true
+  tags               = "${merge(local.tags, map("kubernetes.io/cluster/${local.cluster_name}", "shared"))}"
+}
+
+module "eks" {
+  source                               = "terraform-aws-modules/eks/aws"
+  cluster_name                         = "${local.cluster_name}"
+  subnets                              = ["${module.vpc.private_subnets}"]
+  tags                                 = "${local.tags}"
+  vpc_id                               = "${module.vpc.vpc_id}"
+  worker_groups                        = "${local.worker_groups}"
+  worker_groups_launch_template        = "${local.worker_groups_launch_template}"
+  worker_group_count                   = "1"
+  worker_group_launch_template_count   = "1"
+  worker_additional_security_group_ids = ["${aws_security_group.all_worker_mgmt.id}"]
 }
