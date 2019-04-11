@@ -41,31 +41,21 @@ local fakeHashFNV(input) =
 // This hashes clientIDs and emails to metadata names for dex crds
 local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s)), '=', ''));
 
-
 {
   // Create a entry in the password DB
-  Password(email, hash):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Password', dexNameHash(email)) + {
-    metadata+: {
-      namespace: $.namespace,
-    },
+  Password(email, hash):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Password', dexNameHash(email)) + $.metadata {
     email: email,
     hash: std.base64(hash),
     username: email,
   },
 
   // Create a client configuration for dex
-  Client(name):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'OAuth2Client', dexNameHash(name)) + {
-    metadata+: {
-      namespace: $.namespace,
-    },
+  Client(name):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'OAuth2Client', dexNameHash(name)) + $.metadata {
     id: name,
   },
 
   // Create a connector configuration for dex
-  Connector(id, name, type, config):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Connector', id) + {
-    metadata+: {
-      namespace: $.namespace,
-    },
+  Connector(id, name, type, config):: kube._Object(dexAPIGroup + '/' + dexAPIVersion, 'Connector', id) + $.metadata {
     id: id,
     name: name,
     type: type,
@@ -76,12 +66,15 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
 
   p:: '',
 
-  namespace:: 'auth',
-
   base_domain:: 'example.net',
 
   app:: 'dex',
-  domain:: $.app + '.' + $.base_domain,
+
+  name:: $.p + $.app,
+
+  domain:: $.name + '.' + $.base_domain,
+
+  namespace:: 'foo',
 
   labels:: {
     metadata+: {
@@ -121,10 +114,10 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
     },
     enablePasswordDB: true,
   },
-  serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata {
+  serviceAccount: kube.ServiceAccount($.name) + $.metadata {
   },
 
-  role: kube.Role($.p + $.app) + $.metadata {
+  role: kube.Role($.name) + $.metadata {
     rules: [
       {
         apiGroups: [''],
@@ -134,7 +127,7 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
     ],
   },
 
-  clusterRole: kube.ClusterRole($.p + $.app) + $.metadata {
+  clusterRole: kube.ClusterRole($.name) + $.metadata {
     rules: [
       {
         apiGroups: ['dex.coreos.com'],  // API group created by dex
@@ -149,29 +142,29 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
     ],
   },
 
-  roleBinding: kube.RoleBinding($.p + $.app) + $.metadata {
+  roleBinding: kube.RoleBinding($.name) + $.metadata {
     roleRef_: $.role,
     subjects_+: [$.serviceAccount],
   },
 
-  clusterRoleBinding: kube.ClusterRoleBinding($.p + $.app) + $.metadata {
+  clusterRoleBinding: kube.ClusterRoleBinding($.name) + $.metadata {
     roleRef_: $.clusterRole,
     subjects_+: [$.serviceAccount],
   },
 
-  disruptionBudget: kube.PodDisruptionBudget($.p + $.app) + $.metadata {
+  disruptionBudget: kube.PodDisruptionBudget($.name) + $.metadata {
     target_pod: $.deployment.spec.template,
     spec+: { maxUnavailable: 1 },
   },
 
 
   // ConfigMap for additional Java security properties
-  configMap: kube.ConfigMap($.p + $.app) + $.metadata {
+  configMap: kube.ConfigMap($.name) + $.metadata {
     data+: {
       'config.yaml': std.manifestJsonEx($.config, '  '),
     },
   },
-  deployment: kube.Deployment($.p + $.app) + $.metadata {
+  deployment: kube.Deployment($.name) + $.metadata {
     local this = self,
     spec+: {
       replicas: 1,
@@ -189,7 +182,7 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
             config: kube.ConfigMapVolume($.configMap),
             tls: {
               secret: {
-                secretName: $.p + 'dex-tls',
+                secretName: $.name + '-tls',
               },
             },
           },
@@ -262,7 +255,7 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
     ]
   ),
 
-  svc: kube.Service($.p + $.app) + $.metadata {
+  svc: kube.Service($.name) + $.metadata {
     target_pod: $.deployment.spec.template,
     spec+: {
       sessionAffinity: 'None',

@@ -11,7 +11,10 @@ local READINESS_PORT = 8080;
   base_domain:: 'example.net',
 
   app:: 'kube-oidc-proxy',
-  domain:: $.app + '.' + $.base_domain,
+
+  name:: $.p + $.app,
+
+  domain:: $.name + '.' + $.base_domain,
 
   namespace:: 'kube-oidc-proxy',
 
@@ -45,7 +48,7 @@ local READINESS_PORT = 8080;
     },
   },
 
-  clusterRole: kube.ClusterRole($.p + $.app) + $.metadata {
+  clusterRole: kube.ClusterRole($.name) + $.metadata {
     rules: [
       {
         apiGroups: [''],
@@ -60,9 +63,9 @@ local READINESS_PORT = 8080;
     ],
   },
 
-  serviceAccount: kube.ServiceAccount($.p + $.app) + $.metadata,
+  serviceAccount: kube.ServiceAccount($.name) + $.metadata,
 
-  clusterRoleBinding: kube.ClusterRoleBinding($.p + $.app) + $.metadata {
+  clusterRoleBinding: kube.ClusterRoleBinding($.name) + $.metadata {
     roleRef_: $.clusterRole,
     subjects_+: [$.serviceAccount],
   },
@@ -77,7 +80,7 @@ local READINESS_PORT = 8080;
             else {},
   },
 
-  deployment: kube.Deployment($.p + $.app) + $.metadata {
+  deployment: kube.Deployment($.name) + $.metadata {
     local this = self,
 
     spec+: {
@@ -138,7 +141,7 @@ local READINESS_PORT = 8080;
             oidc: kube.SecretVolume($.oidcSecret),
             serving: {
               secret: {
-                secretName: $.p + $.app + '-tls',
+                secretName: $.name + '-tls',
               },
             },
           },
@@ -147,7 +150,7 @@ local READINESS_PORT = 8080;
     },
   },
 
-  svc: kube.Service($.p + $.app) + $.metadata {
+  svc: kube.Service($.name) + $.metadata {
     target_pod: $.deployment.spec.template,
     port: $.config.secureServing.port,
 

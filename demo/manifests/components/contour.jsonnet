@@ -12,13 +12,16 @@ local apiVersion = 'v1beta1';
 
 {
   p:: '',
+  app:: 'contour',
+
+  name:: $.p + $.app,
 
   namespace:: 'contour',
 
   labels:: {
     metadata+: {
       labels+: {
-        app: 'contour',
+        app: $.app,
       },
     },
   },
@@ -36,15 +39,15 @@ local apiVersion = 'v1beta1';
 
   clusterRole: contour_clusterrole + $.labels,
 
-  serviceAccount: kube.ServiceAccount($.p + 'contour') + $.metadata {
+  serviceAccount: kube.ServiceAccount($.name) + $.metadata {
   },
 
-  clusterRoleBinding: kube.ClusterRoleBinding($.p + 'contour') + $.metadata {
+  clusterRoleBinding: kube.ClusterRoleBinding($.name) + $.metadata {
     roleRef_: $.clusterRole,
     subjects_+: [$.serviceAccount],
   },
 
-  deployment: kube.Deployment($.p + 'contour') + $.metadata {
+  deployment: kube.Deployment($.name) + $.metadata {
     local this = self,
     spec+: {
       replicas: 1,
@@ -123,7 +126,7 @@ local apiVersion = 'v1beta1';
     },
   },
 
-  svc: kube._Object('v1', 'Service', 'contour') + $.metadata {
+  svc: kube._Object('v1', 'Service', $.name) + $.metadata {
     metadata+: {
       annotations+: {
         'service.beta.kubernetes.io/aws-load-balancer-backend-protocol': 'tcp',

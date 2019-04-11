@@ -10,8 +10,6 @@ local kube_oidc_proxy = import './components/kube-oidc-proxy.jsonnet';
 
 local config = import './config.json';
 
-local namespace = 'auth';
-
 local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePort) = contour.IngressRoute(
   namespace,
   name,
@@ -50,7 +48,13 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
 
   base_domain:: error 'base_domain is undefined',
 
+  p:: '',
+
   default_replicas:: 1,
+
+  namespace:: 'auth',
+
+  ns: kube.Namespace($.namespace),
 
   cert_manager: cert_manager {
     google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
@@ -128,14 +132,13 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
   },
 
-  namespace: kube.Namespace(namespace),
-
   contour: contour {
     base_domain:: $.base_domain,
+    p:: $.p,
 
     metadata:: {
       metadata+: {
-        namespace: namespace,
+        namespace: $.namespace,
       },
     },
 
@@ -160,8 +163,13 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
 
   dex: dex {
     local this = self,
-    namespace:: namespace,
     base_domain:: $.base_domain,
+    p:: $.p,
+    metadata:: {
+      metadata+: {
+        namespace: $.namespace,
+      },
+    },
 
     deployment+: {
       spec+: {
@@ -170,20 +178,21 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
 
     certificate: cert_manager.Certificate(
-      namespace,
-      this.app,
+      $.namespace,
+      this.name,
       $.cert_manager.letsencryptProd,
       [this.domain]
     ),
-    ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 5556),
+    ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
   },
 
   gangway: gangway {
     local this = self,
     base_domain:: $.base_domain,
+    p:: $.p,
     metadata:: {
       metadata+: {
-        namespace: namespace,
+        namespace: $.namespace,
       },
     },
 
@@ -229,12 +238,12 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
 
     certificate: cert_manager.Certificate(
-      namespace,
-      this.app,
+      $.namespace,
+      this.name,
       $.cert_manager.letsencryptProd,
       [this.domain]
     ),
-    ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 8080),
+    ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 8080),
 
     sessionSecurityKey: $.config.gangway.session_security_key,
 
@@ -247,7 +256,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
       clusterCAPath: this.config_path + '/cluster-ca.crt',
     },
 
-    dexClient: dex.Client(this.config.clientID) {
+    dexClient: dex.Client(this.config.clientID) + $.dex.metadata {
       secret: this.config.clientSecret,
       redirectURIs: [
         this.config.redirectURL,
@@ -258,9 +267,10 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   kube_oidc_proxy: kube_oidc_proxy {
     local this = self,
     base_domain:: $.base_domain,
+    p:: $.p,
     metadata:: {
       metadata+: {
-        namespace: namespace,
+        namespace: $.namespace,
       },
     },
 
@@ -278,11 +288,11 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
 
     certificate: cert_manager.Certificate(
-      namespace,
-      this.app,
+      $.namespace,
+      this.name,
       $.cert_manager.letsencryptProd,
       [this.domain]
     ),
-    ingressRoute: IngressRouteTLSPassthrough(namespace, this.app, this.domain, this.app, 443),
+    ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 443),
   },
 }
