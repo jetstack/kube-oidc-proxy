@@ -43,6 +43,41 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   },
 };
 
+local Dex(p, base_domain, namespace, default_replicas, cert_manager) =
+  if std.extVar('deploy_dex') == 'true' then
+    dex {
+      local this = self,
+      base_domain:: base_domain,
+      p:: p,
+      metadata:: {
+        metadata+: {
+          namespace: namespace,
+        },
+      },
+
+      deployment+: {
+        spec+: {
+          replicas: default_replicas,
+        },
+      },
+
+      certificate: cert_manager.Certificate(
+        namespace,
+        this.name,
+        cert_manager.letsencryptProd,
+        [this.domain]
+      ),
+      ingressRoute: IngressRouteTLSPassthrough(namespace, this.name, this.domain, this.name, 5556),
+    }
+  else
+    {
+      domain: error 'dex.domain is undefined in a non dex hosted cluster',
+      metadata+: dex.metadata {
+        metadata+: {
+          namespace: namespace,
+        },
+      },
+    };
 {
   config:: config,
 
@@ -161,30 +196,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
   },
 
-  dex: dex {
-    local this = self,
-    base_domain:: $.base_domain,
-    p:: $.p,
-    metadata:: {
-      metadata+: {
-        namespace: $.namespace,
-      },
-    },
-
-    deployment+: {
-      spec+: {
-        replicas: $.default_replicas,
-      },
-    },
-
-    certificate: cert_manager.Certificate(
-      $.namespace,
-      this.name,
-      $.cert_manager.letsencryptProd,
-      [this.domain]
-    ),
-    ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
-  },
+  dex:: Dex($.p, $.base_domain, $.namespace, $.default_replicas, $.cert_manager),
 
   gangway: gangway {
     local this = self,

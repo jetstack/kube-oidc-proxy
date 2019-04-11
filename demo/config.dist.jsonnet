@@ -4,6 +4,7 @@
     letsencrypt_contact_email:: 'certificates@example.net',
   },
   dex+: {
+    //domain: 'dex.kubernetes.example.net', // to be used on non dex hosting clusters
     users: [
       $.dex.Password('admin@example.net', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
     ],

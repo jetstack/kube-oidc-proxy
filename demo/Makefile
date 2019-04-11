@@ -8,6 +8,12 @@ ifeq ($(CLOUD),google)
 GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
 endif
 
+ifeq ($(CLOUD),google)
+EXT_VARS ?= "deploy_dex=true"
+else
+EXT_VARS ?= "deploy_dex=false"
+endif
+
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
@@ -49,13 +55,13 @@ manifests/config.json:
 .PHONY: manifests_apply
 manifests_apply: depend manifests/config.json ## Use kubecfg to apply manifests into cluster
 	# apply all CRDs
-	$(BINDIR)/kubecfg show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
+	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
 	# apply everything
-	$(BINDIR)/kubecfg show config.jsonnet | kubectl apply -f -
+	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
 manifests_validate: depend manifests/config.json ## Use kubecfg to validate manifests
-	$(BINDIR)/kubecfg validate config.jsonnet
+	$(BINDIR)/kubecfg -V ${EXT_VARS} validate config.jsonnet
 
 .PHONY: manifests_validate
 jsonnet_fmt: depend ## validate formatting of jsonnet files
@@ -63,7 +69,7 @@ jsonnet_fmt: depend ## validate formatting of jsonnet files
 
 .PHONY: manifests_destroy
 manifests_destroy: depend manifests/config.json ## Use kubecfg to delete manifests
-	$(BINDIR)/kubecfg show config.jsonnet | kubectl delete -f - --ignore-not-found
+	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet | kubectl delete -f - --ignore-not-found
 
 .PHONY: manifests_backup_certificates
 manifests_backup_certificates:
