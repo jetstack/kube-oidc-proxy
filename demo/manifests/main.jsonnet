@@ -47,7 +47,9 @@ local only_master(obj) =
   if std.extVar('master') == 'true' then
     obj
   else
-    {}
+    {
+      domain: obj.domain,
+    }
 ;
 
 {
@@ -168,7 +170,7 @@ local only_master(obj) =
     },
   },
 
-  dex:: dex {
+  dex: only_master(dex {
     local this = self,
     base_domain:: $.base_domain,
     p:: $.p,
@@ -191,9 +193,7 @@ local only_master(obj) =
       [this.domain]
     ),
     ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
-  },
-
-  dex_obj: only_master($.dex),
+  }),
 
   gangway: gangway {
     local this = self,
