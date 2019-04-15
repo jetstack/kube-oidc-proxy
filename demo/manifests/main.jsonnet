@@ -49,6 +49,7 @@ local only_master(obj) =
   else
     {
       domain: obj.domain,
+      metadata: obj.metadata,
     }
 ;
 
@@ -265,12 +266,12 @@ local only_master(obj) =
       clusterCAPath: this.config_path + '/cluster-ca.crt',
     },
 
-    dexClient: dex.Client(this.config.clientID) + $.dex.metadata {
+    dexClient:: only_master(dex.Client(this.config.clientID) + $.dex.metadata {
       secret: this.config.clientSecret,
       redirectURIs: [
         this.config.redirectURL,
       ],
-    },
+    }),
   },
 
   kube_oidc_proxy: kube_oidc_proxy {
