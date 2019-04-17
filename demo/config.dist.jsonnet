@@ -19,4 +19,12 @@
       }),
     ],
   },
+
+  // Here we can register more dex clients
+  //extraClient: $.dex.Client('123') + $.dex.metadata {
+  //  secret: '4567',
+  //  redirectURIs: [
+  //    'gangway.kubernetes.example.net/callback',
+  //  ],
+  //},
 }
