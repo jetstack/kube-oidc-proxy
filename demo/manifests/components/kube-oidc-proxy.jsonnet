@@ -1,7 +1,7 @@
 local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
-local KUBE_OIDC_PROXY_IMAGE = 'docker.io/simonswine/kube-oidc-proxy';
+local KUBE_OIDC_PROXY_IMAGE = 'quay.io/jetstack/kube-oidc-proxy';
 local CONFIG_PATH = '/etc/kube-oidc-proxy';
 local READINESS_PORT = 8080;
 
