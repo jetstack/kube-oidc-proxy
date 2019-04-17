@@ -48,8 +48,6 @@ local only_master(obj) =
     obj
   else
     {
-      domain: obj.domain,
-      metadata: obj.metadata,
     }
 ;
 
@@ -65,6 +63,8 @@ local only_master(obj) =
   namespace:: 'auth',
 
   ns: kube.Namespace($.namespace),
+
+  dex_domain:: $.dex.domain,
 
   cert_manager: cert_manager {
     google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
@@ -164,7 +164,7 @@ local only_master(obj) =
           // this add a final dot to the domain name and joins the list
           'external-dns.alpha.kubernetes.io/hostname': std.join(',', std.map(
             (function(o) o + '.'),
-            [$.dex.domain, $.gangway.domain, $.kube_oidc_proxy.domain],
+            [$.dex_domain, $.gangway.domain, $.kube_oidc_proxy.domain],
           )),
         },
       },
@@ -258,8 +258,8 @@ local only_master(obj) =
     sessionSecurityKey: $.config.gangway.session_security_key,
 
     config+: {
-      authorizeURL: 'https://' + $.dex.domain + '/auth',
-      tokenURL: 'https://' + $.dex.domain + '/token',
+      authorizeURL: 'https://' + $.dex_domain + '/auth',
+      tokenURL: 'https://' + $.dex_domain + '/token',
       apiServerURL: 'https://' + $.kube_oidc_proxy.domain,
       clientID: $.config.gangway.client_id,
       clientSecret: $.config.gangway.client_secret,
@@ -286,7 +286,7 @@ local only_master(obj) =
 
     config+: {
       oidc+: {
-        issuerURL: 'https://' + $.dex.domain,
+        issuerURL: 'https://' + $.dex_domain,
         clientID: $.config.gangway.client_id,
       },
     },

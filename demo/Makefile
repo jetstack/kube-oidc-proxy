@@ -4,9 +4,7 @@ CLOUD  ?= google
 
 KUBECONFIG := $(CURDIR)/.kubeconfig-$(CLOUD)
 
-ifeq ($(CLOUD),google)
 GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
-endif
 
 ifeq ($(CLOUD),google)
 EXT_VARS ?= "master=true"
@@ -38,29 +36,28 @@ help:  ## Display this help
 .PHONY: terraform_apply
 terraform_apply: ## Applies terraform infrastructure
 	echo '' > infrastructure/$(CLOUD)/terraform.tfvars
-ifeq ($(CLOUD),google)
 	echo 'google_project = "$(GOOGLE_PROJECT)"' > infrastructure/$(CLOUD)/terraform.tfvars
-endif
 	cd infrastructure/$(CLOUD) && terraform init && terraform apply
-	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/config.json
+	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/$(CLOUD)-config.json
 	$(shell cd infrastructure/$(CLOUD) && terraform output kubeconfig_command)
 
 .PHONY: terraform_destroy
 terraform_destroy: ## Destroy terraform infrastructure
 	cd infrastructure/$(CLOUD) && terraform init && terraform destroy
 
-manifests/config.json:
+manifests/$(CLOUD)-config.json:
 	$(MAKE) terraform_apply
 
 .PHONY: manifests_apply
-manifests_apply: depend manifests/config.json ## Use kubecfg to apply manifests into cluster
+manifests_apply: depend manifests/$(CLOUD)-config.json ## Use kubecfg to apply manifests into cluster
+	rm -f manifests/config.json && ln -s $(CLOUD)-config.json manifests/config.json
 	# apply all CRDs
 	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
 	# apply everything
 	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
-manifests_validate: depend manifests/config.json ## Use kubecfg to validate manifests
+manifests_validate: depend manifests/$(CLOUD)-config.json ## Use kubecfg to validate manifests
 	$(BINDIR)/kubecfg -V ${EXT_VARS} validate config.jsonnet
 
 .PHONY: manifests_validate
@@ -68,7 +65,7 @@ jsonnet_fmt: depend ## validate formatting of jsonnet files
 	$(BINDIR)/jsonnet fmt --test $(shell find manifests/components/. manifests/main.jsonnet -name "*.jsonnet")
 
 .PHONY: manifests_destroy
-manifests_destroy: depend manifests/config.json ## Use kubecfg to delete manifests
+manifests_destroy: depend manifests/$(CLOUD)-config.json ## Use kubecfg to delete manifests
 	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet | kubectl delete -f - --ignore-not-found
 
 .PHONY: manifests_backup_certificates
