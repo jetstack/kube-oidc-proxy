@@ -66,7 +66,7 @@ spec:
           - name: kube-oidc-proxy-config
             mountPath: /etc/oidc
             readOnly: true
-          - name: kube-oidc-proxy-els
+          - name: kube-oidc-proxy-tls
             mountPath: /etc/oidc/tls
             readOnly: true
       volumes:
