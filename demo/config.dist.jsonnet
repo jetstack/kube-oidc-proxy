@@ -24,7 +24,7 @@
   //extraClient: $.dex.Client('123') + $.dex.metadata {
   //  secret: '4567',
   //  redirectURIs: [
-  //    'gangway.kubernetes.example.net/callback',
+  //    'https://gangway.kubernetes.example.net/callback',
   //  ],
   //},
 }
