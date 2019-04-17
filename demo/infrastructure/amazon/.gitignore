@@ -1,2 +1,2 @@
-config-map-aws-auth_*
-kubeconfig_*
+/config-map-aws-auth_*
+/kubeconfig_*
