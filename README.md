@@ -1,4 +1,4 @@
-  # kube-oidc-proxy
+# kube-oidc-proxy
 
 `kube-oidc-proxy` is a reverse proxy server to authenticate users using OIDC to
 Kubernetes API servers where OIDC authentication is not available (i.e. managed 
@@ -20,7 +20,13 @@ API server.
 The following is a diagram of the request flow for a user request.
 ![kube-oidc-proxy request flow](/img/kube-oidc-proxy.png)
 
-## Quickstart
+## Tutorial
+
+### Quickstart
+
+Deployment yamls can be found in `./demo/yaml` and will require configuration to
+an exiting OIDC issuer.
+
 This quickstart demo will assume you have a Kubernetes cluster without OIDC
 authentication, as well as an OIDC client created with your chosen
 provider. We will be using a Service with type `LoadBalancer` to expose it to
@@ -32,7 +38,7 @@ This will create it's Deployment, Service Account and required permissions into
 the newly created `kube-oidc-proxy` Namespace.
 
 ```
-$ kubectl apply -f ./demo/kube-oidc-proxy.yaml
+$ kubectl apply -f ./demo/yaml/kube-oidc-proxy.yaml
 $ kubectl get all --namespace kube-oidc-proxy
 ```
 
@@ -46,34 +52,12 @@ We now wait until we have an external IP address provisioned.
 $ kubectl get service --namespace kube-oidc-proxy
 ```
 
-We need to generate certificates for the `kube-oidc-proxy` to securely serve.
-We will be creating self-signed certificates which are tied to either it's IP
-address or a domain name that has been configured to point to this address.
-These certificates could also be generated through `cert-manager`, more
-information about this project found
-[here](https://github.com/jetstack/cert-manager).
-
-```
-$ ./demo/gencreds.sh kube-oidc-proxy ${kube-oidc-proxy_IP}
-```
-
-or
-
-```
-$ ./demo/gencreds.sh k8s.my-domain.com
-```
-
-This should generate a certificate authority along with a signed key pair for
-use by `kube-oidc-proxy` in `./demo/generated`. Enter the TLS key and certificate
-into the secure serving Kubernetes Secret manifest.
-
-```
-$ SERVING_TLS_CERT=$(cat ./demo/generated/kube-oidc-proxy-cert.pem | base64 -w0); sed -i -e "s/SERVING_TLS_CERT/${SERVING_TLS_CERT}/g" ./demo/secrets.yaml
-$ SERVING_TLS_KEY=$(cat ./demo/generated/kube-oidc-proxy-key.pem | base64 -w0); sed -i -e "s/SERVING_TLS_KEY/${SERVING_TLS_KEY}/g" ./demo/secrets.yaml
-```
+We need to generate certificates for `kube-oidc-proxy` to securely serve.  These
+certificates can be generated through `cert-manager`, more information about
+this project found [here](https://github.com/jetstack/cert-manager).
 
 Next, populate the OIDC authenticator Secret using the secrets given to you
-by your OIDC provider in `./demo/secrets.yaml`. The OIDC provider CA will be
+by your OIDC provider in `./demo/yaml/secrets.yaml`. The OIDC provider CA will be
 different depending on which provider you are using. The easiest way to obtain
 the correct certificate bundle is often by opening the providers URL into a
 browser and fetching them there (typically output by clicking the lock icon on
@@ -82,21 +66,21 @@ your address bar). Google's OIDC provider for example requires CAs from both
 `https://www.googleapis.com/oauth2/v3/certs`.
 
 
-Apply the two secret manifests.
+Apply the secret manifests.
 
 ```
-kubectl apply -f ./demo/secrets.yaml
+kubectl apply -f ./demo/yaml/secrets.yaml
 ```
 
-You may need to also recreate the `kube-oidc-proxy` pod to use these new secrets
+You can restart the `kube-oidc-proxy` pod to use these new secrets
 now they are available.
 
 ```
 kubectl delete pod --namespace kube-oidc-proxy kube-oidc-proxy-*
 ```
 
-Finally, create a Kubeconfig to now point to `kube-oidc-proxy` as well as setting
-up your OIDC authenticated Kubernetes user.
+Finally, create a Kubeconfig to point to `kube-oidc-proxy` and set up your OIDC
+authenticated Kubernetes user.
 
 ```
 apiVersion: v1

@@ -66,7 +66,7 @@ spec:
           - name: kube-oidc-proxy-config
             mountPath: /etc/oidc
             readOnly: true
-          - name: kube-oidc-proxy-serving
+          - name: kube-oidc-proxy-tls
             mountPath: /etc/oidc/tls
             readOnly: true
       volumes:
@@ -76,9 +76,9 @@ spec:
             items:
             - key: oidc.ca-pem
               path: oidc-ca.pem
-        - name: kube-oidc-proxy-serving
+        - name: kube-oidc-proxy-tls
           secret:
-            secretName: kube-oidc-proxy-serving
+            secretName: kube-oidc-proxy-tls
             items:
             - key: tls.crt
               path: crt.pem
