@@ -7,9 +7,9 @@ KUBECONFIG := $(CURDIR)/.kubeconfig-$(CLOUD)
 GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
 
 ifeq ($(CLOUD),google)
-EXT_VARS ?= "master=true"
+EXT_VARS ?= "master=true,cloud=$(CLOUD)"
 else
-EXT_VARS ?= "master=false"
+EXT_VARS ?= "master=false,cloud=$(CLOUD)"
 endif
 
 UNAME_S := $(shell uname -s)

@@ -47,9 +47,7 @@ local only_master(obj) =
   if std.extVar('master') == 'true' then
     obj
   else
-    {
-    }
-;
+    {};
 
 {
   config:: config,
