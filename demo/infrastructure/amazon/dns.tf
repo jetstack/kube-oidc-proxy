@@ -1,5 +1,9 @@
-module "dns" {
-  source = "../modules/amazon-dns"
-  suffix = "${random_id.suffix.hex}"
-  region = "${var.region}"
+data "external" "cert_manager" {
+  program = ["jq", ".cert_manager", "../../manifests/google-config.json"]
+  query   = { }
+}
+
+data "external" "externaldns" {
+  program = ["jq", ".externaldns", "../../manifests/google-config.json"]
+  query   = { }
 }

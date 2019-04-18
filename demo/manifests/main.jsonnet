@@ -43,6 +43,12 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   },
 };
 
+local only_master(obj) =
+  if std.extVar('master') == 'true' then
+    obj
+  else
+    {};
+
 {
   config:: config,
 
@@ -55,6 +61,8 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   namespace:: 'auth',
 
   ns: kube.Namespace($.namespace),
+
+  dex_domain:: $.dex.domain,
 
   cert_manager: cert_manager {
     google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
@@ -154,14 +162,14 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
           // this add a final dot to the domain name and joins the list
           'external-dns.alpha.kubernetes.io/hostname': std.join(',', std.map(
             (function(o) o + '.'),
-            [$.dex.domain, $.gangway.domain, $.kube_oidc_proxy.domain],
+            [$.dex_domain, $.gangway.domain, $.kube_oidc_proxy.domain],
           )),
         },
       },
     },
   },
 
-  dex: dex {
+  dex: only_master(dex {
     local this = self,
     base_domain:: $.base_domain,
     p:: $.p,
@@ -184,7 +192,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
       [this.domain]
     ),
     ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
-  },
+  }),
 
   gangway: gangway {
     local this = self,
@@ -248,20 +256,20 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     sessionSecurityKey: $.config.gangway.session_security_key,
 
     config+: {
-      authorizeURL: 'https://' + $.dex.domain + '/auth',
-      tokenURL: 'https://' + $.dex.domain + '/token',
+      authorizeURL: 'https://' + $.dex_domain + '/auth',
+      tokenURL: 'https://' + $.dex_domain + '/token',
       apiServerURL: 'https://' + $.kube_oidc_proxy.domain,
       clientID: $.config.gangway.client_id,
       clientSecret: $.config.gangway.client_secret,
       clusterCAPath: this.config_path + '/cluster-ca.crt',
     },
 
-    dexClient: dex.Client(this.config.clientID) + $.dex.metadata {
+    dexClient: only_master(dex.Client(this.config.clientID) + $.dex.metadata {
       secret: this.config.clientSecret,
       redirectURIs: [
         this.config.redirectURL,
       ],
-    },
+    }),
   },
 
   kube_oidc_proxy: kube_oidc_proxy {
@@ -276,7 +284,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
 
     config+: {
       oidc+: {
-        issuerURL: 'https://' + $.dex.domain,
+        issuerURL: 'https://' + $.dex_domain,
         clientID: $.config.gangway.client_id,
       },
     },

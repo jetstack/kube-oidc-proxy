@@ -1,4 +1,4 @@
-variable "region" {
+variable "aws_region" {
   default = "eu-west-1"
 }
 
@@ -7,7 +7,7 @@ variable "cluster_version" {
 }
 
 provider "aws" {
-  region = "${var.region}"
+  region = "${var.aws_region}"
 }
 
 module "cluster" {

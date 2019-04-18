@@ -1,5 +1,6 @@
 (import './manifests/main.jsonnet') {
   base_domain: 'kubernetes.example.net',
+  // dex_domain: 'dex.kubernetes.example.net',  // to be used on non dex hosting clusters
   cert_manager+: {
     letsencrypt_contact_email:: 'certificates@example.net',
   },
@@ -18,4 +19,12 @@
       }),
     ],
   },
+
+  // Here we can register more dex clients
+  //extraClient: $.dex.Client('123') + $.dex.metadata {
+  //  secret: '4567',
+  //  redirectURIs: [
+  //    'https://gangway.other.kubernetes.example.net/callback',
+  //  ],
+  //},
 }
