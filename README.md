@@ -22,6 +22,9 @@ The following is a diagram of the request flow for a user request.
 
 ## Tutorial
 
+Directions on how to deploy OIDC authentication with multi-cluster can be found
+[here.](./demo/README.md)
+
 ### Quickstart
 
 Deployment yamls can be found in `./demo/yaml` and will require configuration to
