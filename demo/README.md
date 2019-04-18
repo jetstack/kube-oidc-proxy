@@ -108,7 +108,7 @@ htpasswd -bnBC 10 "" MyVerySecurePassword | tr -d ':'
 Dex also supports multiple 'connectors' that enable third party applications to
 provide OAuth to it's system. For Github, this involves creating an 'OAuth App'.
 The `Authorization callback URL` should be populated with the Dex callback URL, i.e.
-`https://https://dex.gke.mydomain.company.net/callback`. 
+`https://dex.gke.mydomain.company.net/callback`. 
 The resulting `Client ID` and `Client Secret` can then be used to populate the
 configuration file:
 ```
