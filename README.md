@@ -1,5 +1,15 @@
 # kube-oidc-proxy
 
+>  :warning:
+>
+>  kube-oidc-proxy is an experimental tool that we would like to get feedback
+>  on from the community. Jetstack makes no guarantees on the soundness of the
+>  security in this project, nor any suggestion that it's 'production ready'.
+>  This server sits in the critical path of authentication to the Kubernetes
+>  API.
+>
+>  :warning:
+
 `kube-oidc-proxy` is a reverse proxy server to authenticate users using OIDC to
 Kubernetes API servers where OIDC authentication is not available (i.e. managed 
 Kubernetes providers such as GKE, EKS, etc).
