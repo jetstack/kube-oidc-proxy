@@ -28,7 +28,7 @@ spec:
         app: kube-oidc-proxy
     spec:
       containers:
-      - image: quay.io/jetstack/kube-oidc-proxy:0.1.0
+      - image: quay.io/jetstack/kube-oidc-proxy:v0.1.0
         ports:
         - containerPort: 443
         - containerPort: 8080
