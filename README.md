@@ -3,7 +3,7 @@
 >  :warning:
 >
 >  kube-oidc-proxy is an experimental tool that we would like to get feedback
->  with from the community. Jetstack makes no guarantee on the soundness of the
+>  on from the community. Jetstack makes no guarantees on the soundness of the
 >  security in this project, nor any suggestion that it's 'production ready'.
 >  This server sits in the critical path of authentication to the Kubernetes
 >  API.
