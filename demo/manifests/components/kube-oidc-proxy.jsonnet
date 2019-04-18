@@ -108,7 +108,6 @@ local READINESS_PORT = 8080;
                 periodSeconds: 10,
               },
               command: [
-                'kube-oidc-proxy',
                 '--secure-port=' + $.config.secureServing.port,
                 '--tls-cert-file=' + $.config.secureServing.tlsCertFile,
                 '--tls-private-key-file=' + $.config.secureServing.tlsKeyFile,
