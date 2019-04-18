@@ -86,7 +86,7 @@ authenticated Kubernetes user.
 apiVersion: v1
 clusters:
 - cluster:
-    certificate-authority: ./demo/generated/ca.pem
+    certificate-authority: *
     server: https://[url|ip:443]
   name: *
 contexts:
