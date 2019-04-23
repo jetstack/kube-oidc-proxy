@@ -30,7 +30,8 @@ API server.
 ![kube-oidc-proxy demo](https://storage.googleapis.com/kube-oidc-proxy/demo.svg)
 
 The following is a diagram of the request flow for a user request.
-![kube-oidc-proxy request flow](/img/kube-oidc-proxy.png)
+![kube-oidc-proxy request
+flow](https://storage.googleapis.com/kube-oidc-proxy/diagram-d9623e38a6cd3b585b45f47d80ca1e1c43c7e695.png)
 
 ## Tutorial
 
