@@ -111,11 +111,24 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	info, ok, err := p.reqAuther.AuthenticateRequest(req)
 	if err != nil {
 		klog.Errorf("unable to authenticate the request due to an error: %v", err)
+
+		if !ok {
+			klog.Info("not a valid OIDC token, forward to Kubernetes API as this may be a valid API token")
+			return p.clientTransport.RoundTrip(req)
+		}
+
 		return nil, errUnauthorized
 	}
 
 	if !ok {
-		return nil, errUnauthorized
+		if len(req.Header.Get("Authorization")) > 0 {
+			klog.Info("unrecognised Authorization header, forward to Kubernetes API as this may still be a valid header")
+			return p.clientTransport.RoundTrip(req)
+		}
+
+		klog.Info("no Authorization header in request, forward to Kubernetes API as system:anonymous")
+		rt := transport.NewImpersonatingRoundTripper(transport.ImpersonationConfig{UserName: "system:anonymous"}, p.clientTransport)
+		return rt.RoundTrip(req)
 	}
 
 	// check for incoming impersonation headers and reject if any exists

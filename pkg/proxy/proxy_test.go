@@ -34,9 +34,10 @@ type fakeRW struct {
 type fakeRT struct {
 	t *testing.T
 
-	expUser  string
-	expGroup []string
-	expExtra map[string][]string
+	expUser       string
+	expGroup      []string
+	expExtra      map[string][]string
+	expAuthHeader string
 }
 
 func (f *fakeRW) Write(b []byte) (int, error) {
@@ -69,6 +70,11 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 	if h.Header.Get("Impersonate-User") != f.expUser {
 		f.t.Errorf("client transport got unexpected user impersonation header, exp=%s got=%s",
 			f.expUser, h.Header.Get("Impersonate-User"))
+	}
+
+	if h.Header.Get("Authorization") != f.expAuthHeader {
+		f.t.Errorf("client transport got unexpected authorization header, exp=%s got=%s",
+			f.expAuthHeader, h.Header.Get("Authorization"))
 	}
 
 	if !reflect.DeepEqual(h.Header["Impersonate-Group"], f.expGroup) {
@@ -260,28 +266,34 @@ func newTestProxy(t *testing.T) *fakeProxy {
 
 func Test_RoundTrip(t *testing.T) {
 	p := newTestProxy(t)
+	// we impersonate system:anonymous if no Auth header present
+	p.fakeRT.expUser = "system:anonymous"
 	_, err := p.RoundTrip(new(http.Request))
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
+	if err != nil {
+		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
 	}
 
+	// pass through any unrecognised Auth headers
 	req := &http.Request{
 		Header: http.Header{
 			"Authorization": []string{"foo"},
 		},
 	}
+	p.fakeRT.expUser = ""
+	p.fakeRT.expAuthHeader = "foo"
 	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
+	if err != nil {
+		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
 	}
 
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, false, nil)
 	req.Header = http.Header{
 		"Authorization": []string{"bearer fake-token"},
 	}
+	p.fakeRT.expAuthHeader = "bearer fake-token"
 	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
+	if err != nil {
+		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
 	}
 
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, false, errors.New("some error"))
@@ -289,10 +301,11 @@ func Test_RoundTrip(t *testing.T) {
 		"Authorization": []string{"bearer fake-token"},
 	}
 	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
+	if err != nil {
+		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
 	}
 
+	// unexpected error validating token
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, true, errors.New("some error"))
 	req.Header = http.Header{
 		"Authorization": []string{"bearer fake-token"},
@@ -362,6 +375,8 @@ func Test_RoundTrip(t *testing.T) {
 	}
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
 	p.fakeRT.expUser = "a-user"
+	// the auth header gets replaced by the proxy's token for impersonation
+	p.fakeRT.expAuthHeader = ""
 	req.Header["Authorization"] = []string{"bearer fake-token"}
 	_, err = p.RoundTrip(req)
 	if err != nil {
