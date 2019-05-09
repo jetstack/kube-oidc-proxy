@@ -5,6 +5,8 @@ CLOUD  ?= google
 KUBECONFIG := $(CURDIR)/.kubeconfig-$(CLOUD)
 
 GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
+CA_CRT_FILE ?= /dev/null
+CA_KEY_FILE ?= /dev/null
 
 EXT_VARS := --tla-str cloud=$(CLOUD)
 
@@ -33,6 +35,8 @@ help:  ## Display this help
 terraform_apply: ## Applies terraform infrastructure
 	echo '' > infrastructure/$(CLOUD)/terraform.tfvars
 	echo 'google_project = "$(GOOGLE_PROJECT)"' > infrastructure/$(CLOUD)/terraform.tfvars
+	echo 'ca_crt_file = "$(CA_CRT_FILE)"' >> infrastructure/$(CLOUD)/terraform.tfvars
+	echo 'ca_key_file = "$(CA_KEY_FILE)"' >> infrastructure/$(CLOUD)/terraform.tfvars
 	cd infrastructure/$(CLOUD) && terraform init && terraform apply
 	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/$(CLOUD)-config.json
 	$(shell cd infrastructure/$(CLOUD) && terraform output kubeconfig_command)

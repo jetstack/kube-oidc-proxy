@@ -8,6 +8,9 @@ variable "google_zone" {
 
 variable "google_project" {}
 
+variable "ca_crt_file" {}
+variable "ca_key_file" {}
+
 provider "google" {
   region      = "${var.google_region}"
   credentials = "${file("~/.config/gcloud/terraform-admin.json")}"
