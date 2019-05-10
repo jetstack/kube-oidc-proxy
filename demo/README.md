@@ -12,11 +12,11 @@ separate providers (GKE and EKS), deploying:
 - [Cert-Manager](https://github.com/jetstack/cert-manager) to issue and manage
   certificates.
 
-It will also demonstrate how to enable different authentication methods that dex
-supports, namely, username and password, and Github, however [more are
+It will also demonstrate how to enable different authentication methods that Dex
+supports, namely, username and password, and GitHub, however [more are
 available.](https://github.com/dexidp/dex#connectors)
 
-## Perquisites
+## Prerequisites
 The tutorial will be using Cert-Manager to generate certificates signed by
 [Let's Encrypt](https://letsencrypt.org/) for components in both GKE and EKS
 using a DNS challenge. Although not the only way to generate certificates, the
@@ -25,7 +25,7 @@ project, and records of sub-domains of this domain will be created to assign DNS
 to the components. A Google Cloud Service Account will be created to manage
 these DNS challenges and it's secrets passed to Cert-Manager.
 
-A Service Account has been created for terraform with it's secrets stored at
+A Service Account has been created for Terraform with its secrets stored at
 `~/.config/gcloud/terraform-admin.json`. The Service Account needs at least
 these IAM Roles attached:
 ```
@@ -41,7 +41,7 @@ Project IAM Admin
 You have an AWS account with permissions to create an EKS cluster and other
 relevent permissions to create a fully fledged cluster, including creating
 load balancers, instance pools etc. Typically, these environment variables must
-be set when running terraform and deploying the manifests before OIDC
+be set when running `terraform` and deploying the manifests before OIDC
 authentication has been set up:
 ```
 AWS_SECRET_ACCESS_KEY
@@ -51,8 +51,8 @@ AWS_ACCESS_KEY_ID
 
 ## Infrastructure
 First the GKE and EKS cluster will be created, along with secrets to be used for
-OIDC authentication for each cluster. The amazon terraform module has dependant
-resources on the google module, so the google module must be created first.
+OIDC authentication for each cluster. The Amazon Terraform module has dependant
+resources on the Google module, so the Google module must be created first.
 
 ```
 CLOUD=google make terraform_apply
@@ -77,14 +77,14 @@ gke.mydomain.company.net
 eks.mydomain.company.net
 ```
 
-Populate each configuration file with it's corresponding domain and Let's
+Populate each configuration file with its corresponding domain and Let's
 Encrypt contract email.
 
 ### GKE
 
-Since the GKE cluster will be hosting Dex, the OIDC issuer, it's
+Since the GKE cluster will be hosting Dex, the OIDC issuer, its
 configuration file must contain how or what users will use to authenticate. Here
-we will show two methods, username and password, and Github.
+we will show two methods, username and password, and GitHub.
 
 Usernames and passwords can be populated with the following block within the
 `dex` block.
@@ -106,7 +106,7 @@ htpasswd -bnBC 10 "" MyVerySecurePassword | tr -d ':'
 ```
 
 Dex also supports multiple 'connectors' that enable third party applications to
-provide OAuth to it's system. For Github, this involves creating an 'OAuth App'.
+provide OAuth to it's system. For GitHub, this involves creating an 'OAuth App'.
 The `Authorization callback URL` should be populated with the Dex callback URL, i.e.
 `https://dex.gke.mydomain.company.net/callback`. 
 The resulting `Client ID` and `Client Secret` can then be used to populate the
@@ -125,13 +125,13 @@ configuration file:
   },
 ```
 
-You can find more information on github OAuth apps
+You can find more information on GitHub OAuth apps
 [here.](https://developer.github.com/v3/oauth/)
 
-Finally, Dex needs to be configured to also accept the gangway client in the EKS
-cluster. To do this, we add a Dex Client block in the configuration. We need to
-populate it's redirect URL as well as the client ID and client secret using
-values that were created in the `./manifests/amazon-config.json` by terraform.
+Finally, Dex needs to be configured to also accept the Gangway client in the EKS
+cluster. To do this, we add a `dex.Client` block in the configuration. We need to
+populate its redirect URL as well as the client ID and client secret using
+values that were created in the `./manifests/amazon-config.json` by Terraform.
 The resulting block should would look like:
 
 ```
@@ -181,7 +181,7 @@ The resulting `gke-config.jsonnet` file should look similar to
 ### EKS
 
 The EKS cluster will not be hosting the dex server so only needs to be
-configured with it's domain, Dex's domain and the Let's Encrypt contact email.
+configured with its domain, Dex's domain and the Let's Encrypt contact email.
 The resuting `eks-config.jsonnet` file should look similar to:
 
 ```
@@ -223,7 +223,7 @@ Verify that the ingress has been configured to what you were expecting.
 $ kubectl get ingressroutes -n auth
 ```
 
-You should now see the DNS challenge attempting to be furfilled by Cert-Manager
+You should now see the DNS challenge attempting to be fullfilled by Cert-Manager
 in your DNS Zone details in the Google Cloud console.
 
 Once complete, three TLS secrets will be generated, `gangway-tls`, `dex-tls`,
@@ -233,20 +233,20 @@ and `kube-oidc-proxy-tls`.
 $ kubectl get -n auth secret
 ```
 
-You can save these certifcates locally, and resotre them any time using:
+You can save these certifcates locally, and restore them any time using:
 ```
 $ make manifests_backup_certificates
 $ make manifests_restore_certificates
 ```
 
-An A record can now be created so the DNS can be resolved to the Contour Load
-Balancer public IP Adress. Take a note of the external-IP address exposed:
+An `A` record can now be created so that DNS can be resolve the Contour Load
+Balancer public IP address. Take a note of the external-IP address exposed:
 
 ```
 $ kubectl get svc contour -n auth
 ```
 
-Create an A record set with a wild card sub-domain to your domain, with some
+Create a wildcard `A` record (matching all sub-domains), with some
 reasonable TTL pointing to the exposed IP address of the Contour Load Balancer.
 
 ```
@@ -275,14 +275,14 @@ $ export CLOUD=amazon
 $ make manifests_apply
 ```
 
-Get the AWS DNS URL for the contour Load Balancer.
+Get the AWS DNS URL for the Contour Load Balancer.
 ```
 $ export KUBECONFIG=.kubeconfig-amazon
 $ kubectl get svc -n auth
 ```
 
-Once the the contour LoadBalancer has an external URL, we need to create a CNAME
-record set to resolve the DNS.
+Once the the Contour Load Balancer has an external URL, we need to create a `CNAME`
+record:
 ```
 DNS name: *.eks.mydomain.company.net
 Record resource type: CNAME
@@ -291,5 +291,5 @@ Canonical name: $CONTOUR_AWS_URL
 
 When components have their TLS secrets, you will then be able to login to the
 Gangway portal on EKS and download your Kubeconfig. Again, when trying this
-Kubeconfig, you should initially be greeted with unauthorized to that resource
+Kubeconfig, you will initially be greeted with an "unauthorized" error message
 until RBAC permissions have been granted to this user.
