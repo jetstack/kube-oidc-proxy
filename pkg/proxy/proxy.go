@@ -120,6 +120,9 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, errUnauthorized
 	}
 
+	// AuthenticateRequest will return !ok if it doesn't recognise a valid bearer
+	// token format, but it could still be valid under a different scheme (e.g.
+	// basic auth)
 	if !ok {
 		if len(req.Header.Get("Authorization")) > 0 {
 			klog.Info("unrecognised Authorization header, forward to Kubernetes API as this may still be a valid header")
@@ -127,6 +130,9 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		klog.Info("no Authorization header in request, forward to Kubernetes API as system:anonymous")
+		// it's important that we impersonate here, because without an existing Auth
+		// header, the ServiceAccount token for the proxy is used in
+		// p.clientTransport.RoundTrip
 		rt := transport.NewImpersonatingRoundTripper(transport.ImpersonationConfig{UserName: "system:anonymous"}, p.clientTransport)
 		return rt.RoundTrip(req)
 	}
