@@ -181,6 +181,7 @@ func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
 	case errNoName:
 		klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
 		http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
+		return
 
 		// server or unknown error
 	default:
