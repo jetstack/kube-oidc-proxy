@@ -70,12 +70,13 @@ manifests_destroy: depend manifests/$(CLOUD)-config.json ## Use kubecfg to delet
 
 .PHONY: manifests_backup_certificates
 manifests_backup_certificates:
-	kubectl get secrets --all-namespaces -l certmanager.k8s.io/certificate-name -o yaml > .backup-certificates.yaml
+	kubectl get secrets --all-namespaces -l certmanager.k8s.io/certificate-name -o yaml > .backup-certificates-$(CLOUD).yaml.tmp
+	mv .backup-certificates-$(CLOUD).yaml.tmp .backup-certificates-$(CLOUD).yaml
 
 .PHONY: manifests_restore_certificates
 manifests_restore_certificates:
 	kubectl create ns auth --dry-run -o yaml | kubectl apply -f -
-	kubectl apply -f .backup-certificates.yaml
+	kubectl apply -f .backup-certificates-$(CLOUD).yaml
 
 .PHONY: verify
 verify: jsonnet_fmt ## verify code and vendor
