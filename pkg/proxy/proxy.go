@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -130,12 +131,27 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, errNoName
 	}
 
+	// ensure group contains allauthenticated builtin
+	found := false
+	groups := user.GetGroups()
+	for _, elem := range groups {
+		if elem == authuser.AllAuthenticated {
+			found = true
+			break
+		}
+	}
+	if !found {
+		groups = append(groups, authuser.AllAuthenticated)
+	}
+
 	// set impersonation header using authenticated user identity
+
 	conf := transport.ImpersonationConfig{
 		UserName: user.GetName(),
-		Groups:   user.GetGroups(),
+		Groups:   groups,
 		Extra:    user.GetExtra(),
 	}
+
 	rt := transport.NewImpersonatingRoundTripper(conf, p.clientTransport)
 
 	// push request through round trippers to the API server
