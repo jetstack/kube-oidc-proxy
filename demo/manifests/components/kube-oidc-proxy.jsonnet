@@ -1,7 +1,6 @@
 local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
-local KUBE_OIDC_PROXY_IMAGE = 'quay.io/jetstack/kube-oidc-proxy:v0.1.0';
 local CONFIG_PATH = '/etc/kube-oidc-proxy';
 local READINESS_PORT = 8080;
 
@@ -11,6 +10,8 @@ local READINESS_PORT = 8080;
   base_domain:: 'example.net',
 
   app:: 'kube-oidc-proxy',
+
+  image:: 'quay.io/jetstack/kube-oidc-proxy:v0.1.0',
 
   name:: $.p + $.app,
 
@@ -95,7 +96,7 @@ local READINESS_PORT = 8080;
           serviceAccountName: $.serviceAccount.metadata.name,
           containers_+: {
             kubeOIDCProxy: kube.Container($.app) {
-              image: KUBE_OIDC_PROXY_IMAGE,
+              image: $.image,
 
               ports_+: {
                 serving: { containerPort: $.config.secureServing.port },
