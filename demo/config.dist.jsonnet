@@ -1,5 +1,11 @@
-function(cloud='google') (import './manifests/main.jsonnet') {
+local main = import './manifests/main.jsonnet';
+
+function(cloud='google') main {
   cloud: cloud,
+  // this will only run the google cluster
+  clouds: {
+    google: main.clouds.google,
+  },
   base_domain: '.kubernetes.example.net',
   cert_manager+: {
     letsencrypt_contact_email:: 'certificates@example.net',
