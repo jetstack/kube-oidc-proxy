@@ -3,12 +3,13 @@
 This document will walk-through how to create three managed Kubernetes clusters on
 separate providers (Google, Amazon and Digitalocean), deploying:
 
-- [Dex](https://github.com/dexidp/dex) as the OIDC issuer for both clusters.
+- [Dex](https://github.com/dexidp/dex) as the OIDC issuer for all clusters
+  running only in the master cluster.
 
 - [Gangway](https://github.com/heptiolabs/gangway) web server to authenticate
   users to Dex and help generate Kubeconfig files.
 
-- [kube-oidc-proxy](https://github.com/jetstack/kube-oidc-proxy) to expose both
+- [kube-oidc-proxy](https://github.com/jetstack/kube-oidc-proxy) to expose all
   clusters to OIDC authentication.
 
 - [Contour](https://github.com/heptio/contour) as the ingress controller with
@@ -78,9 +79,8 @@ CLOUD=digitalocean make terraform_apply
 
 This will create a Kubernetes cluster in EKS and GKE, a Service
 Account to manage Google Cloud DNS records for DNS challenges and OIDC secrets
-for both clusters. It should generate a JSON configuration file for both
-clusters in `./manifests/google-config.json` and `./manifests/amazon.json`
-respectively.
+for all clusters. It should generate a JSON configuration file for all clusters
+in `./manifests/[google|amazon|digitalocean]-config.json` respectively.
 
 ## Configuration
 
