@@ -7,6 +7,7 @@ local contour = import './components/contour.jsonnet';
 local dex = import './components/dex.jsonnet';
 local gangway = import './components/gangway.jsonnet';
 local kube_oidc_proxy = import './components/kube-oidc-proxy.jsonnet';
+local landingpage = import './components/landingpage.jsonnet';
 
 local removeLeadingDot(s) = if std.startsWith(s, '.') then
   std.substr(s, 1, std.length(s) - 1)
@@ -167,6 +168,8 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
     },
   },
 
+  sslPassthroughDomains:: std.prune([$.gangway.domain, $.kube_oidc_proxy.domain, if $.master then $.dex_domain]),
+
   contour: contour {
     base_domain:: $.cluster_domain,
     p:: $.p,
@@ -190,7 +193,7 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
           // this add a final dot to the domain name and joins the list
           'external-dns.alpha.kubernetes.io/hostname': std.join(',', std.map(
             (function(o) o + '.'),
-            std.prune([$.gangway.domain, $.kube_oidc_proxy.domain, if $.master then $.dex_domain]),
+            $.sslPassthroughDomains + if $.master then [$.landingpage.domain] else [],
           )),
         },
       },
@@ -341,5 +344,41 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
       [this.domain]
     ),
     ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 443),
+  },
+
+  landingpage: landingpage {
+    local this = self,
+    index:: $.master,
+    domain:: removeLeadingDot($.base_domain),
+    p:: $.p,
+    metadata:: {
+      metadata+: {
+        namespace: $.namespace,
+      },
+    },
+
+    sslRedirectDomains:: $.sslPassthroughDomains,
+
+    deployment+: {
+      spec+: {
+        replicas: $.default_replicas,
+      },
+    },
+
+    certificate: if $.master then cert_manager.Certificate(
+      $.namespace,
+      this.name,
+      $.cert_manager.letsencryptProd,
+      [this.domain]
+    ),
+
+    content: if $.master then std.join('\n', std.map(
+      (function(c) landingpage.Link(
+         c,
+         'https://gangway' + $.clouds[c].domain_part + $.base_domain,
+         'Gangway ' + c,
+       )),
+      std.objectFields($.clouds)
+    )),
   },
 }
