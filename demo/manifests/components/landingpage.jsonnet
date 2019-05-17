@@ -3,7 +3,8 @@ local utils = import '../vendor/kube-prod-runtime/lib/utils.libsonnet';
 
 local IMAGE = 'nginx:1.15.12';
 local WWW_VOLUME_PATH = '/usr/share/nginx/html';
-local CONFIG_PATH = '/etc/nginx/conf.d';
+local CONFIG_TOP_LEVEL_PATH = '/etc/nginx/nginx.conf';
+local CONFIG_DEFAULT_PATH = '/etc/nginx/conf.d';
 local HTTP_PORT = 80;
 
 {
@@ -46,6 +47,38 @@ local HTTP_PORT = 80;
 
   configMap: kube.ConfigMap($.name) + $.metadata {
     data+: {
+      'nginx.conf': |||
+        user  nginx;
+        worker_processes  1;
+
+        error_log  /var/log/nginx/error.log warn;
+        pid        /var/run/nginx.pid;
+
+
+        events {
+            worker_connections  1024;
+        }
+
+
+        http {
+            include       /etc/nginx/mime.types;
+            default_type  application/octet-stream;
+
+            log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                              '$status $body_bytes_sent "$http_referer" '
+                              '"$http_user_agent" "$http_x_forwarded_for"';
+
+            access_log  /var/log/nginx/access.log  main;
+
+            sendfile        on;
+
+            keepalive_timeout  65;
+
+            server_names_hash_bucket_size 256;
+
+            include /etc/nginx/conf.d/*.conf;
+        }
+      |||,
       'default.conf': |||
         server {
             listen       80;
@@ -135,6 +168,13 @@ local HTTP_PORT = 80;
             landingpage: kube.Container($.app) {
               local container = self,
               image: IMAGE,
+              args: [
+                'nginx',
+                '-g',
+                'daemon off;',
+                '-c',
+                CONFIG_TOP_LEVEL_PATH,
+              ],
               resources: {
                 requests: { cpu: '10m', memory: '64Mi' },
               },
@@ -142,7 +182,8 @@ local HTTP_PORT = 80;
                 http: { containerPort: HTTP_PORT },
               },
               volumeMounts_+: {
-                config: { mountPath: CONFIG_PATH },
+                config_top_level: { name: 'config', mountPath: CONFIG_TOP_LEVEL_PATH, subPath: 'nginx.conf' },
+                config_default: { name: 'config', mountPath: CONFIG_DEFAULT_PATH + '/default.conf', subPath: 'default.conf' },
               } + if $.index then { www: { mountPath: WWW_VOLUME_PATH } } else {},
               readinessProbe: {
                 httpGet: { path: '/', port: HTTP_PORT },
