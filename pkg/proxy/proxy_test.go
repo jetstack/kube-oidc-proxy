@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/user"
+	authuser "k8s.io/apiserver/pkg/authentication/user"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
 )
@@ -71,9 +73,12 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 			f.expUser, h.Header.Get("Impersonate-User"))
 	}
 
-	if !reflect.DeepEqual(h.Header["Impersonate-Group"], f.expGroup) {
-		f.t.Errorf("client transport got unexpected group impersonation header, exp=%s got=%s",
-			f.expGroup, h.Header.Get("Impersonate-Group"))
+	if exp, act := sort.StringSlice(f.expGroup), sort.StringSlice(h.Header["Impersonate-Group"]); !reflect.DeepEqual(exp, act) {
+		f.t.Errorf(
+			"client transport got unexpected group impersonation header, exp=%#v got=%#v",
+			exp,
+			act,
+		)
 	}
 
 	for k, vv := range h.Header {
@@ -362,6 +367,7 @@ func Test_RoundTrip(t *testing.T) {
 	}
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
 	p.fakeRT.expUser = "a-user"
+	p.fakeRT.expGroup = []string{authuser.AllAuthenticated}
 	req.Header["Authorization"] = []string{"bearer fake-token"}
 	_, err = p.RoundTrip(req)
 	if err != nil {
@@ -371,7 +377,7 @@ func Test_RoundTrip(t *testing.T) {
 	authResponse = &authenticator.Response{
 		User: &user.DefaultInfo{
 			Name:   "a-user",
-			Groups: []string{"a-group-a", "a-group-b"},
+			Groups: []string{"a-group-a", "a-group-b", authuser.AllAuthenticated},
 			Extra: map[string][]string{
 				"foo":     []string{"a", "b"},
 				"bar":     []string{"c", "d"},
@@ -381,7 +387,7 @@ func Test_RoundTrip(t *testing.T) {
 	}
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
 	p.fakeRT.expUser = "a-user"
-	p.fakeRT.expGroup = []string{"a-group-a", "a-group-b"}
+	p.fakeRT.expGroup = []string{"a-group-a", "a-group-b", authuser.AllAuthenticated}
 	p.fakeRT.expExtra = map[string][]string{
 		"Impersonate-Extra-Foo":     []string{"a", "b"},
 		"Impersonate-Extra-Bar":     []string{"c", "d"},
