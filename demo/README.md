@@ -78,9 +78,9 @@ CLOUD=amazon       make terraform_apply
 CLOUD=digitalocean make terraform_apply
 ```
 
-This will create cluster themselves and a Service Account to manage Google
-Cloud DNS records for DNS challenges and OIDC secrets for all clusters. It
-should generate a JSON configuration file for each cluster in
+This will create each cluster and a Service Account to manage Google Cloud DNS
+records for DNS challenges and OIDC secrets for all clusters. It should
+generate a JSON configuration file for each cluster in
 `./manifests/[google|amazon|digitalocean]-config.json` respectively.
 
 ## Configuration
