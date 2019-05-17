@@ -67,9 +67,10 @@ DIGITALOCEAN_TOKEN
 
 ## Infrastructure
 
-First the GKE and EKS cluster will be created, along with secrets to be used for
-OIDC authentication for each cluster. The Amazon Terraform module has dependant
-resources on the Google module, so the Google module must be created first.
+First the clusters will be created, along with secrets to be used for OIDC
+authentication for each cluster. The Amazon and Digitalocean Terraform module
+has dependant resources on the Google module, so the Google module must be
+created first.
 
 ```
 CLOUD=google       make terraform_apply
@@ -77,10 +78,10 @@ CLOUD=amazon       make terraform_apply
 CLOUD=digitalocean make terraform_apply
 ```
 
-This will create a Kubernetes cluster in EKS and GKE, a Service
-Account to manage Google Cloud DNS records for DNS challenges and OIDC secrets
-for all clusters. It should generate a JSON configuration file for all clusters
-in `./manifests/[google|amazon|digitalocean]-config.json` respectively.
+This will create cluster themselves and a Service Account to manage Google
+Cloud DNS records for DNS challenges and OIDC secrets for all clusters. It
+should generate a JSON configuration file for each cluster in
+`./manifests/[google|amazon|digitalocean]-config.json` respectively.
 
 ## Configuration
 
@@ -224,6 +225,6 @@ $ kubectl get svc -n auth
 ```
 
 When components have their TLS secrets, you will then be able to login to the
-Gangway portal on EKS and download your Kubeconfig. Again, when trying this
-Kubeconfig, you will initially be greeted with an "unauthorized" error message
-until RBAC permissions have been granted to this user.
+Gangway portal on Amazon/DigitalOcean and download your Kubeconfig. Again, when
+trying this Kubeconfig, you will initially be greeted with an "unauthorized"
+error message until RBAC permissions have been granted to this user.
