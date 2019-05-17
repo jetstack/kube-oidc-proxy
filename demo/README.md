@@ -1,14 +1,20 @@
 # Multi-Cluster Tutorial
 
-This document will walk-through how to create two managed Kubernetes clusters on
-separate providers (GKE and EKS), deploying:
- - [Dex](https://github.com/dexidp/dex) as the OIDC issuer for both clusters.
- - [Gangway](https://github.com/heptiolabs/gangway) web server to authenticate
-   users to Dex and help generate Kubeconfig files.
-- [kube-oidc-proxy](https://github.com/jetstack/kube-oidc-proxy) to expose both
+This document will walk-through how to create three managed Kubernetes clusters on
+separate providers (Google, Amazon and Digitalocean), deploying:
+
+- [Dex](https://github.com/dexidp/dex) as the OIDC issuer for all clusters
+  running only in the master cluster.
+
+- [Gangway](https://github.com/heptiolabs/gangway) web server to authenticate
+  users to Dex and help generate Kubeconfig files.
+
+- [kube-oidc-proxy](https://github.com/jetstack/kube-oidc-proxy) to expose all
   clusters to OIDC authentication.
+
 - [Contour](https://github.com/heptio/contour) as the ingress controller with
   TLS SNI passthrough enabled.
+
 - [Cert-Manager](https://github.com/jetstack/cert-manager) to issue and manage
   certificates.
 
@@ -17,17 +23,19 @@ supports, namely, username and password, and GitHub, however [more are
 available.](https://github.com/dexidp/dex#connectors)
 
 ## Prerequisites
+
 The tutorial will be using Cert-Manager to generate certificates signed by
-[Let's Encrypt](https://letsencrypt.org/) for components in both GKE and EKS
-using a DNS challenge. Although not the only way to generate certificates, the
-tutorial assumes that a domain will be used which belongs to your Google Cloud
-project, and records of sub-domains of this domain will be created to assign DNS
-to the components. A Google Cloud Service Account will be created to manage
-these DNS challenges and it's secrets passed to Cert-Manager.
+[Let's Encrypt](https://letsencrypt.org/) for components in all clouds using a
+DNS challenge. Although not the only way to generate certificates, the tutorial
+assumes that a domain will be used which belongs to your Google Cloud project,
+and records of sub-domains of this domain will be created to assign DNS to the
+components. A Google Cloud Service Account will be created to manage these DNS
+challenges and it's secrets passed to Cert-Manager.
 
 A Service Account has been created for Terraform with its secrets stored at
 `~/.config/gcloud/terraform-admin.json`. The Service Account needs at least
 these IAM Roles attached:
+
 ```
 Compute Admin
 Kubernetes Engine Admin
@@ -43,57 +51,73 @@ relevent permissions to create a fully fledged cluster, including creating
 load balancers, instance pools etc. Typically, these environment variables must
 be set when running `terraform` and deploying the manifests before OIDC
 authentication has been set up:
+
 ```
 AWS_SECRET_ACCESS_KEY
 AWS_SESSION_TOKEN
 AWS_ACCESS_KEY_ID
 ```
 
+For Digitalocean you need to get an write token from the console and export it
+using this environment variable:
+
+```
+DIGITALOCEAN_TOKEN
+```
+
 ## Infrastructure
-First the GKE and EKS cluster will be created, along with secrets to be used for
-OIDC authentication for each cluster. The Amazon Terraform module has dependant
-resources on the Google module, so the Google module must be created first.
+
+First the clusters will be created, along with secrets to be used for OIDC
+authentication for each cluster. The Amazon and Digitalocean Terraform module
+has dependant resources on the Google module, so the Google module must be
+created first.
 
 ```
-CLOUD=google make terraform_apply
-CLOUD=amazon make terraform_apply
+CLOUD=google       make terraform_apply
+CLOUD=amazon       make terraform_apply
+CLOUD=digitalocean make terraform_apply
 ```
 
-This will create a standard Kubernetes cluster in both EKS and GKE, a Service
-Account to manage Google Cloud DNS records for DNS challenges and OIDC secrets
-for both clusters. It should generate a JSON configuration file for both
-clusters in `./manifests/google-config.json` and `./manifests/amazon.json`
-respectively.
-
+This will create each cluster and a Service Account to manage Google Cloud DNS
+records for DNS challenges and OIDC secrets for all clusters. It should
+generate a JSON configuration file for each cluster in
+`./manifests/[google|amazon|digitalocean]-config.json` respectively.
 
 ## Configuration
-Copy `config.dist.jsonnet` to both `gke-config.jsonnet` and `eks-config.jsonnet`.
-These two files will hold configuration for setting up the OIDC authentication
-in both clusters as well as assigning DNS. Firstly, determine what sub-domain
-will be used for either cluster, using a domain you own in  your Google Cloud
-Project, e.g.
+
+Copy `config.dist.jsonnet` to `config.jsonnet`. This file will hold
+configuration for setting up the OIDC authentication in all clusters as well as
+assigning DNS. Firstly, determine what `base_domain` will be used for this
+demo. Ensure the `base_domain` starts with a `.`.
+
+The domain, which needs to be managed in Google Cloud DNS will have records
+like this:
+
 ```
-gke.mydomain.company.net
-eks.mydomain.company.net
+dex.mydomain.company.net
+gangway-gke.mydomain.company.net
+gangway-eks.mydomain.company.net
+gangway-dok.mydomain.company.net
 ```
 
-Populate each configuration file with its corresponding domain and Let's
-Encrypt contract email.
+Populate the configuration file with its corresponding domain
+(`.mydomain.company.net` in our example) and Let's Encrypt contact email.
 
-### GKE
+### Dex customisations
 
-Since the GKE cluster will be hosting Dex, the OIDC issuer, its
-configuration file must contain how or what users will use to authenticate. Here
-we will show two methods, username and password, and GitHub.
+Since the GKE cluster will be hosting Dex, the OIDC issuer, its configuration
+file must contain how or what users will use to authenticate. Here we will show
+two methods, username and password, and GitHub.
 
 Usernames and passwords can be populated with the following block within the
 `dex` block.
 
 ```
-  dex+: {
+  dex+: if $.master then {
     users: [
       $.dex.Password('admin@example.net', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
     ],
+  } else {
   },
 ```
 
@@ -108,11 +132,12 @@ htpasswd -bnBC 10 "" MyVerySecurePassword | tr -d ':'
 Dex also supports multiple 'connectors' that enable third party applications to
 provide OAuth to it's system. For GitHub, this involves creating an 'OAuth App'.
 The `Authorization callback URL` should be populated with the Dex callback URL, i.e.
-`https://dex.gke.mydomain.company.net/callback`. 
+`https://dex.gke.mydomain.company.net/callback`.
 The resulting `Client ID` and `Client Secret` can then be used to populate the
 configuration file:
+
 ```
-  dex+: {
+  dex+: if $.master then {
     connectors: [
       $.dex.Connector('github', 'GitHub', 'github', {
         clientID: 'myGithubAppClientID',
@@ -122,88 +147,19 @@ configuration file:
         }],
       }),
     ],
+  } else {
   },
 ```
 
 You can find more information on GitHub OAuth apps
 [here.](https://developer.github.com/v3/oauth/)
 
-Finally, Dex needs to be configured to also accept the Gangway client in the EKS
-cluster. To do this, we add a `dex.Client` block in the configuration. We need to
-populate its redirect URL as well as the client ID and client secret using
-values that were created in the `./manifests/amazon-config.json` by Terraform.
-The resulting block should would look like:
-
-```
-  eksClient: $.dex.Client('my_client_id_in_./manifests/amazon-config.json') + $.dex.metadata {
-    secret: 'my_client_secret_in_./manifests/amazon-config.json',
-    redirectURIs: [
-      'https://gangway.eks.mydomain.company.net/callback',
-    ],
-  },
-```
-
-The resulting `gke-config.jsonnet` file should look similar to
-
-```
-(import './manifests/main.jsonnet') {
-  base_domain: 'gke.mydomain.company.net',
-
-  cert_manager+: {
-    letsencrypt_contact_email:: 'myemail@company.net',
-  },
-
-  dex+: {
-    users: [
-      $.dex.Password('admin@example.net', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
-    ],
-
-    connectors: [
-      $.dex.Connector('github', 'GitHub', 'github', {
-        clientID: 'myGithubAppClientID',
-        clientSecret: 'myGithubAppClientSecret',
-        orgs: [{
-          name: 'company',
-        }],
-      }),
-    ],
-  },
-
-  eksClient: $.dex.Client('my_client_id_in_./manifests/amazon-config.json') + $.dex.metadata {
-    secret: 'my_client_secret_in_./manifests/amazon-config.json',
-    redirectURIs: [
-      'https://gangway.eks.mydomain.company.net/callback',
-    ],
-  },
-}
-```
-
-### EKS
-
-The EKS cluster will not be hosting the dex server so only needs to be
-configured with its domain, Dex's domain and the Let's Encrypt contact email.
-The resuting `eks-config.jsonnet` file should look similar to:
-
-```
-(import './manifests/main.jsonnet') {
-  base_domain: 'eks.mydomain.company.net',
-  dex_domain: 'dex.gke.mydomain.company.net',
-  cert_manager+: {
-    letsencrypt_contact_email:: 'myemail@company.net',
-  },
-}
-```
-
 ## Deployment
 
-Once the configuration files have been created the manifests can be deployed.
-Copy or create a symbolic link from the `gke-config.jsonnet` file to
-`config.jsonnet` and apply.
+Once the configuration file has been created the manifests can be deployed.
 
 ```
-$ ln -s gke-config.jsonnet config.jsonnet
-$ export CLOUD=google
-$ make manifests_apply
+$ CLOUD=google       manifests_apply
 ```
 
 You should then see the components deployed to the cluster in the `auth`
@@ -219,6 +175,7 @@ gangway-77dfdb68d-x84hj            0/1     ContainerCreating   0          11s
 ```
 
 Verify that the ingress has been configured to what you were expecting.
+
 ```
 $ kubectl get ingressroutes -n auth
 ```
@@ -234,31 +191,17 @@ $ kubectl get -n auth secret
 ```
 
 You can save these certifcates locally, and restore them any time using:
+
 ```
 $ make manifests_backup_certificates
 $ make manifests_restore_certificates
 ```
 
-An `A` record can now be created so that DNS can be resolve the Contour Load
-Balancer public IP address. Take a note of the external-IP address exposed:
-
-```
-$ kubectl get svc contour -n auth
-```
-
-Create a wildcard `A` record (matching all sub-domains), with some
-reasonable TTL pointing to the exposed IP address of the Contour Load Balancer.
-
-```
-DNS name: *.gke.mydomain.company.net
-Record resource type: A
-IPv4 address: $CONTOUR_IP
-```
-
 You can check that the DNS record has been propagated by trying to resolve it
 using:
+
 ```
-$ host https://gangway.gke.mydomain.company.net
+$ host https://gangway-gke.mydomain.company.net
 ```
 
 Once propagated, you can then visit the Gangway URL, follow the instructions and
@@ -267,29 +210,21 @@ kube-oidc-proxy. Trying the Kubeconfig, you should be greeted with an error
 message that your OIDC username does not have enough RBAC permissions to access
 that resource.
 
-The EKS cluster manifests can now be deployed using the `eks-config.jsonnet`.
+The EKS and Digitalocean cluster manifests can now be deployed:
 
 ```
-$ rm config.jsonnet && ln -s eks-config.jsonnet config.jsonnet
-$ export CLOUD=amazon
-$ make manifests_apply
+$ CLOUD=amazon       manifests_apply
+$ CLOUD=digitalocean manifests_apply
 ```
 
 Get the AWS DNS URL for the Contour Load Balancer.
+
 ```
 $ export KUBECONFIG=.kubeconfig-amazon
 $ kubectl get svc -n auth
 ```
 
-Once the the Contour Load Balancer has an external URL, we need to create a `CNAME`
-record:
-```
-DNS name: *.eks.mydomain.company.net
-Record resource type: CNAME
-Canonical name: $CONTOUR_AWS_URL
-```
-
 When components have their TLS secrets, you will then be able to login to the
-Gangway portal on EKS and download your Kubeconfig. Again, when trying this
-Kubeconfig, you will initially be greeted with an "unauthorized" error message
-until RBAC permissions have been granted to this user.
+Gangway portal on Amazon/DigitalOcean and download your Kubeconfig. Again, when
+trying this Kubeconfig, you will initially be greeted with an "unauthorized"
+error message until RBAC permissions have been granted to this user.

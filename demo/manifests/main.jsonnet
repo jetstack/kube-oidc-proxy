@@ -8,7 +8,11 @@ local dex = import './components/dex.jsonnet';
 local gangway = import './components/gangway.jsonnet';
 local kube_oidc_proxy = import './components/kube-oidc-proxy.jsonnet';
 
-local config = import './config.json';
+local removeLeadingDot(s) = if std.startsWith(s, '.') then
+  std.substr(s, 1, std.length(s) - 1)
+else
+  s;
+
 
 local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePort) = contour.IngressRoute(
   namespace,
@@ -43,16 +47,37 @@ local IngressRouteTLSPassthrough(namespace, name, domain, serviceName, servicePo
   },
 };
 
-local only_master(obj) =
-  if std.extVar('master') == 'true' then
-    obj
-  else
-    {};
-
 {
-  config:: config,
+
+  cloud:: 'google',
+
+  clouds:: {
+    google: {
+      master: true,
+      domain_part: '-gke',
+      config: import './google-config.json',
+    },
+    amazon: {
+      master: false,
+      domain_part: '-eks',
+      config: import './amazon-config.json',
+    },
+    digitalocean: {
+      master: false,
+      domain_part: '-dok',
+      config: import './digitalocean-config.json',
+    },
+  },
+
+  config:: $.clouds[$.cloud].config,
+
+  master:: $.clouds[$.cloud].master,
 
   base_domain:: error 'base_domain is undefined',
+
+  cluster_domain:: $.clouds[$.cloud].domain_part + $.base_domain,
+
+  dex_domain:: 'dex' + $.base_domain,
 
   p:: '',
 
@@ -62,7 +87,6 @@ local only_master(obj) =
 
   ns: kube.Namespace($.namespace),
 
-  dex_domain:: $.dex.domain,
 
   cert_manager: cert_manager {
     google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
@@ -113,7 +137,8 @@ local only_master(obj) =
     },
 
     deploy+: {
-      ownerId: $.base_domain,
+      domainFilter: removeLeadingDot($.base_domain),
+      ownerId: $.cluster_domain,
       spec+: {
         template+: {
           spec+: {
@@ -122,9 +147,11 @@ local only_master(obj) =
             },
             containers_+: {
               edns+: {
+                image: 'bitnami/external-dns:0.5.14',
                 args_+: {
                   provider: 'google',
                   'google-project': $.config.externaldns.project,
+                  'txt-prefix': '_external-dns.',
                 },
                 env_+: {
                   GOOGLE_APPLICATION_CREDENTIALS: '/google/credentials.json',
@@ -141,8 +168,9 @@ local only_master(obj) =
   },
 
   contour: contour {
-    base_domain:: $.base_domain,
+    base_domain:: $.cluster_domain,
     p:: $.p,
+    cloud:: $.cloud,
 
     metadata:: {
       metadata+: {
@@ -162,41 +190,59 @@ local only_master(obj) =
           // this add a final dot to the domain name and joins the list
           'external-dns.alpha.kubernetes.io/hostname': std.join(',', std.map(
             (function(o) o + '.'),
-            [$.dex_domain, $.gangway.domain, $.kube_oidc_proxy.domain],
+            std.prune([$.gangway.domain, $.kube_oidc_proxy.domain, if $.master then $.dex_domain]),
           )),
         },
       },
     },
   },
 
-  dex: only_master(dex {
-    local this = self,
-    base_domain:: $.base_domain,
-    p:: $.p,
-    metadata:: {
-      metadata+: {
-        namespace: $.namespace,
+  dex: if $.master then
+    dex {
+      local this = self,
+      domain:: $.dex_domain,
+      p:: $.p,
+      metadata:: {
+        metadata+: {
+          namespace: $.namespace,
+        },
       },
-    },
 
-    deployment+: {
-      spec+: {
-        replicas: $.default_replicas,
+      deployment+: {
+        spec+: {
+          replicas: $.default_replicas,
+        },
       },
-    },
 
-    certificate: cert_manager.Certificate(
-      $.namespace,
-      this.name,
-      $.cert_manager.letsencryptProd,
-      [this.domain]
-    ),
-    ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
-  }),
+      certificate: cert_manager.Certificate(
+        $.namespace,
+        this.name,
+        $.cert_manager.letsencryptProd,
+        [this.domain]
+      ),
+      ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
+
+      connectors: [],
+
+      users: [],
+
+      clients: std.mapWithKey(
+        (function(k, v)
+           dex.Client(v.config.gangway.client_id) + $.dex.metadata {
+             secret: v.config.gangway.client_secret,
+             redirectURIs: [
+               'https://gangway' + v.domain_part + $.base_domain + '/callback',
+             ],
+           }),
+        $.clouds
+      ),
+    }
+  else
+    {},
 
   gangway: gangway {
     local this = self,
-    base_domain:: $.base_domain,
+    base_domain:: $.cluster_domain,
     p:: $.p,
     metadata:: {
       metadata+: {
@@ -263,18 +309,11 @@ local only_master(obj) =
       clientSecret: $.config.gangway.client_secret,
       clusterCAPath: this.config_path + '/cluster-ca.crt',
     },
-
-    dexClient: only_master(dex.Client(this.config.clientID) + $.dex.metadata {
-      secret: this.config.clientSecret,
-      redirectURIs: [
-        this.config.redirectURL,
-      ],
-    }),
   },
 
   kube_oidc_proxy: kube_oidc_proxy {
     local this = self,
-    base_domain:: $.base_domain,
+    base_domain:: $.cluster_domain,
     p:: $.p,
     metadata:: {
       metadata+: {

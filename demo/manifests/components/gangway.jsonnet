@@ -11,13 +11,13 @@ local GANGWAY_TLS_VOLUME_PATH = GANGWAY_CONFIG_VOLUME_PATH + '/tls';
 
   sessionSecurityKey:: error 'sessionSecurityKey is undefined',
 
-  base_domain:: 'cluster.local',
+  base_domain:: '.cluster.local',
 
   app:: 'gangway',
 
   name:: $.p + $.app,
 
-  domain:: $.name + '.' + $.base_domain,
+  domain:: $.name + $.base_domain,
   gangway_url:: 'https://' + $.domain,
 
   namespace:: 'gangway',

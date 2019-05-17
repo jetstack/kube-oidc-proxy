@@ -66,13 +66,13 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
 
   p:: '',
 
-  base_domain:: 'example.net',
+  base_domain:: '.example.net',
 
   app:: 'dex',
 
   name:: $.p + $.app,
 
-  domain:: $.name + '.' + $.base_domain,
+  domain:: $.name + $.base_domain,
 
   namespace:: 'dex',
 
@@ -112,7 +112,7 @@ local dexNameHash(s) = std.asciiLower(std.strReplace(base32.base32(fakeHashFNV(s
       tlsCert: DEX_TLS_VOLUME_PATH + '/tls.crt',
       tlsKey: DEX_TLS_VOLUME_PATH + '/tls.key',
     },
-    enablePasswordDB: true,
+    enablePasswordDB: if std.length($.users) > 0 then true else false,
   },
   serviceAccount: kube.ServiceAccount($.name) + $.metadata {
   },

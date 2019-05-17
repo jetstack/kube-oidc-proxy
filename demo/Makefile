@@ -6,11 +6,7 @@ KUBECONFIG := $(CURDIR)/.kubeconfig-$(CLOUD)
 
 GOOGLE_PROJECT := $(shell gcloud config get-value core/project)
 
-ifeq ($(CLOUD),google)
-EXT_VARS ?= "master=true,cloud=$(CLOUD)"
-else
-EXT_VARS ?= "master=false,cloud=$(CLOUD)"
-endif
+EXT_VARS := --tla-str cloud=$(CLOUD)
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
@@ -50,15 +46,14 @@ manifests/$(CLOUD)-config.json:
 
 .PHONY: manifests_apply
 manifests_apply: depend manifests/$(CLOUD)-config.json ## Use kubecfg to apply manifests into cluster
-	rm -f manifests/config.json && ln -s $(CLOUD)-config.json manifests/config.json
 	# apply all CRDs
-	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
+	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
 	# apply everything
-	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet | kubectl apply -f -
+	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet | kubectl apply -f -
 
 .PHONY: manifests_validate
 manifests_validate: depend manifests/$(CLOUD)-config.json ## Use kubecfg to validate manifests
-	$(BINDIR)/kubecfg -V ${EXT_VARS} validate config.jsonnet
+	$(BINDIR)/kubecfg $(EXT_VARS) validate config.jsonnet
 
 .PHONY: manifests_validate
 jsonnet_fmt: depend ## validate formatting of jsonnet files
@@ -66,16 +61,17 @@ jsonnet_fmt: depend ## validate formatting of jsonnet files
 
 .PHONY: manifests_destroy
 manifests_destroy: depend manifests/$(CLOUD)-config.json ## Use kubecfg to delete manifests
-	$(BINDIR)/kubecfg -V ${EXT_VARS} show config.jsonnet | kubectl delete -f - --ignore-not-found
+	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet | kubectl delete -f - --ignore-not-found
 
 .PHONY: manifests_backup_certificates
 manifests_backup_certificates:
-	kubectl get secrets --all-namespaces -l certmanager.k8s.io/certificate-name -o yaml > .backup-certificates.yaml
+	kubectl get secrets --all-namespaces -l certmanager.k8s.io/certificate-name -o yaml > .backup-certificates-$(CLOUD).yaml.tmp
+	mv .backup-certificates-$(CLOUD).yaml.tmp .backup-certificates-$(CLOUD).yaml
 
 .PHONY: manifests_restore_certificates
 manifests_restore_certificates:
 	kubectl create ns auth --dry-run -o yaml | kubectl apply -f -
-	kubectl apply -f .backup-certificates.yaml
+	kubectl apply -f .backup-certificates-$(CLOUD).yaml
 
 .PHONY: verify
 verify: jsonnet_fmt ## verify code and vendor

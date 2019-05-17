@@ -1,10 +1,16 @@
-(import './manifests/main.jsonnet') {
-  base_domain: 'kubernetes.example.net',
-  // dex_domain: 'dex.kubernetes.example.net',  // to be used on non dex hosting clusters
+local main = import './manifests/main.jsonnet';
+
+function(cloud='google') main {
+  cloud: cloud,
+  // this will only run the google cluster
+  clouds: {
+    google: main.clouds.google,
+  },
+  base_domain: '.kubernetes.example.net',
   cert_manager+: {
     letsencrypt_contact_email:: 'certificates@example.net',
   },
-  dex+: {
+  dex+: if $.master then {
     users: [
       $.dex.Password('admin@example.net', '$2y$10$i2.tSLkchjnpvnI73iSW/OPAVriV9BWbdfM6qemBM1buNRu81.ZG.'),  // plaintext: secure
     ],
@@ -18,13 +24,6 @@
         }],
       }),
     ],
+  } else {
   },
-
-  // Here we can register more dex clients
-  //extraClient: $.dex.Client('123') + $.dex.metadata {
-  //  secret: '4567',
-  //  redirectURIs: [
-  //    'https://gangway.other.kubernetes.example.net/callback',
-  //  ],
-  //},
 }

@@ -10,18 +10,10 @@ local ENVOY_IMAGE = 'docker.io/envoyproxy/envoy-alpine:v1.9.0';
 local apiGroup = 'contour.heptio.com';
 local apiVersion = 'v1beta1';
 
-local ServiceAnnotations(cloud) =
-  if cloud == 'amazon' then
-    {
-      'service.beta.kubernetes.io/aws-load-balancer-backend-protocol': 'tcp',
-      'service.beta.kubernetes.io/aws-load-balancer-type': 'nlb',
-    }
-  else
-    {};
-
 {
   p:: '',
   app:: 'contour',
+  cloud:: '',
 
   name:: $.p + $.app,
 
@@ -137,14 +129,20 @@ local ServiceAnnotations(cloud) =
 
   svc: kube._Object('v1', 'Service', $.name) + $.metadata {
     metadata+: {
-      annotations+: ServiceAnnotations(std.extVar('cloud')),
+      annotations+: if $.cloud == 'amazon' then
+        {
+          'service.beta.kubernetes.io/aws-load-balancer-backend-protocol': 'tcp',
+          'service.beta.kubernetes.io/aws-load-balancer-type': 'nlb',
+        }
+      else
+        {},
     },
     spec+: {
       type: 'LoadBalancer',
       selector: $.deployment.spec.template.metadata.labels,
       ports: [
-        { name: 'http', targetPort: 8080, port: 80 },
         { name: 'https', targetPort: 8443, port: 443 },
+        { name: 'http', targetPort: 8080, port: 80 },
       ],
     },
   },
