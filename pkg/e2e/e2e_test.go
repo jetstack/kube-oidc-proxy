@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "1.14.0"
+	defaultNodeImage = "1.15.0"
 )
 
 var e2eSuite *E2E
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 			nodeImage, err)
 	}
 
-	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
+	nodeImage = fmt.Sprintf("eu.gcr.io/jetstack-build-infra-images/kind:%s", nodeImage)
 
 	clusterContext := cluster.NewContext("kube-oidc-proxy-e2e")
 
