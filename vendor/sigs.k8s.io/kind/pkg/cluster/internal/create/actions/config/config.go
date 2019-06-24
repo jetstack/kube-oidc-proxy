@@ -19,8 +19,10 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/kind/pkg/cluster/config"
 	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions"
@@ -57,7 +59,7 @@ func (a *Action) Execute(ctx *actions.ActionContext) error {
 	kubeVersion, err := node.KubeVersion()
 	if err != nil {
 		// TODO(bentheelder): logging here
-		return errors.Wrap(err, "failed to get kubernetes version from node: %v")
+		return errors.Wrap(err, "failed to get kubernetes version from node")
 	}
 
 	// get the control plane endpoint, in case the cluster has an external load balancer in
@@ -77,6 +79,7 @@ func (a *Action) Execute(ctx *actions.ActionContext) error {
 			ControlPlaneEndpoint: controlPlaneEndpoint,
 			APIBindPort:          kubeadm.APIServerPort,
 			Token:                kubeadm.Token,
+			PodSubnet:            ctx.Config.Networking.PodSubnet,
 		},
 	)
 
@@ -84,6 +87,8 @@ func (a *Action) Execute(ctx *actions.ActionContext) error {
 		// TODO(bentheelder): logging here
 		return errors.Wrap(err, "failed to generate kubeadm config content")
 	}
+
+	log.Debug("Using kubeadm config:\n" + kubeadmConfig)
 
 	// copy the config to the node
 	if err := node.WriteFile("/kind/kubeadm.conf", kubeadmConfig); err != nil {
@@ -111,7 +116,24 @@ func getKubeadmConfig(cfg *config.Cluster, data kubeadm.ConfigData) (path string
 	// apply patches
 	// TODO(bentheelder): this does not respect per node patches at all
 	// either make patches cluster wide, or change this
-	return kustomize.Build([]string{config}, patches, jsonPatches)
+	patched, err := kustomize.Build([]string{config}, patches, jsonPatches)
+	if err != nil {
+		return "", err
+	}
+	return removeMetadata(patched), nil
+}
+
+// trims out the metadata.name we put in the config for kustomize matching,
+// kubeadm will complain about this otherwise
+func removeMetadata(kustomized string) string {
+	return strings.Replace(
+		kustomized,
+		`metadata:
+  name: config
+`,
+		"",
+		-1,
+	)
 }
 
 func allPatchesFromConfig(cfg *config.Cluster) (patches []string, jsonPatches []kustomize.PatchJSON6902) {

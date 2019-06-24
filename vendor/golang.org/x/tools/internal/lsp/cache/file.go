@@ -5,83 +5,65 @@
 package cache
 
 import (
-	"go/ast"
+	"context"
 	"go/token"
-	"io/ioutil"
+	"path/filepath"
+	"strings"
+	"sync"
 
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/internal/lsp/source"
+	"golang.org/x/tools/internal/span"
 )
 
-// File holds all the information we know about a file.
-type File struct {
-	URI     source.URI
-	view    *View
-	active  bool
-	content []byte
-	ast     *ast.File
-	token   *token.File
-	pkg     *packages.Package
+// viewFile extends source.File with helper methods for the view package.
+type viewFile interface {
+	source.File
+
+	filename() string
+	addURI(uri span.URI) int
 }
 
-// GetContent returns the contents of the file, reading it from file system if needed.
-func (f *File) GetContent() []byte {
-	f.view.mu.Lock()
-	defer f.view.mu.Unlock()
-	f.read()
-	return f.content
+// fileBase holds the common functionality for all files.
+// It is intended to be embedded in the file implementations
+type fileBase struct {
+	uris  []span.URI
+	fname string
+
+	view *view
+
+	handleMu sync.Mutex
+	handle   source.FileHandle
+
+	token *token.File
 }
 
-func (f *File) GetFileSet() *token.FileSet {
-	return f.view.Config.Fset
+func basename(filename string) string {
+	return strings.ToLower(filepath.Base(filename))
 }
 
-func (f *File) GetToken() *token.File {
-	f.view.mu.Lock()
-	defer f.view.mu.Unlock()
-	if f.token == nil {
-		if err := f.view.parse(f.URI); err != nil {
-			return nil
-		}
-	}
-	return f.token
+func (f *fileBase) URI() span.URI {
+	return f.uris[0]
 }
 
-func (f *File) GetAST() *ast.File {
-	f.view.mu.Lock()
-	defer f.view.mu.Unlock()
-	if f.ast == nil {
-		if err := f.view.parse(f.URI); err != nil {
-			return nil
-		}
-	}
-	return f.ast
+func (f *fileBase) filename() string {
+	return f.fname
 }
 
-func (f *File) GetPackage() *packages.Package {
-	f.view.mu.Lock()
-	defer f.view.mu.Unlock()
-	if f.pkg == nil {
-		if err := f.view.parse(f.URI); err != nil {
-			return nil
-		}
-	}
-	return f.pkg
+// View returns the view associated with the file.
+func (f *fileBase) View() source.View {
+	return f.view
 }
 
-// read is the internal part of Read that presumes the lock is already held
-func (f *File) read() {
-	if f.content != nil {
-		return
+// Content returns a handle for the contents of the file.
+func (f *fileBase) Handle(ctx context.Context) source.FileHandle {
+	f.handleMu.Lock()
+	defer f.handleMu.Unlock()
+	if f.handle == nil {
+		f.handle = f.view.Session().GetFile(f.URI())
 	}
-	// we don't know the content yet, so read it
-	filename, err := f.URI.Filename()
-	if err != nil {
-		return
-	}
-	content, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return
-	}
-	f.content = content
+	return f.handle
+}
+
+func (f *fileBase) FileSet() *token.FileSet {
+	return f.view.Session().Cache().FileSet()
 }

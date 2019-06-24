@@ -37,14 +37,21 @@ import (
 	"k8s.io/kubernetes/pkg/volume"
 )
 
-// Host methods required by stats handlers.
-type StatsProvider interface {
+// Provider hosts methods required by stats handlers.
+type Provider interface {
 	// The following stats are provided by either CRI or cAdvisor.
 	//
 	// ListPodStats returns the stats of all the containers managed by pods.
 	ListPodStats() ([]statsapi.PodStats, error)
-	// ListPodCPUAndMemoryStats returns the CPU and memory stats of all the containers managed by pods.
+	// ListPodStatsAndUpdateCPUNanoCoreUsage updates the cpu nano core usage for
+	// the containers and returns the stats for all the pod-managed containers.
 	ListPodCPUAndMemoryStats() ([]statsapi.PodStats, error)
+	// ListPodStatsAndUpdateCPUNanoCoreUsage returns the stats of all the
+	// containers managed by pods and force update the cpu usageNanoCores.
+	// This is a workaround for CRI runtimes that do not integrate with
+	// cadvisor. See https://github.com/kubernetes/kubernetes/issues/72788
+	// for more details.
+	ListPodStatsAndUpdateCPUNanoCoreUsage() ([]statsapi.PodStats, error)
 	// ImageFsStats returns the stats of the image filesystem.
 	ImageFsStats() (*statsapi.FsStats, error)
 
@@ -96,26 +103,34 @@ type StatsProvider interface {
 }
 
 type handler struct {
-	provider        StatsProvider
+	provider        Provider
 	summaryProvider SummaryProvider
 }
 
-func CreateHandlers(rootPath string, provider StatsProvider, summaryProvider SummaryProvider) *restful.WebService {
+// CreateHandlers creates the REST handlers for the stats.
+func CreateHandlers(rootPath string, provider Provider, summaryProvider SummaryProvider, enableCAdvisorJSONEndpoints bool) *restful.WebService {
 	h := &handler{provider, summaryProvider}
 
 	ws := &restful.WebService{}
 	ws.Path(rootPath).
 		Produces(restful.MIME_JSON)
 
-	endpoints := []struct {
+	type endpoint struct {
 		path    string
 		handler restful.RouteFunction
-	}{
-		{"", h.handleStats},
+	}
+
+	endpoints := []endpoint{
 		{"/summary", h.handleSummary},
-		{"/container", h.handleSystemContainer},
-		{"/{podName}/{containerName}", h.handlePodContainer},
-		{"/{namespace}/{podName}/{uid}/{containerName}", h.handlePodContainer},
+	}
+
+	if enableCAdvisorJSONEndpoints {
+		endpoints = append(endpoints,
+			endpoint{"", h.handleStats},
+			endpoint{"/container", h.handleSystemContainer},
+			endpoint{"/{podName}/{containerName}", h.handlePodContainer},
+			endpoint{"/{namespace}/{podName}/{uid}/{containerName}", h.handlePodContainer},
+		)
 	}
 
 	for _, e := range endpoints {
@@ -130,7 +145,7 @@ func CreateHandlers(rootPath string, provider StatsProvider, summaryProvider Sum
 	return ws
 }
 
-type StatsRequest struct {
+type statsRequest struct {
 	// The name of the container for which to request stats.
 	// Default: /
 	// +optional
@@ -158,7 +173,7 @@ type StatsRequest struct {
 	Subcontainers bool `json:"subcontainers,omitempty"`
 }
 
-func (r *StatsRequest) cadvisorRequest() *cadvisorapi.ContainerInfoRequest {
+func (r *statsRequest) cadvisorRequest() *cadvisorapi.ContainerInfoRequest {
 	return &cadvisorapi.ContainerInfoRequest{
 		NumStats: r.NumStats,
 		Start:    r.Start,
@@ -166,9 +181,9 @@ func (r *StatsRequest) cadvisorRequest() *cadvisorapi.ContainerInfoRequest {
 	}
 }
 
-func parseStatsRequest(request *restful.Request) (StatsRequest, error) {
+func parseStatsRequest(request *restful.Request) (statsRequest, error) {
 	// Default request.
-	query := StatsRequest{
+	query := statsRequest{
 		NumStats: 60,
 	}
 

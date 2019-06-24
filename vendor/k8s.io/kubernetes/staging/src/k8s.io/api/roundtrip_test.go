@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	admissionregv1alpha1 "k8s.io/api/admissionregistration/v1alpha1"
 	admissionregv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
@@ -45,6 +44,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	rbacv1alpha1 "k8s.io/api/rbac/v1alpha1"
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	schedulingv1alpha1 "k8s.io/api/scheduling/v1alpha1"
 	schedulingv1beta1 "k8s.io/api/scheduling/v1beta1"
 	settingsv1alpha1 "k8s.io/api/settings/v1alpha1"
@@ -56,15 +56,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/apitesting/fuzzer"
 	"k8s.io/apimachinery/pkg/api/apitesting/roundtrip"
 	genericfuzzer "k8s.io/apimachinery/pkg/apis/meta/fuzzer"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
 
 var groups = []runtime.SchemeBuilder{
 	admissionv1beta1.SchemeBuilder,
-	admissionregv1alpha1.SchemeBuilder,
 	admissionregv1beta1.SchemeBuilder,
 	appsv1beta1.SchemeBuilder,
 	appsv1beta2.SchemeBuilder,
@@ -90,6 +87,7 @@ var groups = []runtime.SchemeBuilder{
 	rbacv1.SchemeBuilder,
 	schedulingv1alpha1.SchemeBuilder,
 	schedulingv1beta1.SchemeBuilder,
+	schedulingv1.SchemeBuilder,
 	settingsv1alpha1.SchemeBuilder,
 	storagev1alpha1.SchemeBuilder,
 	storagev1beta1.SchemeBuilder,
@@ -97,55 +95,23 @@ var groups = []runtime.SchemeBuilder{
 }
 
 func TestRoundTripExternalTypes(t *testing.T) {
-	for _, builder := range groups {
-		scheme := runtime.NewScheme()
-		codecs := serializer.NewCodecFactory(scheme)
-
-		require.NoError(t, builder.AddToScheme(scheme))
-		seed := rand.Int63()
-		// I'm only using the generic fuzzer funcs, but at some point in time we might need to
-		// switch to specialized. For now we're happy with the current serialization test.
-		fuzzer := fuzzer.FuzzerFor(genericfuzzer.Funcs, rand.NewSource(seed), codecs)
-
-		roundtrip.RoundTripExternalTypes(t, scheme, codecs, fuzzer, nil)
-	}
-}
-
-func TestFailRoundTrip(t *testing.T) {
 	scheme := runtime.NewScheme()
 	codecs := serializer.NewCodecFactory(scheme)
-	groupVersion := schema.GroupVersion{Group: "broken", Version: "v1"}
-	builder := runtime.NewSchemeBuilder(func(scheme *runtime.Scheme) error {
-		scheme.AddKnownTypes(groupVersion, &BrokenType{})
-		metav1.AddToGroupVersion(scheme, groupVersion)
-		return nil
-	})
-	require.NoError(t, builder.AddToScheme(scheme))
-	seed := rand.Int63()
-	fuzzer := fuzzer.FuzzerFor(genericfuzzer.Funcs, rand.NewSource(seed), codecs)
-	tmpT := new(testing.T)
-	roundtrip.RoundTripExternalTypes(tmpT, scheme, codecs, fuzzer, nil)
-	// It's very hacky way of making sure the DeepCopy is actually invoked inside RoundTripExternalTypes
-	// used in the other test. If for some reason this tests starts passing we need to fail b/c we're not testing
-	// the DeepCopy in the other method which we care so much about.
-	if !tmpT.Failed() {
-		t.Log("RoundTrip should've failed on DeepCopy but it did not!")
-		t.FailNow()
+	for _, builder := range groups {
+		require.NoError(t, builder.AddToScheme(scheme))
 	}
+	seed := rand.Int63()
+	// I'm only using the generic fuzzer funcs, but at some point in time we might need to
+	// switch to specialized. For now we're happy with the current serialization test.
+	fuzzer := fuzzer.FuzzerFor(genericfuzzer.Funcs, rand.NewSource(seed), codecs)
+
+	roundtrip.RoundTripExternalTypes(t, scheme, codecs, fuzzer, nil)
 }
 
-type BrokenType struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Field1 string `json:"field1,omitempty"`
-	Field2 string `json:"field2,omitempty"`
-}
-
-func (in *BrokenType) DeepCopy() *BrokenType {
-	return new(BrokenType)
-}
-
-func (in *BrokenType) DeepCopyObject() runtime.Object {
-	return in.DeepCopy()
+func TestCompatibility(t *testing.T) {
+	scheme := runtime.NewScheme()
+	for _, builder := range groups {
+		require.NoError(t, builder.AddToScheme(scheme))
+	}
+	roundtrip.NewCompatibilityTestOptions(scheme).Complete(t).Run(t)
 }

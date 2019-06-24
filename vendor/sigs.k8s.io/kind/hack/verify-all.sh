@@ -50,15 +50,15 @@ if [[ "${VERIFY_GOVET:-true}" == "true" ]]; then
   cd "${REPO_ROOT}"
 fi
 
-if [[ "${VERIFY_GENERATED:-true}" == "true" ]]; then
-  echo "verifying generated ..."
-  hack/verify-generated.sh || res=1
+if [[ "${VERIFY_STATICCHECK:-true}" == "true" ]]; then
+  echo "verifying staticcheck ..."
+  hack/verify-staticcheck.sh || res=1
   cd "${REPO_ROOT}"
 fi
 
-if [[ "${VERIFY_DEPS:-true}" == "true" ]]; then
-  echo "verifying deps ..."
-  hack/verify-deps.sh || res=1
+if [[ "${VERIFY_GENERATED:-true}" == "true" ]]; then
+  echo "verifying generated ..."
+  hack/verify-generated.sh || res=1
   cd "${REPO_ROOT}"
 fi
 

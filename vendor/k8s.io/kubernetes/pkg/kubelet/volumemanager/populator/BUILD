@@ -47,10 +47,7 @@ filegroup(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "desired_state_of_world_populator_test.go",
-        "main_test.go",
-    ],
+    srcs = ["desired_state_of_world_populator_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//pkg/features:go_default_library",
@@ -70,8 +67,8 @@ go_test(
         "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
         "//staging/src/k8s.io/apiserver/pkg/util/feature:go_default_library",
-        "//staging/src/k8s.io/apiserver/pkg/util/feature/testing:go_default_library",
         "//staging/src/k8s.io/client-go/kubernetes/fake:go_default_library",
         "//staging/src/k8s.io/client-go/testing:go_default_library",
+        "//staging/src/k8s.io/component-base/featuregate/testing:go_default_library",
     ],
 )

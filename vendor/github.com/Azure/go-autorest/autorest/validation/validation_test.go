@@ -2431,20 +2431,3 @@ func TestNewError(t *testing.T) {
 		err.Error())
 	require.Equal(t, NewError("batch.AccountClient", "Create", err.Error()).Error(), z)
 }
-
-func TestNewErrorWithValidationError(t *testing.T) {
-	p := &Product{}
-	v := []Validation{
-		{p, []Constraint{{"p", Null, true,
-			[]Constraint{{"p.C", Null, true,
-				[]Constraint{{"p.C.I", Empty, true, nil}}},
-			},
-		}}},
-	}
-	err := createError(reflect.ValueOf(p.C), v[0].Constraints[0].Chain[0], "value can not be null; required parameter")
-	z := fmt.Sprintf("batch.AccountClient#Create: Invalid input: %s",
-		err.Error())
-	valError := NewErrorWithValidationError(err, "batch.AccountClient", "Create")
-	require.IsType(t, valError, Error{})
-	require.Equal(t, valError.Error(), z)
-}

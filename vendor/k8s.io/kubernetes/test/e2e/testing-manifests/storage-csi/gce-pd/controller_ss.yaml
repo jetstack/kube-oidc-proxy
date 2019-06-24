@@ -16,16 +16,17 @@ spec:
       serviceAccountName: csi-controller-sa
       containers:
         - name: csi-provisioner
-          image: gcr.io/gke-release/csi-provisioner:v1.0.0-gke.0
+          # TODO: replace with official image
+          image: quay.io/k8scsi/csi-provisioner:v1.1.0-rc1
           args:
             - "--v=5"
-            - "--provisioner=pd.csi.storage.gke.io"
             - "--csi-address=/csi/csi.sock"
+            - "--feature-gates=Topology=true"
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
         - name: csi-attacher
-          image: gcr.io/gke-release/csi-attacher:v1.0.0-gke.0
+          image: gcr.io/gke-release/csi-attacher:v1.0.1-gke.0
           args:
             - "--v=5"
             - "--csi-address=/csi/csi.sock"
@@ -33,7 +34,7 @@ spec:
             - name: socket-dir
               mountPath: /csi
         - name: gce-pd-driver
-          image: gcr.io/gke-release/gcp-compute-persistent-disk-csi-driver:v0.3.0-gke.0
+          image: gcr.io/gke-release/gcp-compute-persistent-disk-csi-driver:v0.4.0-gke.0
           args:
             - "--v=5"
             - "--endpoint=unix:/csi/csi.sock"

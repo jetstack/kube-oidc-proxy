@@ -5,9 +5,7 @@
 // Package diff implements the Myers diff algorithm.
 package diff
 
-import (
-	"strings"
-)
+import "strings"
 
 // Sources:
 // https://blog.jcoglan.com/2017/02/17/the-myers-diff-algorithm-part-3/
@@ -15,9 +13,9 @@ import (
 
 type Op struct {
 	Kind    OpKind
-	Content string
-	I1, I2  int // indices of the line in a
-	J1, J2  int // indices of the line in b
+	Content []string // content from b
+	I1, I2  int      // indices of the line in a
+	J1      int      // indices of the line in b, J2 implied by len(Content)
 }
 
 type OpKind int
@@ -53,7 +51,7 @@ func ApplyEdits(a []string, operations []*Op) []string {
 		}
 		switch op.Kind {
 		case Equal, Insert:
-			b = append(b, op.Content)
+			b = append(b, op.Content...)
 		}
 		prevI2 = op.I2
 	}
@@ -82,9 +80,8 @@ func Operations(a, b []string) []*Op {
 			return
 		}
 		op.I2 = i2
-		op.J2 = j2
 		if op.Kind == Insert {
-			op.Content = strings.Join(b[op.J1:op.J2], "")
+			op.Content = b[op.J1:j2]
 		}
 		solution[i] = op
 		i++
@@ -177,6 +174,7 @@ func shortestEditSequence(a, b []string) ([][]int, int) {
 
 	// Iterate through the maximum possible length of the SES (N+M).
 	for d := 0; d <= N+M; d++ {
+		copyV := make([]int, len(V))
 		// k lines are represented by the equation y = x - k. We move in
 		// increments of 2 because end points for even d are on even k lines.
 		for k := -d; k <= d; k += 2 {
@@ -200,16 +198,27 @@ func shortestEditSequence(a, b []string) ([][]int, int) {
 
 			V[k+offset] = x
 
-			// Save the state of the array.
-			copyV := make([]int, len(V))
-			copy(copyV, V)
-			trace[d] = copyV
-
 			// Return if we've exceeded the maximum values.
 			if x == M && y == N {
+				// Save the state of the array, and exit function
+				copy(copyV, V)
+				trace[d] = copyV
+
 				return trace, offset
 			}
 		}
+
+		// Save the state of the array, and continue loop
+		copy(copyV, V)
+		trace[d] = copyV
 	}
 	return nil, 0
+}
+
+func SplitLines(text string) []string {
+	lines := strings.SplitAfter(text, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }

@@ -20,11 +20,16 @@ import (
 	"testing"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/storage"
+	"k8s.io/kubernetes/pkg/features"
 )
 
 func getValidVolumeAttachment(name string) *storage.VolumeAttachment {
@@ -40,6 +45,25 @@ func getValidVolumeAttachment(name string) *storage.VolumeAttachment {
 			NodeName: "valid-node",
 		},
 	}
+}
+
+func getValidVolumeAttachmentWithInlineSpec(name string) *storage.VolumeAttachment {
+	volumeAttachment := getValidVolumeAttachment(name)
+	volumeAttachment.Spec.Source.PersistentVolumeName = nil
+	volumeAttachment.Spec.Source.InlineVolumeSpec = &api.PersistentVolumeSpec{
+		Capacity: api.ResourceList{
+			api.ResourceName(api.ResourceStorage): resource.MustParse("10"),
+		},
+		AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+		PersistentVolumeSource: api.PersistentVolumeSource{
+			CSI: &api.CSIPersistentVolumeSource{
+				Driver:       "com.test.foo",
+				VolumeHandle: name,
+			},
+		},
+		MountOptions: []string{"soft"},
+	}
+	return volumeAttachment
 }
 
 func TestVolumeAttachmentStrategy(t *testing.T) {
@@ -94,6 +118,46 @@ func TestVolumeAttachmentStrategy(t *testing.T) {
 	}
 }
 
+func TestVolumeAttachmentStrategySourceInlineSpec(t *testing.T) {
+	ctx := genericapirequest.WithRequestInfo(genericapirequest.NewContext(), &genericapirequest.RequestInfo{
+		APIGroup:   "storage.k8s.io",
+		APIVersion: "v1",
+		Resource:   "volumeattachments",
+	})
+
+	volumeAttachment := getValidVolumeAttachmentWithInlineSpec("valid-attachment")
+	volumeAttachmentSaved := volumeAttachment.DeepCopy()
+	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.CSIMigration, true)()
+	Strategy.PrepareForCreate(ctx, volumeAttachment)
+	if volumeAttachment.Spec.Source.InlineVolumeSpec == nil {
+		t.Errorf("InlineVolumeSpec unexpectedly set to nil during PrepareForCreate")
+	}
+	if !apiequality.Semantic.DeepEqual(volumeAttachmentSaved, volumeAttachment) {
+		t.Errorf("unexpected difference in object after creation: %v", diff.ObjectDiff(volumeAttachment, volumeAttachmentSaved))
+	}
+	Strategy.PrepareForUpdate(ctx, volumeAttachmentSaved, volumeAttachment)
+	if volumeAttachmentSaved.Spec.Source.InlineVolumeSpec == nil {
+		t.Errorf("InlineVolumeSpec unexpectedly set to nil during PrepareForUpdate")
+	}
+	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.CSIMigration, false)()
+	Strategy.PrepareForUpdate(ctx, volumeAttachmentSaved, volumeAttachment)
+	if volumeAttachmentSaved.Spec.Source.InlineVolumeSpec == nil {
+		t.Errorf("InlineVolumeSpec unexpectedly set to nil during PrepareForUpdate")
+	}
+
+	volumeAttachment = getValidVolumeAttachmentWithInlineSpec("valid-attachment")
+	volumeAttachmentNew := volumeAttachment.DeepCopy()
+	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.CSIMigration, false)()
+	Strategy.PrepareForCreate(ctx, volumeAttachment)
+	if volumeAttachment.Spec.Source.InlineVolumeSpec != nil {
+		t.Errorf("InlineVolumeSpec unexpectedly not dropped during PrepareForCreate")
+	}
+	Strategy.PrepareForUpdate(ctx, volumeAttachmentNew, volumeAttachment)
+	if volumeAttachmentNew.Spec.Source.InlineVolumeSpec != nil {
+		t.Errorf("InlineVolumeSpec unexpectedly not dropped during PrepareForUpdate")
+	}
+}
+
 func TestVolumeAttachmentStatusStrategy(t *testing.T) {
 	ctx := genericapirequest.WithRequestInfo(genericapirequest.NewContext(), &genericapirequest.RequestInfo{
 		APIGroup:   "storage.k8s.io",
@@ -113,9 +177,18 @@ func TestVolumeAttachmentStatusStrategy(t *testing.T) {
 		t.Errorf("unexpected objects differerence after modifying status: %v", diff.ObjectDiff(statusVolumeAttachment, expectedVolumeAttachment))
 	}
 
-	// modifying spec should be dropped
+	// spec and metadata modifications should be dropped
 	newVolumeAttachment := volumeAttachment.DeepCopy()
 	newVolumeAttachment.Spec.NodeName = "valid-node-2"
+	newVolumeAttachment.Labels = map[string]string{"foo": "bar"}
+	newVolumeAttachment.Annotations = map[string]string{"foo": "baz"}
+	newVolumeAttachment.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: "v1",
+			Kind:       "Pod",
+			Name:       "Foo",
+		},
+	}
 
 	StatusStrategy.PrepareForUpdate(ctx, newVolumeAttachment, volumeAttachment)
 	if !apiequality.Semantic.DeepEqual(newVolumeAttachment, volumeAttachment) {

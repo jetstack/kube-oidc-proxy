@@ -46,12 +46,11 @@ install_kind() {
     TMP_DIR=$(mktemp -d)
     # ensure bin dir
     mkdir -p "${TMP_DIR}/bin"
-    # if we have a kind checkout, install that to the tmpdir, otherwise go get it
-    if [[ $(go list sigs.k8s.io/kind) = "sigs.k8s.io/kind" ]]; then
-        env "GOBIN=${TMP_DIR}/bin" go install sigs.k8s.io/kind
-    else
-        env "GOPATH=${TMP_DIR}" go get -u sigs.k8s.io/kind
-    fi
+    # install
+    local script_dir
+    script_dir="$(dirname "${BASH_SOURCE[0]}")"
+    make -C "${script_dir}/../.." install INSTALL_PATH="${TMP_DIR}/bin"
+    # ensure it is in path
     PATH="${TMP_DIR}/bin:${PATH}"
     export PATH
 }
@@ -66,7 +65,10 @@ build() {
     fi
 
     # build the node image w/ kubernetes
-    kind build node-image --type=bazel
+    # TODO(bentheelder): remove the kube-root flag after we make kind try to
+    # find this in a go module compatible way
+    kind build node-image --type=bazel \
+        --kube-root="$(go env GOPATH)/src/k8s.io/kubernetes"
 
     # make sure we have e2e requirements
     #make all WHAT="cmd/kubectl test/e2e/e2e.test vendor/github.com/onsi/ginkgo/ginkgo"
@@ -98,13 +100,13 @@ create_cluster() {
     cat <<EOF > "${ARTIFACTS}/kind-config.yaml"
 # config for 1 control plane node and 2 workers
 # necessary for conformance
-kind: Config
-apiVersion: kind.sigs.k8s.io/v1alpha2
+kind: Cluster
+apiVersion: kind.sigs.k8s.io/v1alpha3
 nodes:
 # the control plane node
 - role: control-plane
 - role: worker
-  replicas: 2
+- role: worker
 EOF
     # mark the cluster as up for cleanup
     # even if kind create fails, kind delete can clean up after it
@@ -139,12 +141,16 @@ run_tests() {
     )"
 
     # ginkgo regexes
-    SKIP="${SKIP:-"Alpha|Kubectl|\\[(Disruptive|Feature:[^\\]]+|Flaky)\\]"}"
+    SKIP="${SKIP:-}"
     FOCUS="${FOCUS:-"\\[Conformance\\]"}"
     # if we set PARALLEL=true, skip serial tests set --ginkgo-parallel
     PARALLEL="${PARALLEL:-false}"
     if [[ "${PARALLEL}" == "true" ]]; then
-        SKIP="\\[Serial\\]|${SKIP}"
+        if [[ -z "${SKIP}" ]]; then
+            SKIP="\\[Serial\\]"
+        else
+            SKIP="\\[Serial\\]|${SKIP}"
+        fi
         KUBETEST_ARGS="${KUBETEST_ARGS} --ginkgo-parallel"
     fi
 

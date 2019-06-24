@@ -102,12 +102,13 @@ aliases:
     - tallclair
   sig-auth-policy-reviewers:
     - deads2k
-    - hongchaodeng    
+    - hongchaodeng
     - jianhuiz
     - liggitt
     - mbohlool
     - pweil-
     - tallclair
+    - krmayankk
 
   sig-auth-serviceaccounts-approvers:
     - deads2k
@@ -119,18 +120,18 @@ aliases:
     - enj
     - liggitt
     - mikedanese
+    - WanLinghao
 
   sig-storage-reviewers:
     - saad-ali
     - childsb
+
   sig-scheduling-maintainers:
     - bsalamat
-    - davidopp
     - k82cn
-    - timothysc
     - wojtek-t
-    - aveshagarwal
     - ravisantoshgudimetla
+    - Huang-Wei
   sig-scheduling:
     - bsalamat
     - k82cn
@@ -138,6 +139,8 @@ aliases:
     - ravisantoshgudimetla
     - misterikkit
     - Huang-Wei
+    - wgliang
+
   sig-cli-maintainers:
     - adohe
     - brendandburns
@@ -168,14 +171,18 @@ aliases:
     - smarterclayton
     - soltysh
   sig-testing-reviewers:
+    - bentheelder
+    - cblecker
     - fejta
+    - krzyzacy
     - ixdy
-    - rmmh
     - spiffxp
   sig-testing-approvers:
+    - bentheelder
+    - cblecker
     - fejta
+    - krzyzacy
     - ixdy
-    - rmmh
     - spiffxp
   sig-node-reviewers:
     - Random-Liu
@@ -202,6 +209,7 @@ aliases:
     - dcbw
     - dnardo
     - freehan
+    - johnbelamaric
     - mrhohn
     - nicksardo
     - thockin
@@ -212,105 +220,37 @@ aliases:
     - dcbw
     - dnardo
     - freehan
+    - johnbelamaric
     - mrhohn
     - nicksardo
     - thockin
     - rramkumar1
+    - cmluciano
+    - m1093782566
+  sig-apps-approvers:
+    - kow3ns
+    - janetkuo
+    - soltysh
+    - tnozicka
+    - erictune
+    - smarterclayton
   sig-apps-reviewers:
     - enisoc
     - erictune
     - foxish
     - janetkuo
     - kow3ns
-    - lukaszo
-    - mfojtik
+    - mortent
     - smarterclayton
     - soltysh
     - tnozicka
-  sig-apps-api-approvers:
-    - erictune
-    - smarterclayton
+    - krmayankk
   sig-autoscaling-maintainers:
     - aleksandra-malinowska
     - bskiba
-    - DirectXMan12
     - MaciekPytel
     - mwielgus
-  milestone-maintainers:
-    - lavalamp
-    - deads2k
-    - michelleN
-    - mattfarina
-    - prydonius
-    - bgrant0607
-    - jdumars
-    - liggitt
-    - deads2k
-    - mwielgus
-    - directxman12
-    - justinsb
-    - kris-nova
-    - chrislovecnm
-    - mfburnett
-    - slack
-    - colemickens
-    - foxish
-    - AdoHe
-    - lukemarsden
-    - jbeda
-    - roberthbailey
-    - zehicle
-    - jdumars
-    - grodrigues3
-    - Phillels
-    - devin-donnelly
-    - jaredbhatti
-    - csbell
-    - quinton-hoole
-    - piosz
-    - fabxc
-    - thockin
-    - dcbw
-    - caseydavenport
-    - dchen1107
-    - derekwaynecarr
-    - zen
-    - marcoceppi
-    - dghubble
-    - idvoretskyi
-    - xsgordon
-    - apsinha
-    - idvoretskyi
-    - calebamiles
-    - calebamiles
-    - wojtek-t
-    - countspongebob
-    - jbeda
-    - davidopp
-    - timothysc
-    - pmorie
-    - arschles
-    - vaikas-google
-    - duglin
-    - saad-ali
-    - childsb
-    - spiffxp
-    - fejta
-    - timothysc
-    - danielromlein
-    - floreks
-    - michmike
-    - abgworrall
-    - krzyzacy
-    - steveperry-53
-    - radhikpac
-    - jpbetz
-    - cmluciano
-    - bsalamat
-    - m1093782566
-    - tallclair
-    - feiskyer
-    - mikedanese
+
   api-approvers:
     - erictune
     - lavalamp
@@ -318,6 +258,63 @@ aliases:
     - thockin
     - liggitt
     # - bgrant0607 # manual escalations only
+
+  # subsets of api-approvers by sig area to help focus approval requests to those with domain knowledge
+  sig-api-machinery-api-approvers:
+    - lavalamp
+    - liggitt
+    - smarterclayton
+
+  sig-apps-api-approvers:
+    - erictune
+    - lavalamp
+    - liggitt
+    - smarterclayton
+
+  sig-auth-api-approvers:
+    - liggitt
+    - smarterclayton
+
+  sig-cli-api-approvers:
+    - liggitt
+    - smarterclayton
+
+  sig-cloud-provider-api-approvers:
+    - liggitt
+    - thockin
+
+  sig-cluster-lifecycle-api-approvers:
+    - liggitt
+    - smarterclayton
+
+  sig-network-api-approvers:
+    - smarterclayton
+    - thockin
+
+  sig-network-api-reviewers:
+    - caseydavenport
+    - cmluciano
+    - danwinship
+    - thockin
+
+  sig-node-api-approvers:
+    - smarterclayton
+    - thockin
+
+  sig-scheduling-api-approvers:
+    - lavalamp
+    - smarterclayton
+    - thockin
+
+  sig-storage-api-approvers:
+    - liggitt
+    - thockin
+
+  sig-windows-api-approvers:
+    - smarterclayton
+    - thockin
+    - liggitt
+  
   api-reviewers:
     - erictune
     - lavalamp
@@ -355,12 +352,66 @@ aliases:
     - piosz
     - jsafrane
     - jbeda
+
+  # api-reviewers targeted by sig area
+  # see https://git.k8s.io/community/sig-architecture/api-review-process.md#training-reviews
+  
+  sig-api-machinery-api-reviewers:
+    - caesarxuchao
+    - deads2k
+    - jpbetz
+    - sttts
+  
+  # sig-apps-api-reviewers:
+  #   - 
+  #   - 
+
+  sig-auth-api-reviewers:
+    - enj
+    - mikedanese
+
+  sig-cli-api-reviewers:
+    - pwittrock
+    - soltysh
+
+  sig-cloud-provider-api-reviewers:
+    - andrewsykim
+    - cheftako
+  
+  # sig-cluster-lifecycle-api-reviewers:
+  #   - 
+  #   -
+  
+  sig-node-api-reviewers:
+    - dchen1107
+    - derekwaynecarr
+    - tallclair
+    - yujuhong
+  
+  sig-scheduling-api-reviewers:
+      - bsalamat
+      - k82cn
+  
+  sig-storage-api-reviewers:
+    - saad-ali
+    - msau42
+    - jsafrane
+
+  
+  sig-windows-api-reviewers:
+    - patricklang
+    - ddebroy
+    - benmoss
+
   dep-approvers:
+    - apelisse
+    - BenTheElder
     - cblecker
+    - dims
     - thockin
     - sttts
+    - soltysh
   feature-approvers:
-    - AdoHe           # CLI
     - bgrant0607      # Architecture
     - brancz          # Instrumentation
     - bsalamat        # Scheduling
@@ -374,7 +425,6 @@ aliases:
     - deads2k         # API Machinery
     - derekwaynecarr  # Node
     - dghubble        # On Premise
-    - directxman12    # Autoscaling
     - jdumars         # Architecture, Cluster Ops, Release
     - kow3ns          # Apps
     - lavalamp        # API Machinery
@@ -391,6 +441,7 @@ aliases:
     - quinton-hoole   # Multicluster
     - roberthbailey   # Cluster Lifecycle
     - saad-ali        # Storage
+    - seans3          # CLI
     - soltysh         # CLI
     - tallclair       # Auth
     - thockin         # Network

@@ -23,7 +23,7 @@ set -o pipefail
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "${REPO_ROOT}"
 
-OUT="${REPO_ROOT}/_output/bin"
+OUT="${REPO_ROOT}/bin"
 mkdir -p "${OUT}"
 
 CLEAN="false"
@@ -44,19 +44,16 @@ build() {
     GOARCH="${2}"
     export GOOS
     export GOARCH
-    # build without CGO for cross compiling and distributing
-    CGO_ENABLED=0
-    export CGO_ENABLED
-    local out_path
-    out_path="${OUT}/kind-${GOOS}-${GOARCH}"
-    echo "${out_path}"
-    go build -o "${out_path}" sigs.k8s.io/kind
+    KIND_BINARY_NAME="kind-${GOOS}-${GOARCH}"
+    export KIND_BINARY_NAME
+    make build
 }
 
 # TODO(bentheelder): support more platforms
 echo "Building in parallel for:"
 build "linux" "amd64" & \
 build "linux" "arm64" & \
+build "linux" "ppc64le" & \
 build "darwin" "amd64" & \
 build "windows" "amd64" & \
 wait

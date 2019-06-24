@@ -35,6 +35,7 @@ import (
 	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 	kubemetrics "k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	"k8s.io/kubernetes/test/e2e/framework/metrics"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 
@@ -49,7 +50,7 @@ const (
 var _ = framework.KubeDescribe("Density [Serial] [Slow]", func() {
 	const (
 		// The data collection time of resource collector and the standalone cadvisor
-		// is not synchronizated, so resource collector may miss data or
+		// is not synchronized, so resource collector may miss data or
 		// collect duplicated data
 		containerStatsPollingPeriod = 500 * time.Millisecond
 	)
@@ -198,7 +199,7 @@ var _ = framework.KubeDescribe("Density [Serial] [Slow]", func() {
 				// Here we set API QPS limit from default 5 to 60 in order to test real Kubelet performance.
 				// Note that it will cause higher resource usage.
 				tempSetCurrentKubeletConfig(f, func(cfg *kubeletconfig.KubeletConfiguration) {
-					framework.Logf("Old QPS limit is: %d", cfg.KubeAPIQPS)
+					e2elog.Logf("Old QPS limit is: %d", cfg.KubeAPIQPS)
 					// Set new API QPS limit
 					cfg.KubeAPIQPS = int32(itArg.APIQPSLimit)
 				})
@@ -454,17 +455,17 @@ func createBatchPodWithRateControl(f *framework.Framework, pods []*v1.Pod, inter
 // getPodStartLatency gets prometheus metric 'pod start latency' from kubelet
 func getPodStartLatency(node string) (framework.KubeletLatencyMetrics, error) {
 	latencyMetrics := framework.KubeletLatencyMetrics{}
-	ms, err := metrics.GrabKubeletMetricsWithoutProxy(node)
-	Expect(err).NotTo(HaveOccurred())
+	ms, err := metrics.GrabKubeletMetricsWithoutProxy(node, "/metrics")
+	Expect(err).NotTo(HaveOccurred(), "Failed to get kubelet metrics without proxy in node %s", node)
 
 	for _, samples := range ms {
 		for _, sample := range samples {
-			if sample.Metric["__name__"] == kubemetrics.KubeletSubsystem+"_"+kubemetrics.PodStartLatencyKey {
+			if sample.Metric["__name__"] == kubemetrics.KubeletSubsystem+"_"+kubemetrics.PodStartDurationKey {
 				quantile, _ := strconv.ParseFloat(string(sample.Metric["quantile"]), 64)
 				latencyMetrics = append(latencyMetrics,
 					framework.KubeletLatencyMetric{
 						Quantile: quantile,
-						Method:   kubemetrics.PodStartLatencyKey,
+						Method:   kubemetrics.PodStartDurationKey,
 						Latency:  time.Duration(int(sample.Value)) * time.Microsecond})
 			}
 		}
@@ -539,7 +540,7 @@ func logAndVerifyLatency(batchLag time.Duration, e2eLags []framework.PodLatencyD
 
 	// TODO(coufon): do not trust 'kubelet' metrics since they are not reset!
 	latencyMetrics, _ := getPodStartLatency(kubeletAddr)
-	framework.Logf("Kubelet Prometheus metrics (not reset):\n%s", framework.PrettyPrintJSON(latencyMetrics))
+	e2elog.Logf("Kubelet Prometheus metrics (not reset):\n%s", framework.PrettyPrintJSON(latencyMetrics))
 
 	podStartupLatency := framework.ExtractLatencyMetrics(e2eLags)
 

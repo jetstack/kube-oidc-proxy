@@ -25,14 +25,14 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/cli-runtime/pkg/genericclioptions/printers"
-	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
+	"k8s.io/cli-runtime/pkg/printers"
+	"k8s.io/cli-runtime/pkg/resource"
 	autoscalingv1client "k8s.io/client-go/kubernetes/typed/autoscaling/v1"
+	"k8s.io/client-go/scale"
 	"k8s.io/kubernetes/pkg/kubectl"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/generate"
 	generateversioned "k8s.io/kubernetes/pkg/kubectl/generate/versioned"
-	"k8s.io/kubernetes/pkg/kubectl/polymorphichelpers"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 	"k8s.io/kubernetes/pkg/kubectl/util/templates"
@@ -53,6 +53,7 @@ var (
 		kubectl autoscale rc foo --max=5 --cpu-percent=80`))
 )
 
+// AutoscaleOptions declare the arguments accepted by the Autoscale command
 type AutoscaleOptions struct {
 	FilenameOptions *resource.FilenameOptions
 
@@ -66,7 +67,7 @@ type AutoscaleOptions struct {
 	Generator  string
 	Min        int32
 	Max        int32
-	CpuPercent int32
+	CPUPercent int32
 
 	createAnnotation bool
 	args             []string
@@ -74,14 +75,15 @@ type AutoscaleOptions struct {
 	namespace        string
 	dryRun           bool
 	builder          *resource.Builder
-	canBeAutoscaled  polymorphichelpers.CanBeAutoscaledFunc
 	generatorFunc    func(string, *meta.RESTMapping) (generate.StructuredGenerator, error)
 
-	HPAClient autoscalingv1client.HorizontalPodAutoscalersGetter
+	HPAClient         autoscalingv1client.HorizontalPodAutoscalersGetter
+	scaleKindResolver scale.ScaleKindResolver
 
 	genericclioptions.IOStreams
 }
 
+// NewAutoscaleOptions creates the options for autoscale
 func NewAutoscaleOptions(ioStreams genericclioptions.IOStreams) *AutoscaleOptions {
 	return &AutoscaleOptions{
 		PrintFlags:      genericclioptions.NewPrintFlags("autoscaled").WithTypeSetter(scheme.Scheme),
@@ -93,6 +95,7 @@ func NewAutoscaleOptions(ioStreams genericclioptions.IOStreams) *AutoscaleOption
 	}
 }
 
+// NewCmdAutoscale returns the autoscale Cobra command
 func NewCmdAutoscale(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	o := NewAutoscaleOptions(ioStreams)
 
@@ -120,7 +123,7 @@ func NewCmdAutoscale(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *
 	cmd.Flags().Int32Var(&o.Min, "min", -1, "The lower limit for the number of pods that can be set by the autoscaler. If it's not specified or negative, the server will apply a default value.")
 	cmd.Flags().Int32Var(&o.Max, "max", -1, "The upper limit for the number of pods that can be set by the autoscaler. Required.")
 	cmd.MarkFlagRequired("max")
-	cmd.Flags().Int32Var(&o.CpuPercent, "cpu-percent", -1, fmt.Sprintf("The target average CPU utilization (represented as a percent of requested CPU) over all the pods. If it's not specified or negative, a default autoscaling policy will be used."))
+	cmd.Flags().Int32Var(&o.CPUPercent, "cpu-percent", -1, fmt.Sprintf("The target average CPU utilization (represented as a percent of requested CPU) over all the pods. If it's not specified or negative, a default autoscaling policy will be used."))
 	cmd.Flags().StringVar(&o.Name, "name", "", i18n.T("The name for the newly created object. If not specified, the name of the input resource will be used."))
 	cmdutil.AddDryRunFlag(cmd)
 	cmdutil.AddFilenameOptionFlags(cmd, o.FilenameOptions, "identifying the resource to autoscale.")
@@ -128,12 +131,17 @@ func NewCmdAutoscale(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *
 	return cmd
 }
 
+// Complete verifies command line arguments and loads data from the command environment
 func (o *AutoscaleOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	var err error
 	o.dryRun = cmdutil.GetFlagBool(cmd, "dry-run")
 	o.createAnnotation = cmdutil.GetFlagBool(cmd, cmdutil.ApplyAnnotationsFlag)
 	o.builder = f.NewBuilder()
-	o.canBeAutoscaled = polymorphichelpers.CanBeAutoscaledFn
+	discoveryClient, err := f.ToDiscoveryClient()
+	if err != nil {
+		return err
+	}
+	o.scaleKindResolver = scale.NewDiscoveryScaleKindResolver(discoveryClient)
 	o.args = args
 	o.RecordFlags.Complete(cmd)
 
@@ -156,7 +164,7 @@ func (o *AutoscaleOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args 
 				Name:               name,
 				MinReplicas:        o.Min,
 				MaxReplicas:        o.Max,
-				CPUPercent:         o.CpuPercent,
+				CPUPercent:         o.CPUPercent,
 				ScaleRefName:       name,
 				ScaleRefKind:       mapping.GroupVersionKind.Kind,
 				ScaleRefAPIVersion: mapping.GroupVersionKind.GroupVersion().String(),
@@ -183,6 +191,7 @@ func (o *AutoscaleOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args 
 	return nil
 }
 
+// Validate checks that the provided attach options are specified.
 func (o *AutoscaleOptions) Validate() error {
 	if o.Max < 1 {
 		return fmt.Errorf("--max=MAXPODS is required and must be at least 1, max: %d", o.Max)
@@ -194,9 +203,10 @@ func (o *AutoscaleOptions) Validate() error {
 	return nil
 }
 
+// Run performs the execution
 func (o *AutoscaleOptions) Run() error {
 	r := o.builder.
-		WithScheme(scheme.Scheme, scheme.Scheme.PrioritizedVersionsAllGroups()...).
+		Unstructured().
 		ContinueOnError().
 		NamespaceParam(o.namespace).DefaultNamespace().
 		FilenameParam(o.enforceNamespace, o.FilenameOptions).
@@ -214,8 +224,9 @@ func (o *AutoscaleOptions) Run() error {
 		}
 
 		mapping := info.ResourceMapping()
-		if err := o.canBeAutoscaled(mapping.GroupVersionKind.GroupKind()); err != nil {
-			return err
+		gvr := mapping.GroupVersionKind.GroupVersion().WithResource(mapping.Resource.Resource)
+		if _, err := o.scaleKindResolver.ScaleForResource(gvr); err != nil {
+			return fmt.Errorf("cannot autoscale a %v: %v", mapping.GroupVersionKind.Kind, err)
 		}
 
 		generator, err := o.generatorFunc(info.Name, mapping)

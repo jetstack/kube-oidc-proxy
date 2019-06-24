@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## v12.1.0
+
+### New Features
+
+- Added `to.ByteSlicePtr()`.
+- Added blob/queue storage resource ID to `azure.ResourceIdentifier`.
+
+## v12.0.0
+
+### Breaking Changes
+
+In preparation for modules the following deprecated content has been removed.
+
+  - async.NewFuture()
+  - async.Future.Done()
+  - async.Future.WaitForCompletion()
+  - async.DoPollForAsynchronous()
+  - The `utils` package
+  - validation.NewErrorWithValidationError()
+  - The `version` package
+
+## v11.9.0
+
+### New Features
+
+- Add `ResourceIdentifiers` field to `azure.Environment` containing resource IDs for public and sovereign clouds.
+
+## v11.8.0
+
+### New Features
+
+- Added `autorest.NewClientWithOptions()` to support endpoints that require free renegotiation.
+
+## v11.7.1
+
+### Bug Fixes
+
+- Fix missing support for http(s) proxy when using the default sender.
+
+## v11.7.0
+
+### New Features
+
+- Added methods to obtain a ServicePrincipalToken on the various credential configuration types in the `auth` package.
+
+## v11.6.1
+
+### Bug Fixes
+
+- Fix ACR DNS endpoint for government clouds.
+- Add Cosmos DB DNS endpoints.
+- Update dependencies to resolve build breaks in OpenCensus.
+
+## v11.6.0
+
+### New Features
+
+- Added type `autorest.BasicAuthorizer` to support Basic authentication.
+
+## v11.5.2
+
+### Bug Fixes
+
+- Fixed `GetTokenFromCLI` did not work with zsh.
+
+## v11.5.1
+
+### Bug Fixes
+
+- In `Client.sender()` set the minimum TLS version on HTTP clients to 1.2.
+
 ## v11.5.0
 
 ### New Features
@@ -37,7 +108,7 @@
 
 ### Bug Fixes
 
-- Deprecate content in the `version` package.  The functionality has been superseded by content in the `autorest` package.
+- Deprecate content in the `version` package. The functionality has been superseded by content in the `autorest` package.
 
 ## v11.2.7
 

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package kubeadmjoin implements the kubeadm config action
+// Package kubeadmjoin implements the kubeadm join action
 package kubeadmjoin
 
 import (
@@ -31,15 +31,16 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions"
 	"sigs.k8s.io/kind/pkg/cluster/internal/kubeadm"
 	"sigs.k8s.io/kind/pkg/cluster/nodes"
+	"sigs.k8s.io/kind/pkg/concurrent"
 	"sigs.k8s.io/kind/pkg/exec"
 	"sigs.k8s.io/kind/pkg/fs"
 )
 
-// Action implements action for creating the kubeadm config
+// Action implements action for creating the kubeadm join
 // and deployng it on the bootrap control-plane node.
 type Action struct{}
 
-// NewAction returns a new action for creating the kubadm config
+// NewAction returns a new action for creating the kubeadm jion
 func NewAction() actions.Action {
 	return &Action{}
 }
@@ -47,9 +48,15 @@ func NewAction() actions.Action {
 // Execute runs the action
 func (a *Action) Execute(ctx *actions.ActionContext) error {
 	allNodes, err := ctx.Nodes()
+	if err != nil {
+		return err
+	}
 
 	// join secondary control plane nodes if any
 	secondaryControlPlanes, err := nodes.SecondaryControlPlaneNodes(allNodes)
+	if err != nil {
+		return err
+	}
 	if len(secondaryControlPlanes) > 0 {
 		if err := joinSecondaryControlPlanes(
 			ctx, allNodes, secondaryControlPlanes,
@@ -80,7 +87,8 @@ func joinSecondaryControlPlanes(
 	ctx.Status.Start("Joining more control-plane nodes 🎮")
 	defer ctx.Status.End(false)
 
-	// TODO(bentheelder): this should be concurrent
+	// TODO(bentheelder): it's too bad we can't do this concurrently
+	// (this is not safe currently)
 	for _, node := range secondaryControlPlanes {
 		if err := runKubeadmJoinControlPlane(ctx, allNodes, &node); err != nil {
 			return err
@@ -99,28 +107,16 @@ func joinWorkers(
 	ctx.Status.Start("Joining worker nodes 🚜")
 	defer ctx.Status.End(false)
 
-	// TODO(bentheelder): this should be concurrent
-	errChan := make(chan error, len(workers))
-	defer close(errChan)
+	// create the workers concurrently
+	fns := []func() error{}
 	for _, node := range workers {
 		node := node // capture loop variable
-		go func() {
-			errChan <- runKubeadmJoin(ctx, allNodes, &node)
-		}()
+		fns = append(fns, func() error {
+			return runKubeadmJoin(ctx, allNodes, &node)
+		})
 	}
-
-	// watch for all worker joins to finish
-	// NOTE: we don't use a waitgroup because we want to exit early
-	count := 0
-	for err := range errChan {
-		// if any errored, bail out
-		if err != nil {
-			return err
-		}
-		count++
-		if count == len(workers) {
-			break
-		}
+	if err := concurrent.UntilError(fns); err != nil {
+		return err
 	}
 
 	ctx.Status.End(true)
@@ -207,6 +203,7 @@ func runKubeadmJoinControlPlane(
 		"--ignore-preflight-errors=all",
 		// increase verbosity for debug
 		"--v=6",
+		"--cri-socket=/run/containerd/containerd.sock",
 	)
 	lines, err := exec.CombinedOutputLines(cmd)
 	log.Debug(strings.Join(lines, "\n"))
@@ -231,6 +228,7 @@ func runKubeadmJoin(
 	}
 
 	// run kubeadm join
+	// TODO(bentheelder): this should be using the config file
 	cmd := node.Command(
 		"kubeadm", "join",
 		// the join command uses the docker ip and a well know port that
@@ -244,6 +242,7 @@ func runKubeadmJoin(
 		"--ignore-preflight-errors=all",
 		// increase verbosity for debugging
 		"--v=6",
+		"--cri-socket=/run/containerd/containerd.sock",
 	)
 	lines, err := exec.CombinedOutputLines(cmd)
 	log.Debug(strings.Join(lines, "\n"))

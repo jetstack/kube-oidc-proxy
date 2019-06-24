@@ -431,7 +431,7 @@ run_pod_tests() {
 
   ## Create valid-pod POD
   # Pre-condition: no POD exists
-  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
+  kube::test::wait_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command
   kubectl create -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml "${kube_flags[@]}"
   # Post-condition: valid-pod POD is created
@@ -992,6 +992,32 @@ __EOF__
   # Post-condition: Only the default kubernetes services exist
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
 
+  ### Create deployent and service
+  # Pre-condition: no deployment exists
+  kube::test::wait_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" ''
+  # Command
+  kubectl run testmetadata --image=nginx --replicas=2 --port=80 --expose --service-overrides='{ "metadata": { "annotations": { "zone-context": "home" } } } '
+  # Check result
+  kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'testmetadata:'
+  kube::test::get_object_assert 'service testmetadata' "{{.metadata.annotations}}" "map\[zone-context:home\]"
+
+  ### Expose deployment as a new service
+  # Command
+  kubectl expose deployment testmetadata  --port=1000 --target-port=80 --type=NodePort --name=exposemetadata --overrides='{ "metadata": { "annotations": { "zone-context": "work" } } } '
+  # Check result
+  kube::test::get_object_assert 'service exposemetadata' "{{.metadata.annotations}}" "map\[zone-context:work\]"
+
+  # Clean-Up
+  # Command
+  kubectl delete service exposemetadata testmetadata "${kube_flags[@]}"
+  if [[ "${WAIT_FOR_DELETION:-}" == "true" ]]; then
+    kube::test::wait_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
+  fi
+  kubectl delete deployment testmetadata "${kube_flags[@]}"
+  if [[ "${WAIT_FOR_DELETION:-}" == "true" ]]; then
+    kube::test::wait_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" ''
+  fi
+
   set +o nounset
   set +o errexit
 }
@@ -1010,7 +1036,7 @@ run_rc_tests() {
   kubectl create -f hack/testdata/frontend-controller.yaml "${kube_flags[@]}"
   kubectl delete rc frontend "${kube_flags[@]}"
   # Post-condition: no pods from frontend controller
-  kube::test::get_object_assert 'pods -l "name=frontend"' "{{range.items}}{{$id_field}}:{{end}}" ''
+  kube::test::wait_object_assert 'pods -l "name=frontend"' "{{range.items}}{{$id_field}}:{{end}}" ''
 
   ### Create replication controller frontend from JSON
   # Pre-condition: no replication controller exists
@@ -1080,15 +1106,6 @@ run_rc_tests() {
   kube::test::get_object_assert 'rc redis-slave' "{{$rc_replicas_field}}" '4'
   # Clean-up
   kubectl delete rc redis-{master,slave} "${kube_flags[@]}"
-
-  ### Scale a job
-  kubectl create -f test/fixtures/doc-yaml/user-guide/job.yaml "${kube_flags[@]}"
-  # Command
-  kubectl scale --replicas=2 job/pi
-  # Post-condition: 2 replicas for pi
-  kube::test::get_object_assert 'job pi' "{{$job_parallelism_field}}" '2'
-  # Clean-up
-  kubectl delete job/pi "${kube_flags[@]}"
 
   ### Scale a deployment
   kubectl create -f test/fixtures/doc-yaml/user-guide/deployment.yaml "${kube_flags[@]}"
@@ -1299,6 +1316,12 @@ run_namespace_tests() {
   kubectl wait --for=delete ns/my-namespace
   output_message=$(! kubectl get ns/my-namespace 2>&1 "${kube_flags[@]}")
   kube::test::if_has_string "${output_message}" ' not found'
+
+  kubectl create namespace my-namespace
+  kube::test::get_object_assert 'namespaces/my-namespace' "{{$id_field}}" 'my-namespace'
+  output_message=$(! kubectl delete namespace -n my-namespace --all 2>&1 "${kube_flags[@]}")
+  kube::test::if_has_string "${output_message}" 'warning: deleting cluster-scoped resources'
+  kube::test::if_has_string "${output_message}" 'namespace "my-namespace" deleted'
 
   ######################
   # Pods in Namespaces #

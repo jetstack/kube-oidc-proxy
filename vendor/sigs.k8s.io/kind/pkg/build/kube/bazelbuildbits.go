@@ -21,8 +21,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+
+	"sigs.k8s.io/kind/pkg/container/docker"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/version"
 	"sigs.k8s.io/kind/pkg/exec"
 	"sigs.k8s.io/kind/pkg/util"
 )
@@ -62,7 +66,8 @@ func (b *BazelBuildBits) Build() error {
 
 	// TODO(bentheelder): we assume the host arch, but cross compiling should
 	// be possible now
-	bazelGoosGoarch := util.GetOSandArch("_")
+	arch := util.GetArch()
+	bazelGoosGoarch := fmt.Sprintf("linux_%s", arch)
 
 	// build artifacts
 	cmd := exec.Command(
@@ -82,7 +87,69 @@ func (b *BazelBuildBits) Build() error {
 	b.paths = b.findPaths(bazelGoosGoarch)
 
 	// capture version info
-	return buildVersionFile(b.kubeRoot)
+	rawVersion, err := buildVersionFile(b.kubeRoot)
+	if err != nil {
+		return err
+	}
+
+	// additional special handling for old kubernetes versions + bazel
+	// before Kubernetes v1.12.0 kubeadm requires arch specific images, instead
+	// later releases use manifest list images
+	// we must re-tag them here
+	ver, err := version.ParseGeneric(rawVersion)
+	if err != nil {
+		return err
+	}
+	// only < 1.12.0 has this problem
+	if !ver.LessThan(version.MustParseSemantic("v1.12.0")) {
+		return nil
+	}
+
+	// fix all tar files
+	for path := range b.paths {
+		if !strings.HasSuffix(path, ".tar") {
+			continue
+		}
+		if err := fixOldImageTags(path, arch); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// fixes the missing -$arch suffix on old kubernetes image archives
+func fixOldImageTags(path, arch string) error {
+	// open input at path and create a fixed file at path+.fixed
+	in, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(path + ".fixed")
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// create a tarball with corrected tags
+	archSuffix := "-" + arch
+	repositoryFixer := func(repository string) string {
+		if !strings.HasSuffix(repository, archSuffix) {
+			fmt.Println("fixed: " + repository + " -> " + repository + archSuffix)
+			repository = repository + archSuffix
+		}
+		return repository
+	}
+	if err := docker.EditArchiveRepositories(in, out, repositoryFixer); err != nil {
+		return err
+	}
+
+	// replace the original file with the fixed file
+	in.Close()
+	out.Sync()
+	out.Close()
+	return os.Rename(out.Name(), in.Name())
 }
 
 func (b *BazelBuildBits) findPaths(bazelGoosGoarch string) map[string]string {
@@ -103,26 +170,42 @@ func (b *BazelBuildBits) findPaths(bazelGoosGoarch string) map[string]string {
 		// TODO(bentheelder): probably we should use our own config instead :-)
 		filepath.Join(b.kubeRoot, "build", "debs", "kubelet.service"): "systemd/kubelet.service",
 		filepath.Join(b.kubeRoot, "build", "debs", "10-kubeadm.conf"): "systemd/10-kubeadm.conf",
-		// binaries
-		filepath.Join(
-			binDir, "cmd", "kubeadm",
-			// pure-go binary
-			fmt.Sprintf("%s_pure_stripped", bazelGoosGoarch), "kubeadm",
-		): "bin/kubeadm",
-		filepath.Join(
-			binDir, "cmd", "kubectl",
-			// pure-go binary
-			fmt.Sprintf("%s_pure_stripped", bazelGoosGoarch), "kubectl",
-		): "bin/kubectl",
 	}
 
-	// paths that changed: kubelet binary
+	// binaries that may be in different locations
+	kubeadmPureStrippedPath := filepath.Join(
+		binDir, "cmd", "kubeadm",
+		fmt.Sprintf("%s_pure_stripped", bazelGoosGoarch), "kubeadm",
+	)
+	kubeadmStrippedPath := filepath.Join(
+		binDir, "cmd", "kubeadm",
+		fmt.Sprintf("%s_stripped", bazelGoosGoarch), "kubeadm",
+	)
+	kubectlPureStrippedPath := filepath.Join(
+		binDir, "cmd", "kubectl",
+		fmt.Sprintf("%s_pure_stripped", bazelGoosGoarch), "kubectl",
+	)
+	kubectlStrippedPath := filepath.Join(
+		binDir, "cmd", "kubectl",
+		fmt.Sprintf("%s_stripped", bazelGoosGoarch), "kubectl",
+	)
 	oldKubeletPath := filepath.Join(
 		binDir, "cmd", "kubelet",
-		// cgo binary
 		fmt.Sprintf("%s_stripped", bazelGoosGoarch), "kubelet",
 	)
 	newKubeletPath := filepath.Join(binDir, "cmd", "kubelet", "kubelet")
+
+	// look for one path then fall back to the alternate for each
+	if _, err := os.Stat(kubeadmPureStrippedPath); os.IsNotExist(err) {
+		paths[kubeadmStrippedPath] = "bin/kubeadm"
+	} else {
+		paths[kubeadmPureStrippedPath] = "bin/kubeadm"
+	}
+	if _, err := os.Stat(kubectlPureStrippedPath); os.IsNotExist(err) {
+		paths[kubectlStrippedPath] = "bin/kubectl"
+	} else {
+		paths[kubectlPureStrippedPath] = "bin/kubectl"
+	}
 	if _, err := os.Stat(oldKubeletPath); os.IsNotExist(err) {
 		paths[newKubeletPath] = "bin/kubelet"
 	} else {

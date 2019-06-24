@@ -17,6 +17,7 @@ limitations under the License.
 package storage
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -350,7 +351,7 @@ func TestEtcdCreateDeploymentRollback(t *testing.T) {
 		if _, err := storage.Deployment.Create(ctx, validNewDeployment(), rest.ValidateAllObjectFunc, &metav1.CreateOptions{}); err != nil {
 			t.Fatalf("%s: unexpected error: %v", k, err)
 		}
-		rollbackRespStatus, err := rollbackStorage.Create(ctx, &test.rollback, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
+		rollbackRespStatus, err := rollbackStorage.Create(ctx, test.rollback.Name, &test.rollback, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
 		if !test.errOK(err) {
 			t.Errorf("%s: unexpected error: %v", k, err)
 		} else if err == nil {
@@ -374,6 +375,33 @@ func TestEtcdCreateDeploymentRollback(t *testing.T) {
 	}
 }
 
+func TestCreateDeploymentRollbackValidation(t *testing.T) {
+	storage, server := newStorage(t)
+	rollbackStorage := storage.Rollback
+	rollback := apps.DeploymentRollback{
+		Name:               name,
+		UpdatedAnnotations: map[string]string{},
+		RollbackTo:         apps.RollbackConfig{Revision: 1},
+	}
+
+	ctx := genericapirequest.WithNamespace(genericapirequest.NewContext(), namespace)
+
+	if _, err := storage.Deployment.Create(ctx, validNewDeployment(), rest.ValidateAllObjectFunc, &metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	validationError := fmt.Errorf("admission deny")
+	alwaysDenyValidationFunc := func(obj runtime.Object) error { return validationError }
+	_, err := rollbackStorage.Create(ctx, rollback.Name, &rollback, alwaysDenyValidationFunc, &metav1.CreateOptions{})
+
+	if err == nil || validationError != err {
+		t.Errorf("expected: %v, got: %v", validationError, err)
+	}
+
+	storage.Deployment.Store.DestroyFunc()
+	server.Terminate(t)
+}
+
 // Ensure that when a deploymentRollback is created for a deployment that has already been deleted
 // by the API server, API server returns not-found error.
 func TestEtcdCreateDeploymentRollbackNoDeployment(t *testing.T) {
@@ -383,7 +411,7 @@ func TestEtcdCreateDeploymentRollbackNoDeployment(t *testing.T) {
 	rollbackStorage := storage.Rollback
 	ctx := genericapirequest.WithNamespace(genericapirequest.NewContext(), namespace)
 
-	_, err := rollbackStorage.Create(ctx, &apps.DeploymentRollback{
+	_, err := rollbackStorage.Create(ctx, name, &apps.DeploymentRollback{
 		Name:               name,
 		UpdatedAnnotations: map[string]string{},
 		RollbackTo:         apps.RollbackConfig{Revision: 1},

@@ -1,4 +1,4 @@
-// Copyright 2018 Google Inc. All rights reserved.
+// Copyright 2019 Google LLC.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,13 +6,39 @@
 
 // Package genomics provides access to the Genomics API.
 //
-// See https://cloud.google.com/genomics
+// For product documentation, see: https://cloud.google.com/genomics
+//
+// Creating a client
 //
 // Usage example:
 //
 //   import "google.golang.org/api/genomics/v2alpha1"
 //   ...
-//   genomicsService, err := genomics.New(oauthHttpClient)
+//   ctx := context.Background()
+//   genomicsService, err := genomics.NewService(ctx)
+//
+// In this example, Google Application Default Credentials are used for authentication.
+//
+// For information on how to create and obtain Application Default Credentials, see https://developers.google.com/identity/protocols/application-default-credentials.
+//
+// Other authentication options
+//
+// By default, all available scopes (see "Constants") are used to authenticate. To restrict scopes, use option.WithScopes:
+//
+//   genomicsService, err := genomics.NewService(ctx, option.WithScopes(genomics.GenomicsScope))
+//
+// To use an API key for authentication (note: some APIs do not support API keys), use option.WithAPIKey:
+//
+//   genomicsService, err := genomics.NewService(ctx, option.WithAPIKey("AIza..."))
+//
+// To use an OAuth token (e.g., a user token obtained via a three-legged OAuth flow), use option.WithTokenSource:
+//
+//   config := &oauth2.Config{...}
+//   // ...
+//   token, err := config.Exchange(ctx, ...)
+//   genomicsService, err := genomics.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx, token)))
+//
+// See https://godoc.org/google.golang.org/api/option/ for details on options.
 package genomics // import "google.golang.org/api/genomics/v2alpha1"
 
 import (
@@ -29,6 +55,8 @@ import (
 
 	gensupport "google.golang.org/api/gensupport"
 	googleapi "google.golang.org/api/googleapi"
+	option "google.golang.org/api/option"
+	htransport "google.golang.org/api/transport/http"
 )
 
 // Always reference these packages, just in case the auto-generated code
@@ -59,6 +87,33 @@ const (
 	GenomicsScope = "https://www.googleapis.com/auth/genomics"
 )
 
+// NewService creates a new Service.
+func NewService(ctx context.Context, opts ...option.ClientOption) (*Service, error) {
+	scopesOption := option.WithScopes(
+		"https://www.googleapis.com/auth/cloud-platform",
+		"https://www.googleapis.com/auth/genomics",
+	)
+	// NOTE: prepend, so we don't override user-specified scopes.
+	opts = append([]option.ClientOption{scopesOption}, opts...)
+	client, endpoint, err := htransport.NewClient(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	s, err := New(client)
+	if err != nil {
+		return nil, err
+	}
+	if endpoint != "" {
+		s.BasePath = endpoint
+	}
+	return s, nil
+}
+
+// New creates a new Service. It uses the provided http.Client for requests.
+//
+// Deprecated: please use NewService instead.
+// To provide a custom HTTP client, use option.WithHTTPClient.
+// If you are using google.golang.org/api/googleapis/transport.APIKey, use option.WithAPIKey with NewService instead.
 func New(client *http.Client) (*Service, error) {
 	if client == nil {
 		return nil, errors.New("client is nil")
@@ -333,9 +388,11 @@ type Action struct {
 	// and cannot start with a hypen.
 	Name string `json:"name,omitempty"`
 
-	// PidNamespace: The PID namespace to run the action inside. If
-	// unspecified, a separate
-	// isolated namespace is used.
+	// PidNamespace: An optional identifier for a PID namespace to run the
+	// action inside.
+	// Multiple actions should use the same string to share a namespace.
+	// If
+	// unspecified, a separate isolated namespace is used.
 	PidNamespace string `json:"pidNamespace,omitempty"`
 
 	// PortMappings: A map of containers to host port mappings for this
@@ -977,7 +1034,8 @@ type FailedEvent struct {
 	//   "UNAVAILABLE" - The service is currently unavailable.  This is most
 	// likely a
 	// transient condition, which can be corrected by retrying with
-	// a backoff.
+	// a backoff. Note that it is not always safe to retry
+	// non-idempotent operations.
 	//
 	// See the guidelines above for deciding between
 	// `FAILED_PRECONDITION`,
@@ -1008,63 +1066,6 @@ type FailedEvent struct {
 
 func (s *FailedEvent) MarshalJSON() ([]byte, error) {
 	type NoMethod FailedEvent
-	raw := NoMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
-}
-
-// ImportReadGroupSetsResponse: The read group set import response.
-type ImportReadGroupSetsResponse struct {
-	// ReadGroupSetIds: IDs of the read group sets that were created.
-	ReadGroupSetIds []string `json:"readGroupSetIds,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g. "ReadGroupSetIds") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-
-	// NullFields is a list of field names (e.g. "ReadGroupSetIds") to
-	// include in API requests with the JSON null value. By default, fields
-	// with empty values are omitted from API requests. However, any field
-	// with an empty value appearing in NullFields will be sent to the
-	// server as null. It is an error if a field in this list has a
-	// non-empty value. This may be used to include null fields in Patch
-	// requests.
-	NullFields []string `json:"-"`
-}
-
-func (s *ImportReadGroupSetsResponse) MarshalJSON() ([]byte, error) {
-	type NoMethod ImportReadGroupSetsResponse
-	raw := NoMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
-}
-
-// ImportVariantsResponse: The variant data import response.
-type ImportVariantsResponse struct {
-	// CallSetIds: IDs of the call sets created during the import.
-	CallSetIds []string `json:"callSetIds,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g. "CallSetIds") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-
-	// NullFields is a list of field names (e.g. "CallSetIds") to include in
-	// API requests with the JSON null value. By default, fields with empty
-	// values are omitted from API requests. However, any field with an
-	// empty value appearing in NullFields will be sent to the server as
-	// null. It is an error if a field in this list has a non-empty value.
-	// This may be used to include null fields in Patch requests.
-	NullFields []string `json:"-"`
-}
-
-func (s *ImportVariantsResponse) MarshalJSON() ([]byte, error) {
-	type NoMethod ImportVariantsResponse
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -1277,9 +1278,7 @@ type Operation struct {
 	// `operations/CJHU7Oi_ChDrveSpBRjfuL-qzoWAgEw`
 	Name string `json:"name,omitempty"`
 
-	// Response: If importing ReadGroupSets, an ImportReadGroupSetsResponse
-	// is returned. If importing Variants, an ImportVariantsResponse is
-	// returned. For pipelines and exports, an Empty response is returned.
+	// Response: An Empty object.
 	Response googleapi.RawMessage `json:"response,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1722,20 +1721,20 @@ func (s *ServiceAccount) MarshalJSON() ([]byte, error) {
 }
 
 // Status: The `Status` type defines a logical error model that is
-// suitable for different
-// programming environments, including REST APIs and RPC APIs. It is
-// used by
-// [gRPC](https://github.com/grpc). The error model is designed to
-// be:
+// suitable for
+// different programming environments, including REST APIs and RPC APIs.
+// It is
+// used by [gRPC](https://github.com/grpc). The error model is designed
+// to be:
 //
 // - Simple to use and understand for most users
 // - Flexible enough to meet unexpected needs
 //
 // # Overview
 //
-// The `Status` message contains three pieces of data: error code, error
-// message,
-// and error details. The error code should be an enum value
+// The `Status` message contains three pieces of data: error code,
+// error
+// message, and error details. The error code should be an enum value
 // of
 // google.rpc.Code, but it may accept additional error codes if needed.
 // The
@@ -1930,6 +1929,10 @@ type VirtualMachine struct {
 
 	// Disks: The list of disks to create and attach to the VM.
 	Disks []*Disk `json:"disks,omitempty"`
+
+	// EnableStackdriverMonitoring: Whether Stackdriver monitoring should be
+	// enabled on the VM.
+	EnableStackdriverMonitoring bool `json:"enableStackdriverMonitoring,omitempty"`
 
 	// Labels: Optional set of labels to apply to the VM and any attached
 	// disk resources.
@@ -2619,8 +2622,7 @@ func (c *ProjectsOperationsListCall) Filter(filter string) *ProjectsOperationsLi
 }
 
 // PageSize sets the optional parameter "pageSize": The maximum number
-// of results to return. If unspecified, defaults to
-// 256. The maximum value is 2048.
+// of results to return. The maximum value is 256.
 func (c *ProjectsOperationsListCall) PageSize(pageSize int64) *ProjectsOperationsListCall {
 	c.urlParams_.Set("pageSize", fmt.Sprint(pageSize))
 	return c
@@ -2752,7 +2754,7 @@ func (c *ProjectsOperationsListCall) Do(opts ...googleapi.CallOption) (*ListOper
 	//       "type": "string"
 	//     },
 	//     "pageSize": {
-	//       "description": "The maximum number of results to return. If unspecified, defaults to\n256. The maximum value is 2048.",
+	//       "description": "The maximum number of results to return. The maximum value is 256.",
 	//       "format": "int32",
 	//       "location": "query",
 	//       "type": "integer"

@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# simple script to ensure all of our builds work
+# simple CI script to verify kind's own sources
+# TODO(bentheelder): rename / refactor. consider building kindnetd
 
 set -o errexit
 set -o nounset
@@ -23,8 +24,16 @@ set -o pipefail
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "${REPO_ROOT}"
 
-# build kind
-set -x
-# TODO(bentheelder): find a solution that does not depend on GO111MODULE="off"
-# we could use -mod vendor, but only go 1.11+ will understand this
-GO111MODULE="off" go install -v .
+# enable modules and the proxy cache
+export GO111MODULE="on"
+GOPROXY="${GOPROXY:-https://proxy.golang.org}"
+export GOPROXY
+
+# build and kind
+go install -v .
+go test -v ./...
+
+# build and test kindnetd
+cd ./cmd/kindnetd
+go install -v .
+go test -v ./...

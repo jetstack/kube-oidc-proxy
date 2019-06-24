@@ -268,16 +268,16 @@ run_recursive_resources_tests() {
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx:'
   kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Command
-  output_message=$(kubectl convert --local -f hack/testdata/deployment-revision1.yaml --output-version=apps/v1beta1 -o yaml "${kube_flags[@]}")
+  output_message=$(kubectl convert --local -f hack/testdata/deployment-revision1.yaml --output-version=apps/v1 -o yaml "${kube_flags[@]}")
   # Post-condition: apiVersion is still extensions/v1beta1 in the live deployment, but command output is the new value
   kube::test::get_object_assert 'deployment nginx' "{{ .apiVersion }}" 'extensions/v1beta1'
-  kube::test::if_has_string "${output_message}" "apps/v1beta1"
+  kube::test::if_has_string "${output_message}" "apps/v1"
   # Clean up
   kubectl delete deployment nginx "${kube_flags[@]}"
 
   ## Convert multiple busybox PODs recursively from directory of YAML files
-  # Pre-condition: busybox0 & busybox1 PODs exist
-  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'busybox0:busybox1:'
+  # Pre-condition: only busybox0 & busybox1 PODs exist
+  kube::test::wait_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'busybox0:busybox1:'
   # Command
   output_message=$(! kubectl convert -f hack/testdata/recursive/pod --recursive 2>&1 "${kube_flags[@]}")
   # Post-condition: busybox0 & busybox1 PODs are converted, and since busybox2 is malformed, it should error
@@ -378,7 +378,7 @@ run_recursive_resources_tests() {
   # Command
   output_message=$(! kubectl delete -f hack/testdata/recursive/rc --recursive --grace-period=0 --force 2>&1 "${kube_flags[@]}")
   # Post-condition: busybox0 & busybox1 replication controllers are deleted, and since busybox2 is malformed, it should error
-  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
+  kube::test::get_object_assert rc "{{range.items}}{{$id_field}}:{{end}}" ''
   kube::test::if_has_string "${output_message}" "Object 'Kind' is missing"
 
   ### Rollout on multiple deployments recursively

@@ -29,9 +29,9 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	cloudprovider "k8s.io/cloud-provider"
-	nodeutil "k8s.io/kubernetes/pkg/api/v1/node"
-	fakecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/fake"
+	fakecloud "k8s.io/cloud-provider/fake"
 	"k8s.io/kubernetes/pkg/controller"
+	nodeutil "k8s.io/kubernetes/pkg/controller/util/node"
 )
 
 func alwaysReady() bool { return true }
@@ -226,9 +226,9 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		cloud := &fakecloud.FakeCloud{RouteMap: make(map[string]*fakecloud.FakeRoute)}
+		cloud := &fakecloud.Cloud{RouteMap: make(map[string]*fakecloud.Route)}
 		for _, route := range testCase.initialRoutes {
-			fakeRoute := &fakecloud.FakeRoute{}
+			fakeRoute := &fakecloud.Route{}
 			fakeRoute.ClusterName = cluster
 			fakeRoute.Route = *route
 			cloud.RouteMap[route.Name] = fakeRoute

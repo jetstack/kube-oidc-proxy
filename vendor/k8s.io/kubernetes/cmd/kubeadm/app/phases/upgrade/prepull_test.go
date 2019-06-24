@@ -108,41 +108,47 @@ func (p *goodPrepuller) DeleteFunc(component string) error {
 
 func TestPrepullImagesInParallel(t *testing.T) {
 	tests := []struct {
+		name        string
 		p           Prepuller
 		timeout     time.Duration
 		expectedErr bool
 	}{
-		{ // should error out; create failed
+		{
+			name:        "should error out; create failed",
 			p:           NewFailedCreatePrepuller(),
-			timeout:     10 * time.Second,
+			timeout:     constants.PrepullImagesInParallelTimeout,
 			expectedErr: true,
 		},
-		{ // should error out; timeout exceeded
+		{
+			name:        "should error out; timeout exceeded",
 			p:           NewForeverWaitPrepuller(),
-			timeout:     10 * time.Second,
+			timeout:     constants.PrepullImagesInParallelTimeout,
 			expectedErr: true,
 		},
-		{ // should error out; delete failed
+		{
+			name:        "should error out; delete failed",
 			p:           NewFailedDeletePrepuller(),
-			timeout:     10 * time.Second,
+			timeout:     constants.PrepullImagesInParallelTimeout,
 			expectedErr: true,
 		},
-		{ // should work just fine
+		{
+			name:        "should work just fine",
 			p:           NewGoodPrepuller(),
-			timeout:     10 * time.Second,
+			timeout:     constants.PrepullImagesInParallelTimeout,
 			expectedErr: false,
 		},
 	}
 
 	for _, rt := range tests {
-
-		actualErr := PrepullImagesInParallel(rt.p, rt.timeout, append(constants.MasterComponents, constants.Etcd))
-		if (actualErr != nil) != rt.expectedErr {
-			t.Errorf(
-				"failed TestPrepullImagesInParallel\n\texpected error: %t\n\tgot: %t",
-				rt.expectedErr,
-				(actualErr != nil),
-			)
-		}
+		t.Run(rt.name, func(t *testing.T) {
+			actualErr := PrepullImagesInParallel(rt.p, rt.timeout, append(constants.ControlPlaneComponents, constants.Etcd))
+			if (actualErr != nil) != rt.expectedErr {
+				t.Errorf(
+					"failed TestPrepullImagesInParallel\n\texpected error: %t\n\tgot: %t",
+					rt.expectedErr,
+					(actualErr != nil),
+				)
+			}
+		})
 	}
 }

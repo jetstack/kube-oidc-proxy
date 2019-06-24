@@ -17,17 +17,18 @@ limitations under the License.
 package logs
 
 import (
+	"archive/tar"
+	"io"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/kind/pkg/cluster/nodes"
+	"sigs.k8s.io/kind/pkg/concurrent"
 	"sigs.k8s.io/kind/pkg/exec"
-	"sigs.k8s.io/kind/pkg/util"
 )
-
-type errFn func() error
 
 // Collect collects logs related to / from the cluster nodes and the host
 // system to the specified directory
@@ -54,7 +55,7 @@ func Collect(nodes []nodes.Node, dir string) error {
 		}
 	}
 	// construct a slice of methods to collect logs
-	fns := []errFn{
+	fns := []func() error{
 		// TODO(bentheelder): record the kind version here as well
 		// record info about the host docker
 		execToPathFn(
@@ -65,15 +66,29 @@ func Collect(nodes []nodes.Node, dir string) error {
 	// add a log collection method for each node
 	for _, n := range nodes {
 		node := n // https://golang.org/doc/faq#closures_and_goroutines
+		name := node.String()
+		// grab all logs under /var/log (pods and containers)
+		cmd := node.Command("tar", "--hard-dereference", "-C", "/var/log", "-chf", "-", ".")
+
+		exec.RunWithStdoutReader(cmd, func(outReader io.Reader) error {
+			if err := untar(outReader, filepath.Join(dir, name)); err != nil {
+				return errors.Wrapf(err, "Untarring %q: %v", name, err)
+			}
+			return nil
+		})
+
 		fns = append(fns, func() error {
-			name := node.String()
-			return coalesce(
+			return concurrent.Coalesce(
 				// record info about the node container
 				execToPathFn(
 					exec.Command("docker", "inspect", name),
 					filepath.Join(name, "inspect.json"),
 				),
 				// grab all of the node logs
+				execToPathFn(
+					exec.Command("docker", "logs", name),
+					filepath.Join(name, "serial.log"),
+				),
 				execToPathFn(
 					node.Command("cat", "/kind/version"),
 					filepath.Join(name, "kubernetes-version.txt"),
@@ -87,68 +102,59 @@ func Collect(nodes []nodes.Node, dir string) error {
 					filepath.Join(name, "kubelet.log"),
 				),
 				execToPathFn(
-					node.Command("journalctl", "--no-pager", "-u", "docker.service"),
-					filepath.Join(name, "docker.log"),
+					node.Command("journalctl", "--no-pager", "-u", "containerd.service"),
+					filepath.Join(name, "containerd.log"),
 				),
-				// grab all container / pod logs
-				// NOTE: we cannot just docker cp this directory because
-				// it is mostly symlinks, so we must list and resolve the symlinks
-				func() error {
-					// collect up file names
-					files, err := exec.CombinedOutputLines(
-						node.Command("find", "-L", "/var/log", "-type", "f"),
-					)
-					if err != nil {
-						return err
-					}
-					// for each file, we want to copy it out at the path
-					// we find it (symlink or not), so we pipe cat in the container
-					// to a file in our logs dir on the host
-					copyFns := []errFn{}
-					for _, f := range files {
-						file := f // https://golang.org/doc/faq#closures_and_goroutines
-						targetPath := strings.TrimPrefix(file, "/var/log/")
-						copyFns = append(copyFns, func() error {
-							return execToPath(
-								node.Command("cat", file),
-								filepath.Join(name, targetPath),
-							)
-						})
-					}
-					return coalesce(copyFns...)
-				},
 			)
 		})
 	}
+
 	// run and collect up all errors
-	return coalesce(fns...)
+	return concurrent.Coalesce(fns...)
 }
 
-// colaese runs fns concurrently, returning an Errors if there are > 1 errors
-func coalesce(fns ...errFn) error {
-	// run all fns concurrently
-	ch := make(chan error, len(fns))
-	var wg sync.WaitGroup
-	for _, fn := range fns {
-		wg.Add(1)
-		go func(f errFn) {
-			defer wg.Done()
-			ch <- f()
-		}(fn)
-	}
-	wg.Wait()
-	close(ch)
-	// collect up and return errors
-	errs := []error{}
-	for err := range ch {
-		if err != nil {
-			errs = append(errs, err)
+// untar reads the tar file from r and writes it into dir.
+func untar(r io.Reader, dir string) (err error) {
+	tr := tar.NewReader(r)
+	for {
+		f, err := tr.Next()
+
+		switch {
+		case err == io.EOF:
+			return nil
+		case err != nil:
+			return errors.Wrapf(err, "tar reading error: %v", err)
+		case f == nil:
+			continue
+		}
+
+		rel := filepath.FromSlash(f.Name)
+		abs := filepath.Join(dir, rel)
+
+		switch f.Typeflag {
+		case tar.TypeReg:
+			wf, err := os.OpenFile(abs, os.O_CREATE|os.O_RDWR, os.FileMode(f.Mode))
+			if err != nil {
+				return err
+			}
+			n, err := io.Copy(wf, tr)
+			if closeErr := wf.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
+			if err != nil {
+				return errors.Errorf("error writing to %s: %v", abs, err)
+			}
+			if n != f.Size {
+				return errors.Errorf("only wrote %d bytes to %s; expected %d", n, abs, f.Size)
+			}
+		case tar.TypeDir:
+			if _, err := os.Stat(abs); err != nil {
+				if err := os.MkdirAll(abs, 0755); err != nil {
+					return err
+				}
+			}
+		default:
+			log.Warningf("tar file entry %s contained unsupported file type %v", f.Name, f.Typeflag)
 		}
 	}
-	if len(errs) > 1 {
-		return util.Flatten(errs)
-	} else if len(errs) == 1 {
-		return errs[0]
-	}
-	return nil
 }

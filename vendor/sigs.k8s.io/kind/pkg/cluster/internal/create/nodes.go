@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 
 	"sigs.k8s.io/kind/pkg/cluster/config"
 	"sigs.k8s.io/kind/pkg/cluster/constants"
+	"sigs.k8s.io/kind/pkg/cluster/internal/loadbalancer"
 	"sigs.k8s.io/kind/pkg/cluster/nodes"
+	"sigs.k8s.io/kind/pkg/concurrent"
 	"sigs.k8s.io/kind/pkg/container/cri"
 	logutil "sigs.k8s.io/kind/pkg/log"
 )
@@ -79,8 +80,7 @@ func provisionNodes(
 ) error {
 	defer status.End(false)
 
-	_, err := createNodeContainers(status, cfg, clusterName, clusterLabel)
-	if err != nil {
+	if err := createNodeContainers(status, cfg, clusterName, clusterLabel); err != nil {
 		return err
 	}
 
@@ -90,82 +90,28 @@ func provisionNodes(
 
 func createNodeContainers(
 	status *logutil.Status, cfg *config.Cluster, clusterName, clusterLabel string,
-) ([]nodes.Node, error) {
+) error {
 	defer status.End(false)
 
-	// create all of the node containers, concurrently
+	// compute the desired nodes, and inform the user that we are setting them up
 	desiredNodes := nodesToCreate(cfg, clusterName)
 	status.Start("Preparing nodes " + strings.Repeat("📦", len(desiredNodes)))
-	nodeChan := make(chan *nodes.Node, len(desiredNodes))
-	errChan := make(chan error)
-	defer close(nodeChan)
-	defer close(errChan)
+
+	// create all of the node containers, concurrently
+	fns := []func() error{}
 	for _, desiredNode := range desiredNodes {
 		desiredNode := desiredNode // capture loop variable
-		go func() {
-			// create the node into a container (docker run, but it is paused, see createNode)
-			node, err := desiredNode.Create(clusterLabel)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			err = fixupNode(node)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			nodeChan <- node
-		}()
+		fns = append(fns, func() error {
+			// create the node into a container (~= docker run -d)
+			_, err := desiredNode.Create(clusterLabel)
+			return err
+		})
 	}
-
-	// collect nodes
-	allNodes := []nodes.Node{}
-	for {
-		select {
-		case node := <-nodeChan:
-			// TODO(bentheelder): nodes should maybe not be pointers /shrug
-			allNodes = append(allNodes, *node)
-			if len(allNodes) == len(desiredNodes) {
-				status.End(true)
-				return allNodes, nil
-			}
-		case err := <-errChan:
-			return nil, err
-		}
-	}
-}
-
-func fixupNode(node *nodes.Node) error {
-	// we need to change a few mounts once we have the container
-	// we'd do this ahead of time if we could, but --privileged implies things
-	// that don't seem to be configurable, and we need that flag
-	if err := node.FixMounts(); err != nil {
-		// TODO(bentheelder): logging here
+	if err := concurrent.UntilError(fns); err != nil {
 		return err
 	}
 
-	if nodes.NeedProxy() {
-		if err := node.SetProxy(); err != nil {
-			// TODO: logging here
-			return errors.Wrapf(err, "failed to set proxy for node %s", node.Name())
-		}
-	}
-
-	// signal the node container entrypoint to continue booting into systemd
-	if err := node.SignalStart(); err != nil {
-		// TODO(bentheelder): logging here
-		return err
-	}
-
-	// wait for docker to be ready
-	if !node.WaitForDocker(time.Now().Add(time.Second * 30)) {
-		// TODO(bentheelder): logging here
-		return errors.Errorf("timed out waiting for docker to be ready on node %s", node.Name())
-	}
-
-	// load the docker image artifacts into the docker daemon
-	node.LoadImages()
-
+	status.End(true)
 	return nil
 }
 
@@ -234,10 +180,12 @@ func nodesToCreate(cfg *config.Cluster, clusterName string) []nodeSpec {
 	if controlPlanes > 1 {
 		role := constants.ExternalLoadBalancerNodeRoleValue
 		desiredNodes = append(desiredNodes, nodeSpec{
-			Name:        nameNode(role),
-			Image:       controlPlaneImage, // TODO(bentheelder): get from config instead
-			Role:        role,
-			ExtraMounts: []cri.Mount{},
+			Name:             nameNode(role),
+			Image:            loadbalancer.Image, // TODO(bentheelder): get from config instead
+			Role:             role,
+			ExtraMounts:      []cri.Mount{},
+			APIServerAddress: cfg.Networking.APIServerAddress,
+			APIServerPort:    cfg.Networking.APIServerPort,
 		})
 	}
 

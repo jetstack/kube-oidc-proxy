@@ -21,6 +21,7 @@ import (
 	"io"
 	"k8s.io/apiserver/pkg/admission"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/component-base/featuregate"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/features"
 )
@@ -52,7 +53,7 @@ func NewPlugin() *Plugin {
 type Plugin struct {
 	*admission.Handler
 	// allows overriding for testing
-	features utilfeature.FeatureGate
+	features featuregate.FeatureGate
 }
 
 var (
@@ -64,7 +65,7 @@ var (
 )
 
 // Admit is the main function that checks node identity and adds taints as needed.
-func (p *Plugin) Admit(a admission.Attributes) error {
+func (p *Plugin) Admit(a admission.Attributes, o admission.ObjectInterfaces) error {
 	// If TaintNodesByCondition is not enabled, we don't need to do anything.
 	if !p.features.Enabled(features.TaintNodesByCondition) {
 		return nil

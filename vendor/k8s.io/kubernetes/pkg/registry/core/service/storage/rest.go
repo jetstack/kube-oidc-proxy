@@ -77,6 +77,7 @@ type ServiceStorage interface {
 	rest.Watcher
 	rest.TableConvertor
 	rest.Exporter
+	rest.StorageVersionProvider
 }
 
 type EndpointsStorage interface {
@@ -108,10 +109,15 @@ func NewREST(
 }
 
 var (
-	_ ServiceStorage          = &REST{}
-	_ rest.CategoriesProvider = &REST{}
-	_ rest.ShortNamesProvider = &REST{}
+	_ ServiceStorage              = &REST{}
+	_ rest.CategoriesProvider     = &REST{}
+	_ rest.ShortNamesProvider     = &REST{}
+	_ rest.StorageVersionProvider = &REST{}
 )
+
+func (rs *REST) StorageVersion() runtime.GroupVersioner {
+	return rs.services.StorageVersion()
+}
 
 // ShortNames implements the ShortNamesProvider interface. Returns a list of short names for a resource.
 func (rs *REST) ShortNames() []string {
@@ -214,9 +220,9 @@ func (rs *REST) Create(ctx context.Context, obj runtime.Object, createValidation
 	return out, err
 }
 
-func (rs *REST) Delete(ctx context.Context, id string, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+func (rs *REST) Delete(ctx context.Context, id string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	// TODO: handle graceful
-	obj, _, err := rs.services.Delete(ctx, id, options)
+	obj, _, err := rs.services.Delete(ctx, id, deleteValidation, options)
 	if err != nil {
 		return nil, false, err
 	}
@@ -227,7 +233,7 @@ func (rs *REST) Delete(ctx context.Context, id string, options *metav1.DeleteOpt
 	if !dryrun.IsDryRun(options.DryRun) {
 		// TODO: can leave dangling endpoints, and potentially return incorrect
 		// endpoints if a new service is created with the same name
-		_, _, err = rs.endpoints.Delete(ctx, id, &metav1.DeleteOptions{})
+		_, _, err = rs.endpoints.Delete(ctx, id, rest.ValidateAllObjectFunc, &metav1.DeleteOptions{})
 		if err != nil && !errors.IsNotFound(err) {
 			return nil, false, err
 		}
@@ -337,6 +343,18 @@ func (rs *REST) healthCheckNodePortUpdate(oldService, service *api.Service, node
 func (rs *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
 	oldObj, err := rs.services.Get(ctx, name, &metav1.GetOptions{})
 	if err != nil {
+		// Support create on update, if forced to.
+		if forceAllowCreate {
+			obj, err := objInfo.UpdatedObject(ctx, nil)
+			if err != nil {
+				return nil, false, err
+			}
+			createdObj, err := rs.Create(ctx, obj, createValidation, &metav1.CreateOptions{DryRun: options.DryRun})
+			if err != nil {
+				return nil, false, err
+			}
+			return createdObj, true, nil
+		}
 		return nil, false, err
 	}
 	oldService := oldObj.(*api.Service)

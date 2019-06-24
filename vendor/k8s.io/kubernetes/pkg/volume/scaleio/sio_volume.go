@@ -19,7 +19,7 @@ package scaleio
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -28,11 +28,12 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	volumehelpers "k8s.io/cloud-provider/volume/helpers"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/util/mount"
-	kstrings "k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
+	utilstrings "k8s.io/utils/strings"
 )
 
 type sioVolume struct {
@@ -61,7 +62,7 @@ var _ volume.Volume = &sioVolume{}
 func (v *sioVolume) GetPath() string {
 	return v.plugin.host.GetPodVolumeDir(
 		v.podUID,
-		kstrings.EscapeQualifiedNameForDisk(sioPluginName),
+		utilstrings.EscapeQualifiedName(sioPluginName),
 		v.volSpecName)
 }
 
@@ -76,12 +77,12 @@ func (v *sioVolume) CanMount() error {
 	return nil
 }
 
-func (v *sioVolume) SetUp(fsGroup *int64) error {
-	return v.SetUpAt(v.GetPath(), fsGroup)
+func (v *sioVolume) SetUp(mounterArgs volume.MounterArgs) error {
+	return v.SetUpAt(v.GetPath(), mounterArgs)
 }
 
 // SetUp bind mounts the disk global mount to the volume path.
-func (v *sioVolume) SetUpAt(dir string, fsGroup *int64) error {
+func (v *sioVolume) SetUpAt(dir string, mounterArgs volume.MounterArgs) error {
 	v.plugin.volumeMtx.LockKey(v.volSpecName)
 	defer v.plugin.volumeMtx.UnlockKey(v.volSpecName)
 
@@ -153,9 +154,9 @@ func (v *sioVolume) SetUpAt(dir string, fsGroup *int64) error {
 		return err
 	}
 
-	if !v.readOnly && fsGroup != nil {
+	if !v.readOnly && mounterArgs.FsGroup != nil {
 		klog.V(4).Info(log("applying  value FSGroup ownership"))
-		volume.SetVolumeOwnership(v, fsGroup)
+		volume.SetVolumeOwnership(v, mounterArgs.FsGroup)
 	}
 
 	klog.V(4).Info(log("successfully setup PV %s: volume %s mapped as %s mounted at %s", v.volSpecName, v.volName, devicePath, dir))
@@ -193,7 +194,7 @@ func (v *sioVolume) TearDownAt(dir string) error {
 	}
 
 	klog.V(4).Info(log("attempting to unmount %s", dir))
-	if err := util.UnmountPath(dir, mounter); err != nil {
+	if err := mount.CleanupMountPoint(dir, mounter, false); err != nil {
 		klog.Error(log("teardown failed while unmounting dir %s: %v ", dir, err))
 		return err
 	}
@@ -265,19 +266,20 @@ func (v *sioVolume) Provision(selectedNode *api.Node, allowedTopologies []api.To
 
 	// setup volume attrributes
 	genName := v.generateName("k8svol", 11)
-	var oneGig int64 = 1024 * 1024 * 1024
-	eightGig := 8 * oneGig
+	eightGig := int64(8 * volumehelpers.GiB)
 
 	capacity := v.options.PVC.Spec.Resources.Requests[api.ResourceName(api.ResourceStorage)]
+
 	volSizeBytes := capacity.Value()
-	volSizeGB := int64(util.RoundUpSize(volSizeBytes, oneGig))
+	volSizeGB := int64(volumehelpers.RoundUpToGiB(capacity))
 
 	if volSizeBytes == 0 {
 		return nil, fmt.Errorf("invalid volume size of 0 specified")
 	}
 
 	if volSizeBytes < eightGig {
-		volSizeGB = int64(util.RoundUpSize(eightGig, oneGig))
+		eightGiBCapacity := resource.NewQuantity(eightGig, resource.BinarySI)
+		volSizeGB = int64(volumehelpers.RoundUpToGiB(*eightGiBCapacity))
 		klog.V(4).Info(log("capacity less than 8Gi found, adjusted to %dGi", volSizeGB))
 
 	}
@@ -357,7 +359,7 @@ func (v *sioVolume) Provision(selectedNode *api.Node, allowedTopologies []api.To
 func (v *sioVolume) setSioMgr() error {
 	klog.V(4).Info(log("setting up sio mgr for spec  %s", v.volSpecName))
 	podDir := v.plugin.host.GetPodPluginDir(v.podUID, sioPluginName)
-	configName := path.Join(podDir, sioConfigFileName)
+	configName := filepath.Join(podDir, sioConfigFileName)
 	if v.sioMgr == nil {
 		configData, err := loadConfig(configName) // try to load config if exist
 		if err != nil {
@@ -412,7 +414,7 @@ func (v *sioVolume) setSioMgr() error {
 // resetSioMgr creates scaleio manager from existing (cached) config data
 func (v *sioVolume) resetSioMgr() error {
 	podDir := v.plugin.host.GetPodPluginDir(v.podUID, sioPluginName)
-	configName := path.Join(podDir, sioConfigFileName)
+	configName := filepath.Join(podDir, sioConfigFileName)
 	if v.sioMgr == nil {
 		// load config data from disk
 		configData, err := loadConfig(configName)

@@ -99,6 +99,7 @@ func newStorage(t *testing.T) (customresource.CustomResourceStorage, *etcdtestin
 			kind,
 			nil,
 			nil,
+			nil,
 			status,
 			scale,
 		),
@@ -381,6 +382,10 @@ func TestScaleGet(t *testing.T) {
 	}
 
 	want := &autoscalingv1.Scale{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Scale",
+			APIVersion: "autoscaling/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              cr.GetName(),
 			Namespace:         metav1.NamespaceDefault,

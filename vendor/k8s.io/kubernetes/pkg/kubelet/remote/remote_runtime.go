@@ -26,9 +26,10 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/klog"
 
-	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
-	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	internalapi "k8s.io/cri-api/pkg/apis"
+	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/util"
+	"k8s.io/kubernetes/pkg/kubelet/util/logreduction"
 	utilexec "k8s.io/utils/exec"
 )
 
@@ -36,7 +37,14 @@ import (
 type RemoteRuntimeService struct {
 	timeout       time.Duration
 	runtimeClient runtimeapi.RuntimeServiceClient
+	// Cache last per-container error message to reduce log spam
+	logReduction *logreduction.LogReduction
 }
+
+const (
+	// How frequently to report identical errors
+	identicalErrorDelay = 1 * time.Minute
+)
 
 // NewRemoteRuntimeService creates a new internalapi.RuntimeService.
 func NewRemoteRuntimeService(endpoint string, connectionTimeout time.Duration) (internalapi.RuntimeService, error) {
@@ -57,6 +65,7 @@ func NewRemoteRuntimeService(endpoint string, connectionTimeout time.Duration) (
 	return &RemoteRuntimeService{
 		timeout:       connectionTimeout,
 		runtimeClient: runtimeapi.NewRuntimeServiceClient(conn),
+		logReduction:  logreduction.NewLogReduction(identicalErrorDelay),
 	}, nil
 }
 
@@ -225,6 +234,7 @@ func (r *RemoteRuntimeService) StopContainer(containerID string, timeout int64) 
 	ctx, cancel := getContextWithTimeout(t)
 	defer cancel()
 
+	r.logReduction.ClearID(containerID)
 	_, err := r.runtimeClient.StopContainer(ctx, &runtimeapi.StopContainerRequest{
 		ContainerId: containerID,
 		Timeout:     timeout,
@@ -243,6 +253,7 @@ func (r *RemoteRuntimeService) RemoveContainer(containerID string) error {
 	ctx, cancel := getContextWithTimeout(r.timeout)
 	defer cancel()
 
+	r.logReduction.ClearID(containerID)
 	_, err := r.runtimeClient.RemoveContainer(ctx, &runtimeapi.RemoveContainerRequest{
 		ContainerId: containerID,
 	})
@@ -279,9 +290,13 @@ func (r *RemoteRuntimeService) ContainerStatus(containerID string) (*runtimeapi.
 		ContainerId: containerID,
 	})
 	if err != nil {
-		klog.Errorf("ContainerStatus %q from runtime service failed: %v", containerID, err)
+		// Don't spam the log with endless messages about the same failure.
+		if r.logReduction.ShouldMessageBePrinted(err.Error(), containerID) {
+			klog.Errorf("ContainerStatus %q from runtime service failed: %v", containerID, err)
+		}
 		return nil, err
 	}
+	r.logReduction.ClearID(containerID)
 
 	if resp.Status != nil {
 		if err := verifyContainerStatus(resp.Status); err != nil {
@@ -457,9 +472,12 @@ func (r *RemoteRuntimeService) ContainerStats(containerID string) (*runtimeapi.C
 		ContainerId: containerID,
 	})
 	if err != nil {
-		klog.Errorf("ContainerStatus %q from runtime service failed: %v", containerID, err)
+		if r.logReduction.ShouldMessageBePrinted(err.Error(), containerID) {
+			klog.Errorf("ContainerStatus %q from runtime service failed: %v", containerID, err)
+		}
 		return nil, err
 	}
+	r.logReduction.ClearID(containerID)
 
 	return resp.GetStats(), nil
 }

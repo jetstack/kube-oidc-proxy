@@ -20,55 +20,34 @@ limitations under the License.
 package drivers
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 )
-
-var (
-	csiImageVersion  = flag.String("storage.csi.image.version", "", "overrides the default tag used for hostpathplugin/csi-attacher/csi-provisioner/driver-registrar images")
-	csiImageRegistry = flag.String("storage.csi.image.registry", "quay.io/k8scsi", "overrides the default repository used for hostpathplugin/csi-attacher/csi-provisioner/driver-registrar images")
-	csiImageVersions = map[string]string{
-		"hostpathplugin":   "v0.4.0",
-		"csi-attacher":     "v0.4.0",
-		"csi-provisioner":  "v0.4.0",
-		"driver-registrar": "v0.4.0",
-	}
-)
-
-func csiContainerImage(image string) string {
-	var fullName string
-	fullName += *csiImageRegistry + "/" + image + ":"
-	if *csiImageVersion != "" {
-		fullName += *csiImageVersion
-	} else {
-		fullName += csiImageVersions[image]
-	}
-	return fullName
-}
 
 func shredFile(filePath string) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		framework.Logf("File %v was not found, skipping shredding", filePath)
+		e2elog.Logf("File %v was not found, skipping shredding", filePath)
 		return
 	}
-	framework.Logf("Shredding file %v", filePath)
+	e2elog.Logf("Shredding file %v", filePath)
 	_, _, err := framework.RunCmd("shred", "--remove", filePath)
 	if err != nil {
-		framework.Logf("Failed to shred file %v: %v", filePath, err)
+		e2elog.Logf("Failed to shred file %v: %v", filePath, err)
 	}
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		framework.Logf("File %v successfully shredded", filePath)
+		e2elog.Logf("File %v successfully shredded", filePath)
 		return
 	}
 	// Shred failed Try to remove the file for good meausure
@@ -79,7 +58,7 @@ func shredFile(filePath string) {
 
 // createGCESecrets downloads the GCP IAM Key for the default compute service account
 // and puts it in a secret for the GCE PD CSI Driver to consume
-func createGCESecrets(client clientset.Interface, config framework.VolumeTestConfig) {
+func createGCESecrets(client clientset.Interface, ns string) {
 	saEnv := "E2E_GOOGLE_APPLICATION_CREDENTIALS"
 	saFile := fmt.Sprintf("/tmp/%s/cloud-sa.json", string(uuid.NewUUID()))
 
@@ -88,13 +67,13 @@ func createGCESecrets(client clientset.Interface, config framework.VolumeTestCon
 
 	premadeSAFile, ok := os.LookupEnv(saEnv)
 	if !ok {
-		framework.Logf("Could not find env var %v, please either create cloud-sa"+
+		e2elog.Logf("Could not find env var %v, please either create cloud-sa"+
 			" secret manually or rerun test after setting %v to the filepath of"+
 			" the GCP Service Account to give to the GCE Persistent Disk CSI Driver", saEnv, saEnv)
 		return
 	}
 
-	framework.Logf("Found CI service account key at %v", premadeSAFile)
+	e2elog.Logf("Found CI service account key at %v", premadeSAFile)
 	// Need to copy it saFile
 	stdout, stderr, err := framework.RunCmd("cp", premadeSAFile, saFile)
 	framework.ExpectNoError(err, "error copying service account key: %s\nstdout: %s\nstderr: %s", err, stdout, stderr)
@@ -106,7 +85,7 @@ func createGCESecrets(client clientset.Interface, config framework.VolumeTestCon
 	s := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cloud-sa",
-			Namespace: config.Namespace,
+			Namespace: ns,
 		},
 		Type: v1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -114,6 +93,8 @@ func createGCESecrets(client clientset.Interface, config framework.VolumeTestCon
 		},
 	}
 
-	_, err = client.CoreV1().Secrets(config.Namespace).Create(s)
-	framework.ExpectNoError(err, "Failed to create Secret %v", s.GetName())
+	_, err = client.CoreV1().Secrets(ns).Create(s)
+	if !apierrors.IsAlreadyExists(err) {
+		framework.ExpectNoError(err, "Failed to create Secret %v", s.GetName())
+	}
 }

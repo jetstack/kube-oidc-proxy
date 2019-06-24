@@ -46,8 +46,9 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/version"
+	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 )
 
 var (
@@ -133,7 +134,7 @@ func (s *State) serveWrite(w http.ResponseWriter, r *http.Request) {
 		if s.Received == nil {
 			s.Received = map[string]int{}
 		}
-		s.Received[wp.Source] += 1
+		s.Received[wp.Source]++
 	}
 	s.appendErr(json.NewEncoder(w).Encode(&WriteResp{Hostname: s.Hostname}))
 }
@@ -164,7 +165,7 @@ func (s *State) appendSuccessfulSend(toHostname string) {
 	if s.Sent == nil {
 		s.Sent = map[string]int{}
 	}
-	s.Sent[toHostname] += 1
+	s.Sent[toHostname]++
 }
 
 var (
@@ -210,13 +211,17 @@ func main() {
 	http.HandleFunc("/write", state.serveWrite)
 	http.HandleFunc("/status", state.serveStatus)
 
-	go log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", *port), nil))
+	go log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 
 	select {}
 }
 
 // Find all sibling pods in the service and post to their /write handler.
 func contactOthers(state *State) {
+	var (
+		versionInfo *version.Info
+		err         error
+	)
 	sleepTime := 5 * time.Second
 	// In large cluster getting all endpoints is pretty expensive.
 	// Thus, we will limit ourselves to send on average at most 10 such
@@ -241,11 +246,22 @@ func contactOthers(state *State) {
 	if err != nil {
 		log.Fatalf("Unable to create client; error: %v\n", err)
 	}
-	// Double check that worked by getting the server version.
-	if v, err := client.Discovery().ServerVersion(); err != nil {
-		log.Fatalf("Unable to get server version: %v\n", err)
-	} else {
-		log.Printf("Server version: %#v\n", v)
+
+	// Try to get the server version until <timeout>; we use a timeout because
+	// the pod might not have immediate network connectivity.
+	for start := time.Now(); time.Since(start) < timeout; time.Sleep(sleepTime) {
+		// Double check that worked by getting the server version.
+		if versionInfo, err = client.Discovery().ServerVersion(); err != nil {
+			log.Printf("Unable to get server version: %v; retrying.\n", err)
+		} else {
+			log.Printf("Server version: %#v\n", versionInfo)
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	if err != nil {
+		log.Fatalf("Unable to contact Kubernetes: %v\n", err)
 	}
 
 	for start := time.Now(); time.Since(start) < timeout; time.Sleep(sleepTime) {
@@ -270,7 +286,7 @@ func contactOthers(state *State) {
 
 //getWebserverEndpoints returns the webserver endpoints as a set of String, each in the format like "http://{ip}:{port}"
 func getWebserverEndpoints(client clientset.Interface) sets.String {
-	endpoints, err := client.Core().Endpoints(*namespace).Get(*service, v1.GetOptions{})
+	endpoints, err := client.CoreV1().Endpoints(*namespace).Get(*service, v1.GetOptions{})
 	eps := sets.String{}
 	if err != nil {
 		state.Logf("Unable to read the endpoints for %v/%v: %v.", *namespace, *service, err)

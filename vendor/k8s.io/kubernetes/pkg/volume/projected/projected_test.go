@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -878,7 +878,7 @@ func TestPlugin(t *testing.T) {
 		t.Errorf("Got unexpected path: %s", volumePath)
 	}
 
-	err = mounter.SetUp(nil)
+	err = mounter.SetUp(volume.MounterArgs{})
 	if err != nil {
 		t.Errorf("Failed to setup volume: %v", err)
 	}
@@ -943,7 +943,8 @@ func TestInvalidPathProjected(t *testing.T) {
 		t.Errorf("Got unexpected path: %s", volumePath)
 	}
 
-	err = mounter.SetUp(nil)
+	var mounterArgs volume.MounterArgs
+	err = mounter.SetUp(mounterArgs)
 	if err == nil {
 		t.Errorf("Expected error while setting up secret")
 	}
@@ -994,7 +995,7 @@ func TestPluginReboot(t *testing.T) {
 		t.Errorf("Got unexpected path: %s", volumePath)
 	}
 
-	err = mounter.SetUp(nil)
+	err = mounter.SetUp(volume.MounterArgs{})
 	if err != nil {
 		t.Errorf("Failed to setup volume: %v", err)
 	}
@@ -1046,7 +1047,7 @@ func TestPluginOptional(t *testing.T) {
 		t.Errorf("Got unexpected path: %s", volumePath)
 	}
 
-	err = mounter.SetUp(nil)
+	err = mounter.SetUp(volume.MounterArgs{})
 	if err != nil {
 		t.Errorf("Failed to setup volume: %v", err)
 	}
@@ -1069,14 +1070,14 @@ func TestPluginOptional(t *testing.T) {
 		}
 	}
 
-	datadirSymlink := path.Join(volumePath, "..data")
+	datadirSymlink := filepath.Join(volumePath, "..data")
 	datadir, err := os.Readlink(datadirSymlink)
 	if err != nil && os.IsNotExist(err) {
 		t.Fatalf("couldn't find volume path's data dir, %s", datadirSymlink)
 	} else if err != nil {
 		t.Fatalf("couldn't read symlink, %s", datadirSymlink)
 	}
-	datadirPath := path.Join(volumePath, datadir)
+	datadirPath := filepath.Join(volumePath, datadir)
 
 	infos, err := ioutil.ReadDir(volumePath)
 	if err != nil {
@@ -1144,7 +1145,7 @@ func TestPluginOptionalKeys(t *testing.T) {
 		t.Errorf("Got unexpected path: %s", volumePath)
 	}
 
-	err = mounter.SetUp(nil)
+	err = mounter.SetUp(volume.MounterArgs{})
 	if err != nil {
 		t.Errorf("Failed to setup volume: %v", err)
 	}
@@ -1193,20 +1194,6 @@ func makeSecret(namespace, name string) v1.Secret {
 	}
 }
 
-func configMap(namespace, name string) v1.ConfigMap {
-	return v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-		},
-		Data: map[string]string{
-			"data-1": "value-1",
-			"data-2": "value-2",
-			"data-3": "value-3",
-		},
-	}
-}
-
 func makeProjection(name string, defaultMode int32, kind string) *v1.ProjectedVolumeSource {
 	var item v1.VolumeProjection
 
@@ -1241,7 +1228,7 @@ func makeProjection(name string, defaultMode int32, kind string) *v1.ProjectedVo
 
 func doTestSecretDataInVolume(volumePath string, secret v1.Secret, t *testing.T) {
 	for key, value := range secret.Data {
-		secretDataHostPath := path.Join(volumePath, key)
+		secretDataHostPath := filepath.Join(volumePath, key)
 		if _, err := os.Stat(secretDataHostPath); err != nil {
 			t.Fatalf("SetUp() failed, couldn't find secret data on disk: %v", secretDataHostPath)
 		} else {

@@ -29,6 +29,8 @@ import (
 	"time"
 
 	"github.com/Microsoft/hcsshim"
+	"github.com/Microsoft/hcsshim/hcn"
+
 	"github.com/davecgh/go-spew/spew"
 	"k8s.io/klog"
 
@@ -36,10 +38,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	genericfeatures "k8s.io/apiserver/pkg/features"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/record"
 	apiservice "k8s.io/kubernetes/pkg/api/v1/service"
 	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/proxy"
+	"k8s.io/kubernetes/pkg/proxy/apis/config"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"k8s.io/kubernetes/pkg/util/async"
 )
@@ -82,6 +87,18 @@ type loadBalancerIngressInfo struct {
 	hnsID string
 }
 
+type loadBalancerInfo struct {
+	hnsID string
+}
+
+type loadBalancerFlags struct {
+	isILB          bool
+	isDSR          bool
+	localRoutedVIP bool
+	useMUX         bool
+	preserveDIP    bool
+}
+
 // internal struct for string service information
 type serviceInfo struct {
 	clusterIP                net.IP
@@ -100,11 +117,23 @@ type serviceInfo struct {
 	hnsID                    string
 	nodePorthnsID            string
 	policyApplied            bool
+	remoteEndpoint           *endpointsInfo
+	hns                      HostNetworkService
+	preserveDIP              bool
 }
 
 type hnsNetworkInfo struct {
-	name string
-	id   string
+	name          string
+	id            string
+	networkType   string
+	remoteSubnets []*remoteSubnetInfo
+}
+
+type remoteSubnetInfo struct {
+	destinationPrefix string
+	isolationID       uint16
+	providerAddress   string
+	drMacAddress      string
 }
 
 func Log(v interface{}, message string, level klog.Level) {
@@ -120,12 +149,14 @@ func LogJson(v interface{}, message string, level klog.Level) {
 
 // internal struct for endpoints information
 type endpointsInfo struct {
-	ip         string
-	port       uint16
-	isLocal    bool
-	macAddress string
-	hnsID      string
-	refCount   uint16
+	ip              string
+	port            uint16
+	isLocal         bool
+	macAddress      string
+	hnsID           string
+	refCount        uint16
+	providerAddress string
+	hns             HostNetworkService
 }
 
 //Uses mac prefix and IPv4 address to return a mac address
@@ -139,7 +170,7 @@ func conjureMac(macPrefix string, ip net.IP) string {
 	return "02-11-22-33-44-55"
 }
 
-func newEndpointInfo(ip string, port uint16, isLocal bool) *endpointsInfo {
+func newEndpointInfo(ip string, port uint16, isLocal bool, hns HostNetworkService) *endpointsInfo {
 	info := &endpointsInfo{
 		ip:         ip,
 		port:       port,
@@ -147,9 +178,21 @@ func newEndpointInfo(ip string, port uint16, isLocal bool) *endpointsInfo {
 		macAddress: conjureMac("02-11", net.ParseIP(ip)),
 		refCount:   0,
 		hnsID:      "",
+		hns:        hns,
 	}
 
 	return info
+}
+
+func newSourceVIP(hns HostNetworkService, network string, ip string, mac string, providerAddress string) (*endpointsInfo, error) {
+	hnsEndpoint := &endpointsInfo{
+		ip:              ip,
+		isLocal:         true,
+		macAddress:      mac,
+		providerAddress: providerAddress,
+	}
+	ep, err := hns.createEndpoint(hnsEndpoint, network)
+	return ep, err
 }
 
 func (ep *endpointsInfo) Cleanup() {
@@ -160,14 +203,17 @@ func (ep *endpointsInfo) Cleanup() {
 	// Remove only remote endpoints created by this service
 	if ep.refCount <= 0 && !ep.isLocal {
 		klog.V(4).Infof("Removing endpoints for %v, since no one is referencing it", ep)
-		deleteHnsEndpoint(ep.hnsID)
-		ep.hnsID = ""
+		err := ep.hns.deleteEndpoint(ep.hnsID)
+		if err == nil {
+			ep.hnsID = ""
+		} else {
+			klog.Errorf("Endpoint deletion failed for %v: %v", ep.ip, err)
+		}
 	}
-
 }
 
 // returns a new serviceInfo struct
-func newServiceInfo(svcPortName proxy.ServicePortName, port *v1.ServicePort, service *v1.Service) *serviceInfo {
+func newServiceInfo(svcPortName proxy.ServicePortName, port *v1.ServicePort, service *v1.Service, hns HostNetworkService) *serviceInfo {
 	onlyNodeLocalEndpoints := false
 	if apiservice.RequestsOnlyLocalTraffic(service) {
 		onlyNodeLocalEndpoints = true
@@ -175,9 +221,16 @@ func newServiceInfo(svcPortName proxy.ServicePortName, port *v1.ServicePort, ser
 
 	// set default session sticky max age 180min=10800s
 	stickyMaxAgeSeconds := 10800
-	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
-		// Kube-apiserver side guarantees SessionAffinityConfig won't be nil when session affinity type is ClientIP
+	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP && service.Spec.SessionAffinityConfig != nil {
 		stickyMaxAgeSeconds = int(*service.Spec.SessionAffinityConfig.ClientIP.TimeoutSeconds)
+	}
+
+	klog.Infof("Service %q preserve-destination: %v", svcPortName.NamespacedName.String(), service.Annotations["preserve-destination"])
+
+	preserveDIP := service.Annotations["preserve-destination"] == "true"
+	err := hcn.DSRSupported()
+	if err != nil {
+		preserveDIP = false
 	}
 	info := &serviceInfo{
 		clusterIP: net.ParseIP(service.Spec.ClusterIP),
@@ -193,6 +246,8 @@ func newServiceInfo(svcPortName proxy.ServicePortName, port *v1.ServicePort, ser
 		stickyMaxAgeSeconds:      stickyMaxAgeSeconds,
 		loadBalancerSourceRanges: make([]string, len(service.Spec.LoadBalancerSourceRanges)),
 		onlyNodeLocalEndpoints:   onlyNodeLocalEndpoints,
+		hns:                      hns,
+		preserveDIP:              preserveDIP,
 	}
 
 	copy(info.loadBalancerSourceRanges, service.Spec.LoadBalancerSourceRanges)
@@ -256,17 +311,17 @@ func newEndpointsChangeMap(hostname string) endpointsChangeMap {
 	}
 }
 
-func (ecm *endpointsChangeMap) update(namespacedName *types.NamespacedName, previous, current *v1.Endpoints) bool {
+func (ecm *endpointsChangeMap) update(namespacedName *types.NamespacedName, previous, current *v1.Endpoints, hns HostNetworkService) bool {
 	ecm.lock.Lock()
 	defer ecm.lock.Unlock()
 
 	change, exists := ecm.items[*namespacedName]
 	if !exists {
 		change = &endpointsChange{}
-		change.previous = endpointsToEndpointsMap(previous, ecm.hostname)
+		change.previous = endpointsToEndpointsMap(previous, ecm.hostname, hns)
 		ecm.items[*namespacedName] = change
 	}
-	change.current = endpointsToEndpointsMap(current, ecm.hostname)
+	change.current = endpointsToEndpointsMap(current, ecm.hostname, hns)
 	if reflect.DeepEqual(change.previous, change.current) {
 		delete(ecm.items, *namespacedName)
 	}
@@ -279,7 +334,7 @@ func newServiceChangeMap() serviceChangeMap {
 	}
 }
 
-func (scm *serviceChangeMap) update(namespacedName *types.NamespacedName, previous, current *v1.Service) bool {
+func (scm *serviceChangeMap) update(namespacedName *types.NamespacedName, previous, current *v1.Service, hns HostNetworkService) bool {
 	scm.lock.Lock()
 	defer scm.lock.Unlock()
 
@@ -287,10 +342,10 @@ func (scm *serviceChangeMap) update(namespacedName *types.NamespacedName, previo
 	if !exists {
 		// Service is Added
 		change = &serviceChange{}
-		change.previous = serviceToServiceMap(previous)
+		change.previous = serviceToServiceMap(previous, hns)
 		scm.items[*namespacedName] = change
 	}
-	change.current = serviceToServiceMap(current)
+	change.current = serviceToServiceMap(current, hns)
 	if reflect.DeepEqual(change.previous, change.current) {
 		delete(scm.items, *namespacedName)
 	}
@@ -420,7 +475,11 @@ type Proxier struct {
 	// precomputing some number of those and cache for future reuse.
 	precomputedProbabilities []string
 
-	network hnsNetworkInfo
+	hns       HostNetworkService
+	network   hnsNetworkInfo
+	sourceVip string
+	hostMac   string
+	isDSR     bool
 }
 
 type localPort struct {
@@ -465,6 +524,7 @@ func NewProxier(
 	nodeIP net.IP,
 	recorder record.EventRecorder,
 	healthzServer healthcheck.HealthzUpdater,
+	config config.KubeProxyWinkernelConfiguration,
 ) (*Proxier, error) {
 	masqueradeValue := 1 << uint(masqueradeBit)
 	masqueradeMark := fmt.Sprintf("%#08x/%#08x", masqueradeValue, masqueradeValue)
@@ -479,19 +539,83 @@ func NewProxier(
 	}
 
 	healthChecker := healthcheck.NewServer(hostname, recorder, nil, nil) // use default implementations of deps
-
-	// TODO : Make this a param
-	hnsNetworkName := os.Getenv("KUBE_NETWORK")
-	if len(hnsNetworkName) == 0 {
-		return nil, fmt.Errorf("Environment variable KUBE_NETWORK not initialized")
+	var hns HostNetworkService
+	hns = hnsV1{}
+	supportedFeatures := hcn.GetSupportedFeatures()
+	if supportedFeatures.Api.V2 {
+		hns = hnsV2{}
 	}
-	hnsNetwork, err := getHnsNetworkInfo(hnsNetworkName)
-	if err != nil {
-		klog.Fatalf("Unable to find Hns Network specified by %s. Please check environment variable KUBE_NETWORK", hnsNetworkName)
+
+	hnsNetworkName := config.NetworkName
+	if len(hnsNetworkName) == 0 {
+		klog.V(3).Infof("network-name flag not set. Checking environment variable")
+		hnsNetworkName = os.Getenv("KUBE_NETWORK")
+		if len(hnsNetworkName) == 0 {
+			return nil, fmt.Errorf("Environment variable KUBE_NETWORK and network-flag not initialized")
+		}
+	}
+
+	klog.V(3).Infof("Cleaning up old HNS policy lists")
+	deleteAllHnsLoadBalancerPolicy()
+
+	// Get HNS network information
+	hnsNetworkInfo, err := hns.getNetworkByName(hnsNetworkName)
+	for err != nil {
+		klog.Errorf("Unable to find HNS Network specified by %s. Please check network name and CNI deployment", hnsNetworkName)
+		time.Sleep(1 * time.Second)
+		hnsNetworkInfo, err = hns.getNetworkByName(hnsNetworkName)
+	}
+
+	// Network could have been detected before Remote Subnet Routes are applied or ManagementIP is updated
+	// Sleep and update the network to include new information
+	if hnsNetworkInfo.networkType == "Overlay" {
+		time.Sleep(10 * time.Second)
+		hnsNetworkInfo, err = hns.getNetworkByName(hnsNetworkName)
+		if err != nil {
+			return nil, fmt.Errorf("Could not find HNS network %s", hnsNetworkName)
+		}
+	}
+
+	klog.V(1).Infof("Hns Network loaded with info = %v", hnsNetworkInfo)
+	isDSR := config.EnableDSR
+	if isDSR && !utilfeature.DefaultFeatureGate.Enabled(genericfeatures.WinDSR) {
+		return nil, fmt.Errorf("WinDSR feature gate not enabled")
+	}
+	err = hcn.DSRSupported()
+	if isDSR && err != nil {
 		return nil, err
 	}
 
-	klog.V(1).Infof("Hns Network loaded with info = %v", hnsNetwork)
+	var sourceVip string
+	var hostMac string
+	if hnsNetworkInfo.networkType == "Overlay" {
+		if !utilfeature.DefaultFeatureGate.Enabled(genericfeatures.WinOverlay) {
+			return nil, fmt.Errorf("WinOverlay feature gate not enabled")
+		}
+		err = hcn.RemoteSubnetSupported()
+		if err != nil {
+			return nil, err
+		}
+		sourceVip = config.SourceVip
+		if len(sourceVip) == 0 {
+			return nil, fmt.Errorf("source-vip flag not set")
+		}
+
+		interfaces, _ := net.Interfaces() //TODO create interfaces
+		for _, inter := range interfaces {
+			addresses, _ := inter.Addrs()
+			for _, addr := range addresses {
+				addrIP, _, _ := net.ParseCIDR(addr.String())
+				if addrIP.String() == nodeIP.String() {
+					klog.V(2).Infof("Host MAC address is %s", inter.HardwareAddr.String())
+					hostMac = inter.HardwareAddr.String()
+				}
+			}
+		}
+		if len(hostMac) == 0 {
+			return nil, fmt.Errorf("Could not find host mac address for %s", nodeIP)
+		}
+	}
 
 	proxier := &Proxier{
 		portsMap:         make(map[localPort]closeable),
@@ -507,7 +631,11 @@ func NewProxier(
 		recorder:         recorder,
 		healthChecker:    healthChecker,
 		healthzServer:    healthzServer,
-		network:          *hnsNetwork,
+		hns:              hns,
+		network:          *hnsNetworkInfo,
+		sourceVip:        sourceVip,
+		hostMac:          hostMac,
+		isDSR:            isDSR,
 	}
 
 	burstSyncs := 2
@@ -536,27 +664,30 @@ func (svcInfo *serviceInfo) cleanupAllPolicies(endpoints []*endpointsInfo) {
 	for _, ep := range endpoints {
 		ep.Cleanup()
 	}
+	if svcInfo.remoteEndpoint != nil {
+		svcInfo.remoteEndpoint.Cleanup()
+	}
 
 	svcInfo.policyApplied = false
 }
 
 func (svcInfo *serviceInfo) deleteAllHnsLoadBalancerPolicy() {
 	// Remove the Hns Policy corresponding to this service
-	deleteHnsLoadBalancerPolicy(svcInfo.hnsID)
+	hns := svcInfo.hns
+	hns.deleteLoadBalancer(svcInfo.hnsID)
 	svcInfo.hnsID = ""
 
-	deleteHnsLoadBalancerPolicy(svcInfo.nodePorthnsID)
+	hns.deleteLoadBalancer(svcInfo.nodePorthnsID)
 	svcInfo.nodePorthnsID = ""
 
-	for _, externalIp := range svcInfo.externalIPs {
-		deleteHnsLoadBalancerPolicy(externalIp.hnsID)
-		externalIp.hnsID = ""
+	for _, externalIP := range svcInfo.externalIPs {
+		hns.deleteLoadBalancer(externalIP.hnsID)
+		externalIP.hnsID = ""
 	}
-	for _, lbIngressIp := range svcInfo.loadBalancerIngressIPs {
-		deleteHnsLoadBalancerPolicy(lbIngressIp.hnsID)
-		lbIngressIp.hnsID = ""
+	for _, lbIngressIP := range svcInfo.loadBalancerIngressIPs {
+		hns.deleteLoadBalancer(lbIngressIP.hnsID)
+		lbIngressIP.hnsID = ""
 	}
-
 }
 
 func deleteAllHnsLoadBalancerPolicy() {
@@ -574,87 +705,6 @@ func deleteAllHnsLoadBalancerPolicy() {
 
 }
 
-// getHnsLoadBalancer returns the LoadBalancer policy resource, if already found.
-// If not, it would create one and return
-func getHnsLoadBalancer(endpoints []hcsshim.HNSEndpoint, isILB bool, vip string, protocol uint16, internalPort uint16, externalPort uint16) (*hcsshim.PolicyList, error) {
-	plists, err := hcsshim.HNSListPolicyListRequest()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, plist := range plists {
-		if len(plist.EndpointReferences) != len(endpoints) {
-			continue
-		}
-		// Validate if input meets any of the policy lists
-		elbPolicy := hcsshim.ELBPolicy{}
-		if err = json.Unmarshal(plist.Policies[0], &elbPolicy); err != nil {
-			continue
-		}
-		if elbPolicy.Protocol == protocol && elbPolicy.InternalPort == internalPort && elbPolicy.ExternalPort == externalPort && elbPolicy.ILB == isILB {
-			if len(vip) > 0 {
-				if len(elbPolicy.VIPs) == 0 || elbPolicy.VIPs[0] != vip {
-					continue
-				}
-			}
-			LogJson(plist, "Found existing Hns loadbalancer policy resource", 1)
-			return &plist, nil
-
-		}
-	}
-	//TODO: sourceVip is not used. If required, expose this as a param
-	var sourceVip string
-	lb, err := hcsshim.AddLoadBalancer(
-		endpoints,
-		isILB,
-		sourceVip,
-		vip,
-		protocol,
-		internalPort,
-		externalPort,
-	)
-
-	if err == nil {
-		LogJson(lb, "Hns loadbalancer policy resource", 1)
-	}
-	return lb, err
-}
-
-func deleteHnsLoadBalancerPolicy(hnsID string) {
-	if len(hnsID) == 0 {
-		// Return silently
-		return
-	}
-
-	// Cleanup HNS policies
-	hnsloadBalancer, err := hcsshim.GetPolicyListByID(hnsID)
-	if err != nil {
-		klog.Errorf("%v", err)
-		return
-	}
-	LogJson(hnsloadBalancer, "Removing Policy", 2)
-
-	_, err = hnsloadBalancer.Delete()
-	if err != nil {
-		klog.Errorf("%v", err)
-	}
-}
-
-func deleteHnsEndpoint(hnsID string) {
-	hnsendpoint, err := hcsshim.GetHNSEndpointByID(hnsID)
-	if err != nil {
-		klog.Errorf("%v", err)
-		return
-	}
-
-	_, err = hnsendpoint.Delete()
-	if err != nil {
-		klog.Errorf("%v", err)
-	}
-
-	klog.V(3).Infof("Remote endpoint resource deleted id %s", hnsID)
-}
-
 func getHnsNetworkInfo(hnsNetworkName string) (*hnsNetworkInfo, error) {
 	hnsnetwork, err := hcsshim.GetHNSNetworkByName(hnsNetworkName)
 	if err != nil {
@@ -663,27 +713,10 @@ func getHnsNetworkInfo(hnsNetworkName string) (*hnsNetworkInfo, error) {
 	}
 
 	return &hnsNetworkInfo{
-		id:   hnsnetwork.Id,
-		name: hnsnetwork.Name,
+		id:          hnsnetwork.Id,
+		name:        hnsnetwork.Name,
+		networkType: hnsnetwork.Type,
 	}, nil
-}
-
-func getHnsEndpointByIpAddress(ip net.IP, networkName string) (*hcsshim.HNSEndpoint, error) {
-	hnsnetwork, err := hcsshim.GetHNSNetworkByName(networkName)
-	if err != nil {
-		klog.Errorf("%v", err)
-		return nil, err
-	}
-
-	endpoints, err := hcsshim.HNSListEndpointRequest()
-	for _, endpoint := range endpoints {
-		equal := reflect.DeepEqual(endpoint.IPAddress, ip)
-		if equal && endpoint.VirtualNetwork == hnsnetwork.Id {
-			return &endpoint, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Endpoint %v not found on network %s", ip, networkName)
 }
 
 // Sync is called to synchronize the proxier state to hns as soon as possible.
@@ -714,21 +747,21 @@ func (proxier *Proxier) isInitialized() bool {
 
 func (proxier *Proxier) OnServiceAdd(service *v1.Service) {
 	namespacedName := types.NamespacedName{Namespace: service.Namespace, Name: service.Name}
-	if proxier.serviceChanges.update(&namespacedName, nil, service) && proxier.isInitialized() {
+	if proxier.serviceChanges.update(&namespacedName, nil, service, proxier.hns) && proxier.isInitialized() {
 		proxier.syncRunner.Run()
 	}
 }
 
 func (proxier *Proxier) OnServiceUpdate(oldService, service *v1.Service) {
 	namespacedName := types.NamespacedName{Namespace: service.Namespace, Name: service.Name}
-	if proxier.serviceChanges.update(&namespacedName, oldService, service) && proxier.isInitialized() {
+	if proxier.serviceChanges.update(&namespacedName, oldService, service, proxier.hns) && proxier.isInitialized() {
 		proxier.syncRunner.Run()
 	}
 }
 
 func (proxier *Proxier) OnServiceDelete(service *v1.Service) {
 	namespacedName := types.NamespacedName{Namespace: service.Namespace, Name: service.Name}
-	if proxier.serviceChanges.update(&namespacedName, service, nil) && proxier.isInitialized() {
+	if proxier.serviceChanges.update(&namespacedName, service, nil, proxier.hns) && proxier.isInitialized() {
 		proxier.syncRunner.Run()
 	}
 }
@@ -762,8 +795,8 @@ func shouldSkipService(svcName types.NamespacedName, service *v1.Service) bool {
 func (proxier *Proxier) updateServiceMap() (result updateServiceMapResult) {
 	result.staleServices = sets.NewString()
 
-	var serviceMap proxyServiceMap = proxier.serviceMap
-	var changes *serviceChangeMap = &proxier.serviceChanges
+	serviceMap := proxier.serviceMap
+	changes := &proxier.serviceChanges
 
 	func() {
 		changes.lock.Lock()
@@ -789,21 +822,21 @@ func (proxier *Proxier) updateServiceMap() (result updateServiceMapResult) {
 
 func (proxier *Proxier) OnEndpointsAdd(endpoints *v1.Endpoints) {
 	namespacedName := types.NamespacedName{Namespace: endpoints.Namespace, Name: endpoints.Name}
-	if proxier.endpointsChanges.update(&namespacedName, nil, endpoints) && proxier.isInitialized() {
+	if proxier.endpointsChanges.update(&namespacedName, nil, endpoints, proxier.hns) && proxier.isInitialized() {
 		proxier.syncRunner.Run()
 	}
 }
 
 func (proxier *Proxier) OnEndpointsUpdate(oldEndpoints, endpoints *v1.Endpoints) {
 	namespacedName := types.NamespacedName{Namespace: endpoints.Namespace, Name: endpoints.Name}
-	if proxier.endpointsChanges.update(&namespacedName, oldEndpoints, endpoints) && proxier.isInitialized() {
+	if proxier.endpointsChanges.update(&namespacedName, oldEndpoints, endpoints, proxier.hns) && proxier.isInitialized() {
 		proxier.syncRunner.Run()
 	}
 }
 
 func (proxier *Proxier) OnEndpointsDelete(endpoints *v1.Endpoints) {
 	namespacedName := types.NamespacedName{Namespace: endpoints.Namespace, Name: endpoints.Name}
-	if proxier.endpointsChanges.update(&namespacedName, endpoints, nil) && proxier.isInitialized() {
+	if proxier.endpointsChanges.update(&namespacedName, endpoints, nil, proxier.hns) && proxier.isInitialized() {
 		proxier.syncRunner.Run()
 	}
 }
@@ -818,14 +851,33 @@ func (proxier *Proxier) OnEndpointsSynced() {
 	proxier.syncProxyRules()
 }
 
+func (proxier *Proxier) cleanupAllPolicies() {
+	for svcName, svcInfo := range proxier.serviceMap {
+		svcInfo.cleanupAllPolicies(proxier.endpointsMap[svcName])
+	}
+}
+
+func isNetworkNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := err.(hcn.NetworkNotFoundError); ok {
+		return true
+	}
+	if _, ok := err.(hcsshim.NetworkNotFoundError); ok {
+		return true
+	}
+	return false
+}
+
 // <endpointsMap> is updated by this function (based on the given changes).
 // <changes> map is cleared after applying them.
 func (proxier *Proxier) updateEndpointsMap() (result updateEndpointMapResult) {
 	result.staleEndpoints = make(map[endpointServicePair]bool)
 	result.staleServiceNames = make(map[proxy.ServicePortName]bool)
 
-	var endpointsMap proxyEndpointsMap = proxier.endpointsMap
-	var changes *endpointsChangeMap = &proxier.endpointsChanges
+	endpointsMap := proxier.endpointsMap
+	changes := &proxier.endpointsChanges
 
 	func() {
 		changes.lock.Lock()
@@ -867,7 +919,7 @@ func getLocalIPs(endpointsMap proxyEndpointsMap) map[types.NamespacedName]sets.S
 // This function is used for incremental updated of endpointsMap.
 //
 // NOTE: endpoints object should NOT be modified.
-func endpointsToEndpointsMap(endpoints *v1.Endpoints, hostname string) proxyEndpointsMap {
+func endpointsToEndpointsMap(endpoints *v1.Endpoints, hostname string, hns HostNetworkService) proxyEndpointsMap {
 	if endpoints == nil {
 		return nil
 	}
@@ -880,7 +932,7 @@ func endpointsToEndpointsMap(endpoints *v1.Endpoints, hostname string) proxyEndp
 		for i := range ss.Ports {
 			port := &ss.Ports[i]
 			if port.Port == 0 {
-				klog.Warningf("ignoring invalid endpoint port %s", port.Name)
+				klog.Warningf("Ignoring invalid endpoint port %s", port.Name)
 				continue
 			}
 			svcPortName := proxy.ServicePortName{
@@ -890,11 +942,11 @@ func endpointsToEndpointsMap(endpoints *v1.Endpoints, hostname string) proxyEndp
 			for i := range ss.Addresses {
 				addr := &ss.Addresses[i]
 				if addr.IP == "" {
-					klog.Warningf("ignoring invalid endpoint port %s with empty host", port.Name)
+					klog.Warningf("Ignoring invalid endpoint port %s with empty host", port.Name)
 					continue
 				}
 				isLocal := addr.NodeName != nil && *addr.NodeName == hostname
-				epInfo := newEndpointInfo(addr.IP, uint16(port.Port), isLocal)
+				epInfo := newEndpointInfo(addr.IP, uint16(port.Port), isLocal, hns)
 				endpointsMap[svcPortName] = append(endpointsMap[svcPortName], epInfo)
 			}
 			if klog.V(3) {
@@ -912,7 +964,7 @@ func endpointsToEndpointsMap(endpoints *v1.Endpoints, hostname string) proxyEndp
 // Translates single Service object to proxyServiceMap.
 //
 // NOTE: service object should NOT be modified.
-func serviceToServiceMap(service *v1.Service) proxyServiceMap {
+func serviceToServiceMap(service *v1.Service, hns HostNetworkService) proxyServiceMap {
 	if service == nil {
 		return nil
 	}
@@ -925,7 +977,7 @@ func serviceToServiceMap(service *v1.Service) proxyServiceMap {
 	for i := range service.Spec.Ports {
 		servicePort := &service.Spec.Ports[i]
 		svcPortName := proxy.ServicePortName{NamespacedName: svcName, Port: servicePort.Name}
-		serviceMap[svcPortName] = newServiceInfo(svcPortName, servicePort, service)
+		serviceMap[svcPortName] = newServiceInfo(svcPortName, servicePort, service, hns)
 	}
 	return serviceMap
 }
@@ -938,12 +990,27 @@ func (proxier *Proxier) syncProxyRules() {
 
 	start := time.Now()
 	defer func() {
-		SyncProxyRulesLatency.Observe(sinceInMicroseconds(start))
+		SyncProxyRulesLatency.Observe(sinceInSeconds(start))
+		DeprecatedSyncProxyRulesLatency.Observe(sinceInMicroseconds(start))
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
 	}()
 	// don't sync rules till we've received services and endpoints
 	if !proxier.endpointsSynced || !proxier.servicesSynced {
 		klog.V(2).Info("Not syncing hns until Services and Endpoints have been received from master")
+		return
+	}
+
+	hnsNetworkName := proxier.network.name
+	hns := proxier.hns
+
+	prevNetworkID := proxier.network.id
+	updatedNetwork, err := hns.getNetworkByName(hnsNetworkName)
+	if updatedNetwork == nil || updatedNetwork.id != prevNetworkID || isNetworkNotFoundError(err) {
+		klog.Infof("The HNS network %s is not present or has changed since the last sync. Please check the CNI deployment", hnsNetworkName)
+		proxier.cleanupAllPolicies()
+		if updatedNetwork != nil {
+			proxier.network = *updatedNetwork
+		}
 		return
 	}
 
@@ -962,6 +1029,17 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 	}
 
+	if proxier.network.networkType == "Overlay" {
+		existingSourceVip, err := hns.getEndpointByIpAddress(proxier.sourceVip, hnsNetworkName)
+		if existingSourceVip == nil {
+			_, err = newSourceVIP(hns, hnsNetworkName, proxier.sourceVip, proxier.hostMac, proxier.nodeIP.String())
+		}
+		if err != nil {
+			klog.Errorf("Source Vip endpoint creation failed: %v", err)
+			return
+		}
+	}
+
 	klog.V(3).Infof("Syncing Policies")
 
 	// Program HNS by adding corresponding policies for each service.
@@ -971,12 +1049,36 @@ func (proxier *Proxier) syncProxyRules() {
 			continue
 		}
 
-		var hnsEndpoints []hcsshim.HNSEndpoint
+		if proxier.network.networkType == "Overlay" {
+			serviceVipEndpoint, _ := hns.getEndpointByIpAddress(svcInfo.clusterIP.String(), hnsNetworkName)
+			if serviceVipEndpoint == nil {
+				klog.V(4).Infof("No existing remote endpoint for service VIP %v", svcInfo.clusterIP.String())
+				hnsEndpoint := &endpointsInfo{
+					ip:              svcInfo.clusterIP.String(),
+					isLocal:         false,
+					macAddress:      proxier.hostMac,
+					providerAddress: proxier.nodeIP.String(),
+				}
+
+				newHnsEndpoint, err := hns.createEndpoint(hnsEndpoint, hnsNetworkName)
+				if err != nil {
+					klog.Errorf("Remote endpoint creation failed for service VIP: %v", err)
+					continue
+				}
+
+				newHnsEndpoint.refCount++
+				svcInfo.remoteEndpoint = newHnsEndpoint
+			}
+		}
+
+		var hnsEndpoints []endpointsInfo
+		var hnsLocalEndpoints []endpointsInfo
 		klog.V(4).Infof("====Applying Policy for %s====", svcName)
 		// Create Remote endpoints for every endpoint, corresponding to the service
+		containsPublicIP := false
 
 		for _, ep := range proxier.endpointsMap[svcName] {
-			var newHnsEndpoint *hcsshim.HNSEndpoint
+			var newHnsEndpoint *endpointsInfo
 			hnsNetworkName := proxier.network.name
 			var err error
 
@@ -988,44 +1090,83 @@ func (proxier *Proxier) syncProxyRules() {
 			}
 
 			if len(ep.hnsID) > 0 {
-				newHnsEndpoint, err = hcsshim.GetHNSEndpointByID(ep.hnsID)
+				newHnsEndpoint, err = hns.getEndpointByID(ep.hnsID)
 			}
 
 			if newHnsEndpoint == nil {
 				// First check if an endpoint resource exists for this IP, on the current host
 				// A Local endpoint could exist here already
 				// A remote endpoint was already created and proxy was restarted
-				newHnsEndpoint, err = getHnsEndpointByIpAddress(net.ParseIP(ep.ip), hnsNetworkName)
+				newHnsEndpoint, err = hns.getEndpointByIpAddress(ep.ip, hnsNetworkName)
 			}
-
 			if newHnsEndpoint == nil {
 				if ep.isLocal {
 					klog.Errorf("Local endpoint not found for %v: err: %v on network %s", ep.ip, err, hnsNetworkName)
 					continue
 				}
-				// hns Endpoint resource was not found, create one
-				hnsnetwork, err := hcsshim.GetHNSNetworkByName(hnsNetworkName)
-				if err != nil {
-					klog.Errorf("%v", err)
-					continue
-				}
 
-				hnsEndpoint := &hcsshim.HNSEndpoint{
-					MacAddress: ep.macAddress,
-					IPAddress:  net.ParseIP(ep.ip),
-				}
+				if proxier.network.networkType == "Overlay" {
+					klog.Infof("Updating network %v to check for new remote subnet policies", proxier.network.name)
+					networkName := proxier.network.name
+					updatedNetwork, err := hns.getNetworkByName(networkName)
+					if err != nil {
+						klog.Errorf("Unable to find HNS Network specified by %s. Please check network name and CNI deployment", hnsNetworkName)
+						proxier.cleanupAllPolicies()
+						return
+					}
+					proxier.network = *updatedNetwork
+					var providerAddress string
+					for _, rs := range proxier.network.remoteSubnets {
+						_, ipNet, err := net.ParseCIDR(rs.destinationPrefix)
+						if err != nil {
+							klog.Fatalf("%v", err)
+						}
+						if ipNet.Contains(net.ParseIP(ep.ip)) {
+							providerAddress = rs.providerAddress
+						}
+						if ep.ip == rs.providerAddress {
+							providerAddress = rs.providerAddress
+						}
+					}
+					if len(providerAddress) == 0 {
+						klog.Errorf("Could not find provider address for %s", ep.ip)
+						providerAddress = proxier.nodeIP.String()
+						containsPublicIP = true
+					}
+					hnsEndpoint := &endpointsInfo{
+						ip:              ep.ip,
+						isLocal:         false,
+						macAddress:      conjureMac("02-11", net.ParseIP(ep.ip)),
+						providerAddress: providerAddress,
+					}
 
-				newHnsEndpoint, err = hnsnetwork.CreateRemoteEndpoint(hnsEndpoint)
-				if err != nil {
-					klog.Errorf("Remote endpoint creation failed: %v", err)
-					continue
+					newHnsEndpoint, err = hns.createEndpoint(hnsEndpoint, hnsNetworkName)
+					if err != nil {
+						klog.Errorf("Remote endpoint creation failed: %v, %s", err, spew.Sdump(hnsEndpoint))
+						continue
+					}
+				} else {
+					hnsEndpoint := &endpointsInfo{
+						ip:         ep.ip,
+						isLocal:    false,
+						macAddress: ep.macAddress,
+					}
+
+					newHnsEndpoint, err = hns.createEndpoint(hnsEndpoint, hnsNetworkName)
+					if err != nil {
+						klog.Errorf("Remote endpoint creation failed: %v", err)
+						continue
+					}
 				}
 			}
 
 			// Save the hnsId for reference
 			LogJson(newHnsEndpoint, "Hns Endpoint resource", 1)
 			hnsEndpoints = append(hnsEndpoints, *newHnsEndpoint)
-			ep.hnsID = newHnsEndpoint.Id
+			if newHnsEndpoint.isLocal {
+				hnsLocalEndpoints = append(hnsLocalEndpoints, *newHnsEndpoint)
+			}
+			ep.hnsID = newHnsEndpoint.hnsID
 			ep.refCount++
 			Log(ep, "Endpoint resource found", 3)
 		}
@@ -1043,11 +1184,15 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 
 		klog.V(4).Infof("Trying to Apply Policies for service %s", spew.Sdump(svcInfo))
-		var hnsLoadBalancer *hcsshim.PolicyList
-
-		hnsLoadBalancer, err := getHnsLoadBalancer(
+		var hnsLoadBalancer *loadBalancerInfo
+		var sourceVip = proxier.sourceVip
+		if containsPublicIP {
+			sourceVip = proxier.nodeIP.String()
+		}
+		hnsLoadBalancer, err := hns.getLoadBalancer(
 			hnsEndpoints,
-			false,
+			loadBalancerFlags{isDSR: proxier.isDSR},
+			sourceVip,
 			svcInfo.clusterIP.String(),
 			Enum(svcInfo.protocol),
 			uint16(svcInfo.targetPort),
@@ -1058,15 +1203,16 @@ func (proxier *Proxier) syncProxyRules() {
 			continue
 		}
 
-		svcInfo.hnsID = hnsLoadBalancer.ID
-		klog.V(3).Infof("Hns LoadBalancer resource created for cluster ip resources %v, Id [%s]", svcInfo.clusterIP, hnsLoadBalancer.ID)
+		svcInfo.hnsID = hnsLoadBalancer.hnsID
+		klog.V(3).Infof("Hns LoadBalancer resource created for cluster ip resources %v, Id [%s]", svcInfo.clusterIP, hnsLoadBalancer.hnsID)
 
 		// If nodePort is specified, user should be able to use nodeIP:nodePort to reach the backend endpoints
 		if svcInfo.nodePort > 0 {
-			hnsLoadBalancer, err := getHnsLoadBalancer(
+			hnsLoadBalancer, err := hns.getLoadBalancer(
 				hnsEndpoints,
-				false,
-				"", // VIP has to be empty to automatically select the nodeIP
+				loadBalancerFlags{localRoutedVIP: true},
+				sourceVip,
+				"",
 				Enum(svcInfo.protocol),
 				uint16(svcInfo.targetPort),
 				uint16(svcInfo.nodePort),
@@ -1076,17 +1222,18 @@ func (proxier *Proxier) syncProxyRules() {
 				continue
 			}
 
-			svcInfo.nodePorthnsID = hnsLoadBalancer.ID
-			klog.V(3).Infof("Hns LoadBalancer resource created for nodePort resources %v, Id [%s]", svcInfo.clusterIP, hnsLoadBalancer.ID)
+			svcInfo.nodePorthnsID = hnsLoadBalancer.hnsID
+			klog.V(3).Infof("Hns LoadBalancer resource created for nodePort resources %v, Id [%s]", svcInfo.clusterIP, hnsLoadBalancer.hnsID)
 		}
 
 		// Create a Load Balancer Policy for each external IP
-		for _, externalIp := range svcInfo.externalIPs {
+		for _, externalIP := range svcInfo.externalIPs {
 			// Try loading existing policies, if already available
-			hnsLoadBalancer, err := getHnsLoadBalancer(
+			hnsLoadBalancer, err = hns.getLoadBalancer(
 				hnsEndpoints,
-				false,
-				externalIp.ip,
+				loadBalancerFlags{},
+				sourceVip,
+				externalIP.ip,
 				Enum(svcInfo.protocol),
 				uint16(svcInfo.targetPort),
 				uint16(svcInfo.port),
@@ -1095,16 +1242,21 @@ func (proxier *Proxier) syncProxyRules() {
 				klog.Errorf("Policy creation failed: %v", err)
 				continue
 			}
-			externalIp.hnsID = hnsLoadBalancer.ID
-			klog.V(3).Infof("Hns LoadBalancer resource created for externalIp resources %v, Id[%s]", externalIp, hnsLoadBalancer.ID)
+			externalIP.hnsID = hnsLoadBalancer.hnsID
+			klog.V(3).Infof("Hns LoadBalancer resource created for externalIP resources %v, Id[%s]", externalIP, hnsLoadBalancer.hnsID)
 		}
 		// Create a Load Balancer Policy for each loadbalancer ingress
-		for _, lbIngressIp := range svcInfo.loadBalancerIngressIPs {
+		for _, lbIngressIP := range svcInfo.loadBalancerIngressIPs {
 			// Try loading existing policies, if already available
-			hnsLoadBalancer, err := getHnsLoadBalancer(
-				hnsEndpoints,
-				false,
-				lbIngressIp.ip,
+			lbIngressEndpoints := hnsEndpoints
+			if svcInfo.preserveDIP {
+				lbIngressEndpoints = hnsLocalEndpoints
+			}
+			hnsLoadBalancer, err := hns.getLoadBalancer(
+				lbIngressEndpoints,
+				loadBalancerFlags{isDSR: svcInfo.preserveDIP || proxier.isDSR, useMUX: svcInfo.preserveDIP, preserveDIP: svcInfo.preserveDIP},
+				sourceVip,
+				lbIngressIP.ip,
 				Enum(svcInfo.protocol),
 				uint16(svcInfo.targetPort),
 				uint16(svcInfo.port),
@@ -1113,8 +1265,8 @@ func (proxier *Proxier) syncProxyRules() {
 				klog.Errorf("Policy creation failed: %v", err)
 				continue
 			}
-			lbIngressIp.hnsID = hnsLoadBalancer.ID
-			klog.V(3).Infof("Hns LoadBalancer resource created for loadBalancer Ingress resources %v", lbIngressIp)
+			lbIngressIP.hnsID = hnsLoadBalancer.hnsID
+			klog.V(3).Infof("Hns LoadBalancer resource created for loadBalancer Ingress resources %v", lbIngressIP)
 		}
 		svcInfo.policyApplied = true
 		Log(svcInfo, "+++Policy Successfully applied for service +++", 2)
@@ -1124,6 +1276,7 @@ func (proxier *Proxier) syncProxyRules() {
 	if proxier.healthzServer != nil {
 		proxier.healthzServer.UpdateTimestamp()
 	}
+	SyncProxyRulesLastTimestamp.SetToCurrentTime()
 
 	// Update healthchecks.  The endpoints list might include services that are
 	// not "OnlyLocal", but the services list will not, and the healthChecker

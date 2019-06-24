@@ -51,7 +51,7 @@ You can check if Go is in your system with the following command:
 go version
 ```
 
-Preferably Go `1.11.5` or greater should be installed. 
+Preferably Go `1.12.5` or greater should be installed. 
 
 Correct automatic formatting of the source with `gofmt` requires at least
 `1.11.0`.
@@ -119,3 +119,4 @@ See also: the Kubernetes [community page].
 [@munnerz]: https://github.com/munnerz
 [community page]: http://kubernetes.io/community/
 [modules]: https://github.com/golang/go/wiki/Modules
+[SIG-Testing Mailing List]: https://groups.google.com/forum/#!forum/kubernetes-sig-testing

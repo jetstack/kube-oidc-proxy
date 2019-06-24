@@ -21,8 +21,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sigs.k8s.io/kind/pkg/util"
 	"strings"
+
+	"sigs.k8s.io/kind/pkg/util"
 
 	"github.com/pkg/errors"
 
@@ -83,7 +84,12 @@ func (b *DockerBuildBits) Build() error {
 	}
 
 	// capture version info
-	return buildVersionFile(b.kubeRoot)
+	_, err = buildVersionFile(b.kubeRoot)
+	return err
+}
+
+func dockerBuildOsAndArch() string {
+	return "linux/" + util.GetArch()
 }
 
 // binary and image build when we have `make quick-release-images` support
@@ -99,7 +105,7 @@ func (b *DockerBuildBits) build() error {
 		"build/run.sh",
 		"make", "all",
 		"WHAT="+strings.Join(what, " "),
-		"KUBE_BUILD_PLATFORMS="+util.GetOSandArch("/"),
+		"KUBE_BUILD_PLATFORMS="+dockerBuildOsAndArch(),
 		// ensure the build isn't especially noisy..
 		"KUBE_VERBOSE=0",
 	)
@@ -143,7 +149,7 @@ func (b *DockerBuildBits) buildBash() error {
 	}
 	cmd := exec.Command(
 		"build/run.sh", "make", "all",
-		"WHAT="+strings.Join(what, " "), "KUBE_BUILD_PLATFORMS="+util.GetOSandArch("/"),
+		"WHAT="+strings.Join(what, " "), "KUBE_BUILD_PLATFORMS="+dockerBuildOsAndArch(),
 	)
 	// ensure the build isn't especially noisy..., inheret existing env
 	cmd.SetEnv(
@@ -171,7 +177,7 @@ func (b *DockerBuildBits) buildBash() error {
 		"source build/lib/release.sh;",
 		"kube::version::get_version_vars;",
 		fmt.Sprintf(`kube::release::create_docker_images_for_server "${LOCAL_OUTPUT_ROOT}/dockerized/bin/%s" "%s"`,
-			util.GetOSandArch("/"), util.GetArch()),
+			dockerBuildOsAndArch(), util.GetArch()),
 	}
 	cmd = exec.Command("bash", "-c", strings.Join(buildImages, " "))
 	cmd.SetEnv(

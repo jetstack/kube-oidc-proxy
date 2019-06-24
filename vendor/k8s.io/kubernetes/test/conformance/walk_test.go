@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -80,6 +81,18 @@ var _ = framework.KubeDescribe("Feature", func() {
 		Description: `By default the stdout and stderr from the process
 being executed in a pod MUST be sent to the pod's logs.` + "\n\n"}},
 	},
+	{"e2e/foo.go", `
+var _ = framework.KubeDescribe("Feature", func() {
+	Context("with context and extra spaces before It block should still pick up Testname", func() {
+		//					Testname: Test with spaces		
+		//Description: Should pick up testname even if it is not within 3 spaces
+		//even when executed from memory.
+		framework.ConformanceIt("should work", func() {})
+	})
+})`, []conformanceData{{URL: "https://github.com/kubernetes/kubernetes/tree/master/e2e/foo.go#L8", TestName: "Test with spaces",
+		Description: `Should pick up testname even if it is not within 3 spaces
+even when executed from memory.` + "\n\n"}},
+	},
 }
 
 func TestConformance(t *testing.T) {
@@ -112,6 +125,60 @@ func TestNormalizeTestNames(t *testing.T) {
 		actualName := normalizeTestName(tc.rawName)
 		if actualName != tc.normalizedName {
 			t.Errorf("test case[%d]: expected normalized name %q, got %q", i, tc.normalizedName, actualName)
+		}
+	}
+}
+
+func TestValidateTestName(t *testing.T) {
+	testCases := []struct {
+		testName  string
+		tagString string
+	}{
+		{
+			"a test case with no tags",
+			"",
+		},
+		{
+			"a test case with valid tags [LinuxOnly] [NodeConformance] [Serial]",
+			"",
+		},
+		{
+			"a flaky test case that is invalid [Flaky]",
+			"[Flaky]",
+		},
+		{
+			"a disruptive test case that is invalid [Disruptive]",
+			"[Disruptive]",
+		},
+		{
+			"a feature test case that is invalid [Feature:Awesome]",
+			"[Feature:Awesome]",
+		},
+		{
+			"an alpha test case that is invalid [Alpha]",
+			"[Alpha]",
+		},
+		{
+			"a test case with multiple invalid tags [Flaky][Disruptive] [Feature:Awesome] [Alpha]",
+			"[Flaky],[Disruptive],[Feature:Awesome],[Alpha]",
+		},
+		{
+			"[sig-awesome] [Disruptive] a test case with valid and invalid tags [Alpha] [Serial] [Flaky]",
+			"[Disruptive],[Alpha],[Flaky]",
+		},
+	}
+	for i, tc := range testCases {
+		err := validateTestName(tc.testName)
+		if err != nil {
+			if tc.tagString == "" {
+				t.Errorf("test case[%d]: expected no validate error, got %q", i, err.Error())
+			} else {
+				expectedMsg := fmt.Sprintf("'%s' cannot have invalid tags %s", tc.testName, tc.tagString)
+				actualMsg := err.Error()
+				if actualMsg != expectedMsg {
+					t.Errorf("test case[%d]: expected error message %q, got %q", i, expectedMsg, actualMsg)
+				}
+			}
 		}
 	}
 }

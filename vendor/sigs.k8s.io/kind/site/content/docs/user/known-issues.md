@@ -18,6 +18,7 @@ It may additionally be helpful to:
 
 ## Contents
 * [Docker on Btrfs](#docker-on-btrfs)
+* [Docker installed with Snap](#docker-installed-with-snap)
 * [Failing to apply overlay network](#failing-to-apply-overlay-network)
 * [Failure to build node image](#failure-to-build-node-image)
 * [Failure for cluster to properly start](#failure-for-cluster-to-properly-start)
@@ -27,12 +28,31 @@ It may additionally be helpful to:
 `kind` cannot run properly if containers on your machine / host are backed by a
 [Btrfs](https://en.wikipedia.org/wiki/Btrfs) filesystem.
 
-This should only be relevant on linux, on which you can check with:
+This should only be relevant on Linux, on which you can check with:
 
-`stat --file-system --format=%T $(docker info --format {{.DockerRootDir}})`
+```
+docker info | grep -i storage
+```
 
-To fix this you must ensure that your containers are not backed by Btrfs, there
-is no other known workaround at this time.
+As a workaround, create the following configuration in `/etc/docker/daemon.json`:
+
+```
+{
+  "storage-driver": "overlay2"
+}
+```
+
+After restarting the Docker daemon you should see that Docker is now using the `overlay2` storage driver instead of `btrfs`.
+
+### Docker Installed with Snap
+
+If you installed Docker with [snap], it is likely that `docker` commands do not
+have access to `$TMPDIR`. This may break some kind commands which depend
+on using temp directories (`kind build ...`).
+
+Currently a workaround for this is setting the `TEMPDIR` environment variable to
+a directory snap does have access to when working with kind.
+This can for example be some directory under `$HOME`.
 
 ## Failing to apply overlay network
 There are two known causes for problems while applying the overlay network
@@ -196,3 +216,4 @@ This problem seems to be related to a [bug in Docker][moby#9939].
 [kind#270]: https://github.com/kubernetes-sigs/kind/issues/270
 [moby#9939]: https://github.com/moby/moby/issues/9939
 [Docker resource lims]: https://docs.docker.com/docker-for-mac/#advanced
+[snap]: https://snapcraft.io/

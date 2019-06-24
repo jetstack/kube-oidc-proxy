@@ -17,26 +17,20 @@ limitations under the License.
 package nodes
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/version"
 	"sigs.k8s.io/kind/pkg/cluster/constants"
 
 	"sigs.k8s.io/kind/pkg/container/docker"
 	"sigs.k8s.io/kind/pkg/exec"
-	"sigs.k8s.io/kind/pkg/util"
 )
 
 // Node represents a handle to a kind node
@@ -116,12 +110,6 @@ func (n *Node) Name() string {
 	return n.name
 }
 
-// SignalStart sends SIGUSR1 to the node, which signals our entrypoint to boot
-// see images/node/entrypoint
-func (n *Node) SignalStart() error {
-	return docker.Kill("SIGUSR1", n.name)
-}
-
 // CopyTo copies the source file on the host to dest on the node
 func (n *Node) CopyTo(source, dest string) error {
 	return docker.CopyTo(source, n.name, dest)
@@ -133,105 +121,6 @@ func (n *Node) CopyTo(source, dest string) error {
 //     otherwise it should be refactored in something more robust in the long term
 func (n *Node) CopyFrom(source, dest string) error {
 	return docker.CopyFrom(n.name, source, dest)
-}
-
-// WaitForDocker waits for Docker to be ready on the node
-// it returns true on success, and false on a timeout
-func (n *Node) WaitForDocker(until time.Time) bool {
-	return tryUntil(until, func() bool {
-		cmd := n.Command("systemctl", "is-active", "docker")
-		out, err := exec.CombinedOutputLines(cmd)
-		if err != nil {
-			return false
-		}
-		return len(out) == 1 && out[0] == "active"
-	})
-}
-
-// helper that calls `try()`` in a loop until the deadline `until`
-// has passed or `try()`returns true, returns wether try ever returned true
-func tryUntil(until time.Time, try func() bool) bool {
-	for until.After(time.Now()) {
-		if try() {
-			return true
-		}
-	}
-	return false
-}
-
-// LoadImages loads image tarballs stored on the node into docker on the node
-func (n *Node) LoadImages() {
-	// load images cached on the node into docker
-	if err := n.Command(
-		"/bin/bash", "-c",
-		// use xargs to load images in parallel
-		`find /kind/images -name *.tar -print0 | xargs -0 -n 1 -P $(nproc) docker load -i`,
-	).Run(); err != nil {
-		log.Warningf("Failed to preload docker images: %v", err)
-		return
-	}
-
-	// if this fails, we don't care yet, but try to get the kubernetes version
-	// and see if we can skip retagging for amd64
-	// if this fails, we can just assume some unknown version and re-tag
-	// in a future release of kind, we can probably drop v1.11 support
-	// and remove the logic below this comment entirely
-	if rawVersion, err := n.KubeVersion(); err == nil {
-		if ver, err := version.ParseGeneric(rawVersion); err == nil {
-			if !ver.LessThan(version.MustParseSemantic("v1.12.0")) {
-				return
-			}
-		}
-	}
-
-	// for older releases, we need the images to have the arch in their name
-	// bazel built images were missing these, newer releases do not use them
-	// for any builds ...
-	// retag images that are missing -amd64 as image:tag -> image-amd64:tag
-	// TODO(bentheelder): this is a bit gross, move this logic out of bash
-	if err := n.Command(
-		"/bin/bash", "-c",
-		fmt.Sprintf(`docker images --format='{{.Repository}}:{{.Tag}}' | grep -v %s | xargs -L 1 -I '{}' /bin/bash -c 'docker tag "{}" "$(echo "{}" | sed s/:/-%s:/)"'`,
-			util.GetArch(), util.GetArch()),
-	).Run(); err != nil {
-		log.Warningf("Failed to re-tag docker images: %v", err)
-	}
-}
-
-// FixMounts will correct mounts in the node container to meet the right
-// sharing and permissions for systemd and Docker / Kubernetes
-func (n *Node) FixMounts() error {
-	// Check if userns-remap is enabled
-	if docker.UsernsRemap() {
-		// The binary /bin/mount should be owned by root:root in order to execute
-		// the following mount commands
-		if err := n.Command("chown", "root:root", "/bin/mount").Run(); err != nil {
-			return err
-		}
-		// The binary /bin/mount should have the setuid bit
-		if err := n.Command("chmod", "-s", "/bin/mount").Run(); err != nil {
-			return err
-		}
-	}
-
-	// systemd-in-a-container should have read only /sys
-	// https://www.freedesktop.org/wiki/Software/systemd/ContainerInterface/
-	// however, we need other things from `docker run --privileged` ...
-	// and this flag also happens to make /sys rw, amongst other things
-	if err := n.Command("mount", "-o", "remount,ro", "/sys").Run(); err != nil {
-		return err
-	}
-	// kubernetes needs shared mount propagation
-	if err := n.Command("mount", "--make-shared", "/").Run(); err != nil {
-		return err
-	}
-	if err := n.Command("mount", "--make-shared", "/run").Run(); err != nil {
-		return err
-	}
-	if err := n.Command("mount", "--make-shared", "/var/lib/docker").Run(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // KubeVersion returns the Kubernetes version installed on the node
@@ -333,47 +222,7 @@ func (n *Node) Role() (role string, err error) {
 	return role, nil
 }
 
-// matches kubeconfig server entry like:
-//    server: https://172.17.0.2:6443
-// which we rewrite to:
-//    server: https://localhost:$PORT
-var serverAddressRE = regexp.MustCompile(`^(\s+server:) https://.*:\d+$`)
-
-// WriteKubeConfig writes a fixed KUBECONFIG to dest
-// this should only be called on a control plane node
-// While copyng to the host machine the control plane address
-// is replaced with local host and the control plane port with
-// a randomly generated port reserved during node creation.
-func (n *Node) WriteKubeConfig(dest string, hostPort int32) error {
-	cmd := n.Command("cat", "/etc/kubernetes/admin.conf")
-	lines, err := exec.CombinedOutputLines(cmd)
-	if err != nil {
-		return errors.Wrap(err, "failed to get kubeconfig from node")
-	}
-
-	// fix the config file, swapping out the server for the forwarded localhost:port
-	var buff bytes.Buffer
-	for _, line := range lines {
-		match := serverAddressRE.FindStringSubmatch(line)
-		if len(match) > 1 {
-			line = fmt.Sprintf("%s https://localhost:%d", match[1], hostPort)
-		}
-		buff.WriteString(line)
-		buff.WriteString("\n")
-	}
-
-	// create the directory to contain the KUBECONFIG file.
-	// 0755 is taken from client-go's config handling logic: https://github.com/kubernetes/client-go/blob/5d107d4ebc00ee0ea606ad7e39fd6ce4b0d9bf9e/tools/clientcmd/loader.go#L412
-	err = os.MkdirAll(filepath.Dir(dest), 0755)
-	if err != nil {
-		return errors.Wrap(err, "failed to create kubeconfig output directory")
-	}
-
-	return ioutil.WriteFile(dest, buff.Bytes(), 0600)
-}
-
-// WriteFile writes temporary file on the host
-// and copies it to the node
+// WriteFile writes content to dest on the node
 func (n *Node) WriteFile(dest, content string) error {
 	// create destination directory
 	cmd := n.Command("mkdir", "-p", filepath.Dir(dest))
@@ -382,54 +231,20 @@ func (n *Node) WriteFile(dest, content string) error {
 		return errors.Wrapf(err, "failed to create directory %s", dest)
 	}
 
-	// create temporary file
-	ftmp, err := ioutil.TempFile("", "")
-	if err != nil {
-		return errors.Wrap(err, "failed to create temporary file")
-	}
-
-	path := ftmp.Name()
-	defer os.Remove(path)
-
-	// write content to the temp file
-	_, err = ftmp.WriteString(content)
-	if err != nil {
-		return errors.Wrap(err, "failed to write content to the file")
-	}
-
-	// copy the temp file from the host to the node
-	if err := n.CopyTo(path, dest); err != nil {
-		return errors.Wrap(err, "failed to copy file to the node")
-	}
-	return nil
+	return n.Command("cp", "/dev/stdin", dest).SetStdin(strings.NewReader(content)).Run()
 }
 
-// NeedProxy returns true if the host environment appears to have proxy settings
-func NeedProxy() bool {
-	details := getProxyDetails()
-	return len(details.Envs) > 0
-}
-
-// SetProxy configures proxy settings for the node
-//
-// Currently it only creates systemd drop-in for Docker daemon
-// as described in Docker documentation: https://docs.docker.com/config/daemon/systemd/#http-proxy
-//
-// See also: NeedProxy and getProxyDetails
-func (n *Node) SetProxy() error {
-	details := getProxyDetails()
-	// configure Docker daemon to use proxy
-	proxies := ""
-	for key, val := range details.Envs {
-		proxies += fmt.Sprintf("\"%s=%s\" ", key, val)
+// LoadImageArchive will load the image contents in the image reader to the
+// k8s.io namespace on the node such that the image can be used from a
+// Kubernetes pod
+func (n *Node) LoadImageArchive(image io.Reader) error {
+	cmd := n.Command(
+		"ctr", "--namespace=k8s.io", "images", "import", "-",
+	)
+	cmd.SetStdin(image)
+	if err := cmd.Run(); err != nil {
+		return errors.Wrap(err, "failed to load image")
 	}
-
-	err := n.WriteFile("/etc/systemd/system/docker.service.d/http-proxy.conf",
-		"[Service]\nEnvironment="+proxies)
-	if err != nil {
-		errors.Wrap(err, "failed to create http-proxy drop-in")
-	}
-
 	return nil
 }
 

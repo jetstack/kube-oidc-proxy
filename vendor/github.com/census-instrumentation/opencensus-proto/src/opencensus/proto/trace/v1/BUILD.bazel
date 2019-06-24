@@ -14,7 +14,8 @@
 
 package(default_visibility = ["//visibility:public"])
 
-load("@org_pubref_rules_protobuf//go:rules.bzl", "go_proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 proto_library(
     name = "trace_proto",
@@ -22,6 +23,7 @@ proto_library(
     deps = [
         "@com_google_protobuf//:timestamp_proto",
         "@com_google_protobuf//:wrappers_proto",
+        "//opencensus/proto/resource/v1:resource_proto",
     ],
 )
 
@@ -52,28 +54,30 @@ java_proto_library(
 
 go_proto_library(
     name = "trace_proto_go",
-    protos = ["trace.proto"],
-    imports = [
-        "external/com_google_protobuf/src",
-    ],
-    inputs = [
-        "@com_google_protobuf//:well_known_protos",
-    ],
-    pb_options = [
-       # omit the go_package declared in proto files to make bazel works as expect
-       "paths=source_relative",
-    ],
+    proto = ":trace_proto",
+    importpath = "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1",
     deps = [
         "@com_github_golang_protobuf//ptypes/timestamp:go_default_library",
         "@com_github_golang_protobuf//ptypes/wrappers:go_default_library",
+        "//opencensus/proto/resource/v1:resource_proto_go",
     ],
 )
 
 go_proto_library(
     name = "trace_config_proto_go",
-    protos = ["trace_config.proto"],
-    pb_options = [
-       # omit the go_package declared in proto files to make bazel works as expect
-       "paths=source_relative",
-    ],
+    proto = ":trace_config_proto",
+    importpath = "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1",
+)
+
+# This a workaround because `trace_proto_go` and `trace_config_proto_go` have
+# the same importpath, and so cause a compile issue if both are depended on
+# directly by another `go_proto_library` (such as `trace_service_proto_go`).
+# See: https://github.com/bazelbuild/rules_go/issues/1841
+go_library(
+    name = "trace_and_config_proto_go",
+    srcs = [],
+    embed = [
+        ":trace_proto_go",
+        ":trace_config_proto_go",
+    ]
 )

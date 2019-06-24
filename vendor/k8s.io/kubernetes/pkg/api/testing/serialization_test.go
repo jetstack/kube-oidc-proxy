@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	jsoniter "github.com/json-iterator/go"
-
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/apitesting/fuzzer"
@@ -86,9 +85,11 @@ func TestSetControllerConversion(t *testing.T) {
 
 	rs := &apps.ReplicaSet{}
 	rc := &api.ReplicationController{}
+	extGroup := schema.GroupVersion{Group: "apps", Version: "v1"}
+	extCodec := legacyscheme.Codecs.LegacyCodec(extGroup)
 
-	extGroup := testapi.Apps
-	defaultGroup := testapi.Default
+	defaultGroup := schema.GroupVersion{Group: "", Version: "v1"}
+	defaultCodec := legacyscheme.Codecs.LegacyCodec(defaultGroup)
 
 	fuzzInternalObject(t, schema.GroupVersion{Group: "apps", Version: runtime.APIVersionInternal}, rs, rand.Int63())
 
@@ -102,7 +103,7 @@ func TestSetControllerConversion(t *testing.T) {
 	}
 
 	t.Logf("rs._internal.apps -> rs.v1.apps")
-	data, err := runtime.Encode(extGroup.Codec(), rs)
+	data, err := runtime.Encode(extCodec, rs)
 	if err != nil {
 		t.Fatalf("unexpected encoding error: %v", err)
 	}
@@ -110,9 +111,9 @@ func TestSetControllerConversion(t *testing.T) {
 	decoder := legacyscheme.Codecs.DecoderToVersion(
 		legacyscheme.Codecs.UniversalDeserializer(),
 		runtime.NewMultiGroupVersioner(
-			*defaultGroup.GroupVersion(),
-			schema.GroupKind{Group: defaultGroup.GroupVersion().Group},
-			schema.GroupKind{Group: extGroup.GroupVersion().Group},
+			defaultGroup,
+			schema.GroupKind{Group: defaultGroup.Group},
+			schema.GroupKind{Group: extGroup.Group},
 		),
 	)
 
@@ -122,7 +123,7 @@ func TestSetControllerConversion(t *testing.T) {
 	}
 
 	t.Logf("rc._internal -> rc.v1")
-	data, err = runtime.Encode(defaultGroup.Codec(), rc)
+	data, err = runtime.Encode(defaultCodec, rc)
 	if err != nil {
 		t.Fatalf("unexpected encoding error: %v", err)
 	}
@@ -160,9 +161,10 @@ var nonRoundTrippableTypes = sets.NewString(
 	"DeleteOptions",
 	"CreateOptions",
 	"UpdateOptions",
+	"PatchOptions",
 )
 
-var commonKinds = []string{"Status", "ListOptions", "DeleteOptions", "ExportOptions", "GetOptions", "CreateOptions", "UpdateOptions"}
+var commonKinds = []string{"Status", "ListOptions", "DeleteOptions", "ExportOptions", "GetOptions", "CreateOptions", "UpdateOptions", "PatchOptions"}
 
 // TestCommonKindsRegistered verifies that all group/versions registered with
 // the testapi package have the common kinds.
@@ -215,6 +217,7 @@ func TestRoundTripTypes(t *testing.T) {
 func TestEncodePtr(t *testing.T) {
 	grace := int64(30)
 	enableServiceLinks := v1.DefaultEnableServiceLinks
+	preemptNever := api.PreemptNever
 	pod := &api.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"name": "foo"},
@@ -228,6 +231,7 @@ func TestEncodePtr(t *testing.T) {
 			SecurityContext:    &api.PodSecurityContext{},
 			SchedulerName:      api.DefaultSchedulerName,
 			EnableServiceLinks: &enableServiceLinks,
+			PreemptionPolicy:   &preemptNever,
 		},
 	}
 	obj := runtime.Object(pod)
@@ -385,7 +389,7 @@ func TestObjectWatchFraming(t *testing.T) {
 		}
 		sr = streaming.NewDecoder(framer.NewFrameReader(ioutil.NopCloser(out)), s)
 		outEvent := &metav1.WatchEvent{}
-		res, _, err = sr.Decode(nil, outEvent)
+		_, _, err = sr.Decode(nil, outEvent)
 		if err != nil || outEvent.Type != string(watch.Added) {
 			t.Fatalf("%v: %#v", err, outEvent)
 		}

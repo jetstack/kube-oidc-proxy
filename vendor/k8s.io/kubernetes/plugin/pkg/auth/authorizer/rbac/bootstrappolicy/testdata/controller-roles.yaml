@@ -58,6 +58,14 @@ items:
     - get
     - list
     - watch
+  - apiGroups:
+    - storage.k8s.io
+    resources:
+    - csidrivers
+    verbs:
+    - get
+    - list
+    - watch
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
@@ -374,6 +382,12 @@ items:
     - poddisruptionbudgets/status
     verbs:
     - update
+  - apiGroups:
+    - '*'
+    resources:
+    - '*/scale'
+    verbs:
+    - get
   - apiGroups:
     - ""
     resources:
@@ -781,6 +795,14 @@ items:
     - ""
     resources:
     - endpoints
+    verbs:
+    - create
+    - delete
+    - get
+    - update
+  - apiGroups:
+    - ""
+    resources:
     - services
     verbs:
     - create
@@ -1109,6 +1131,7 @@ items:
     resources:
     - services/status
     verbs:
+    - patch
     - update
   - apiGroups:
     - ""

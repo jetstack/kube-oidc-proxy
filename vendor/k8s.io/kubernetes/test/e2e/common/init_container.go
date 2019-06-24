@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -31,6 +31,7 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/client/conditions"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 
 	. "github.com/onsi/ginkgo"
@@ -87,10 +88,10 @@ var _ = framework.KubeDescribe("InitContainer [NodeConformance]", func() {
 				},
 			},
 		}
-		framework.Logf("PodSpec: initContainers in spec.initContainers")
+		e2elog.Logf("PodSpec: initContainers in spec.initContainers")
 		startedPod := podClient.Create(pod)
 		w, err := podClient.Watch(metav1.SingleObject(startedPod.ObjectMeta))
-		Expect(err).NotTo(HaveOccurred(), "error watching a pod")
+		framework.ExpectNoError(err, "error watching a pod")
 		wr := watch.NewRecorder(w)
 		ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), framework.PodStartTimeout)
 		defer cancel()
@@ -158,10 +159,10 @@ var _ = framework.KubeDescribe("InitContainer [NodeConformance]", func() {
 				},
 			},
 		}
-		framework.Logf("PodSpec: initContainers in spec.initContainers")
+		e2elog.Logf("PodSpec: initContainers in spec.initContainers")
 		startedPod := podClient.Create(pod)
 		w, err := podClient.Watch(metav1.SingleObject(startedPod.ObjectMeta))
-		Expect(err).NotTo(HaveOccurred(), "error watching a pod")
+		framework.ExpectNoError(err, "error watching a pod")
 		wr := watch.NewRecorder(w)
 		ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), framework.PodStartTimeout)
 		defer cancel()
@@ -230,10 +231,10 @@ var _ = framework.KubeDescribe("InitContainer [NodeConformance]", func() {
 				},
 			},
 		}
-		framework.Logf("PodSpec: initContainers in spec.initContainers")
+		e2elog.Logf("PodSpec: initContainers in spec.initContainers")
 		startedPod := podClient.Create(pod)
 		w, err := podClient.Watch(metav1.SingleObject(startedPod.ObjectMeta))
-		Expect(err).NotTo(HaveOccurred(), "error watching a pod")
+		framework.ExpectNoError(err, "error watching a pod")
 
 		wr := watch.NewRecorder(w)
 		ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), framework.PodStartTimeout)
@@ -280,7 +281,7 @@ var _ = framework.KubeDescribe("InitContainer [NodeConformance]", func() {
 					if status.RestartCount < 3 {
 						return false, nil
 					}
-					framework.Logf("init container has failed twice: %#v", t)
+					e2elog.Logf("init container has failed twice: %#v", t)
 					// TODO: more conditions
 					return true, nil
 				default:
@@ -347,11 +348,11 @@ var _ = framework.KubeDescribe("InitContainer [NodeConformance]", func() {
 				},
 			},
 		}
-		framework.Logf("PodSpec: initContainers in spec.initContainers")
+		e2elog.Logf("PodSpec: initContainers in spec.initContainers")
 		startedPod := podClient.Create(pod)
 
 		w, err := podClient.Watch(metav1.SingleObject(startedPod.ObjectMeta))
-		Expect(err).NotTo(HaveOccurred(), "error watching a pod")
+		framework.ExpectNoError(err, "error watching a pod")
 
 		wr := watch.NewRecorder(w)
 		ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), framework.PodStartTimeout)

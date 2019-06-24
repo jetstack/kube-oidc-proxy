@@ -40,7 +40,7 @@ import (
 )
 
 func TestUniversalDeserializer(t *testing.T) {
-	expected := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
+	expected := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test"}, TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"}}
 	d := legacyscheme.Codecs.UniversalDeserializer()
 	for _, mediaType := range []string{"application/json", "application/yaml", "application/vnd.kubernetes.protobuf"} {
 		info, ok := runtime.SerializerInfoForMediaType(legacyscheme.Codecs.SupportedMediaTypes(), mediaType)
@@ -121,7 +121,7 @@ func TestProtobufRoundTrip(t *testing.T) {
 func BenchmarkEncodeCodecProtobuf(b *testing.B) {
 	items := benchmarkItems(b)
 	width := len(items)
-	s := protobuf.NewSerializer(nil, nil, "application/arbitrary.content.type")
+	s := protobuf.NewSerializer(nil, nil)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := runtime.Encode(s, &items[i%width]); err != nil {
@@ -142,7 +142,7 @@ func BenchmarkEncodeCodecFromInternalProtobuf(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	s := protobuf.NewSerializer(nil, nil, "application/arbitrary.content.type")
+	s := protobuf.NewSerializer(nil, nil)
 	codec := legacyscheme.Codecs.EncoderForVersion(s, v1.SchemeGroupVersion)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -170,7 +170,7 @@ func BenchmarkEncodeProtobufGeneratedMarshal(b *testing.B) {
 func BenchmarkDecodeCodecToInternalProtobuf(b *testing.B) {
 	items := benchmarkItems(b)
 	width := len(items)
-	s := protobuf.NewSerializer(legacyscheme.Scheme, legacyscheme.Scheme, "application/arbitrary.content.type")
+	s := protobuf.NewSerializer(legacyscheme.Scheme, legacyscheme.Scheme)
 	encoder := legacyscheme.Codecs.EncoderForVersion(s, v1.SchemeGroupVersion)
 	var encoded [][]byte
 	for i := range items {

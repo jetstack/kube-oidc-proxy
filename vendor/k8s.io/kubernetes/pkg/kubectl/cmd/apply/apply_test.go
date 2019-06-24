@@ -32,8 +32,8 @@ import (
 	"github.com/googleapis/gnostic/OpenAPIv2"
 	"github.com/spf13/cobra"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -41,7 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	sptest "k8s.io/apimachinery/pkg/util/strategicpatch/testing"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
+	"k8s.io/cli-runtime/pkg/resource"
 	dynamicfakeclient "k8s.io/client-go/dynamic/fake"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
@@ -50,6 +50,7 @@ import (
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 var (
@@ -99,8 +100,10 @@ const (
 	dirName                   = "../../../../test/fixtures/pkg/kubectl/cmd/apply/testdir"
 	filenameRCJSON            = "../../../../test/fixtures/pkg/kubectl/cmd/apply/rc.json"
 
-	filenameWidgetClientside = "../../../../test/fixtures/pkg/kubectl/cmd/apply/widget-clientside.yaml"
-	filenameWidgetServerside = "../../../../test/fixtures/pkg/kubectl/cmd/apply/widget-serverside.yaml"
+	filenameWidgetClientside    = "../../../../test/fixtures/pkg/kubectl/cmd/apply/widget-clientside.yaml"
+	filenameWidgetServerside    = "../../../../test/fixtures/pkg/kubectl/cmd/apply/widget-serverside.yaml"
+	filenameDeployObjServerside = "../../../../test/fixtures/pkg/kubectl/cmd/apply/deploy-serverside.yaml"
+	filenameDeployObjClientside = "../../../../test/fixtures/pkg/kubectl/cmd/apply/deploy-clientside.yaml"
 )
 
 func readConfigMapList(t *testing.T, filename string) [][]byte {
@@ -377,7 +380,7 @@ func TestRunApplyViewLastApplied(t *testing.T) {
 			name:         "view resource/name invalid format",
 			filePath:     "",
 			outputFormat: "wide",
-			expectedErr:  "error: Unexpected -o output mode: wide, the flag 'output' must be one of yaml|json\nSee 'view-last-applied -h' for help and examples.",
+			expectedErr:  "error: Unexpected -o output mode: wide, the flag 'output' must be one of yaml|json\nSee 'view-last-applied -h' for help and examples",
 			expectedOut:  "",
 			selector:     "",
 			args:         []string{"replicationcontroller", "test-rc"},
@@ -648,7 +651,7 @@ func TestApplyRetry(t *testing.T) {
 					case p == pathRC && m == "PATCH":
 						if firstPatch {
 							firstPatch = false
-							statusErr := kubeerr.NewConflict(schema.GroupResource{Group: "", Resource: "rc"}, "test-rc", fmt.Errorf("the object has been modified. Please apply at first."))
+							statusErr := kubeerr.NewConflict(schema.GroupResource{Group: "", Resource: "rc"}, "test-rc", fmt.Errorf("the object has been modified. Please apply at first"))
 							bodyBytes, _ := json.Marshal(statusErr)
 							bodyErr := ioutil.NopCloser(bytes.NewReader(bodyBytes))
 							return &http.Response{StatusCode: http.StatusConflict, Header: cmdtesting.DefaultHeader(), Body: bodyErr}, nil
@@ -869,14 +872,9 @@ func testApplyMultipleObjects(t *testing.T, asList bool) {
 	}
 }
 
-const (
-	filenameDeployObjServerside = "../../../../test/fixtures/pkg/kubectl/cmd/apply/deploy-serverside.yaml"
-	filenameDeployObjClientside = "../../../../test/fixtures/pkg/kubectl/cmd/apply/deploy-clientside.yaml"
-)
-
 func readDeploymentFromFile(t *testing.T, file string) []byte {
 	raw := readBytesFromFile(t, file)
-	obj := &extensionsv1beta1.Deployment{}
+	obj := &appsv1.Deployment{}
 	if err := runtime.DecodeInto(codec, raw, obj); err != nil {
 		t.Fatal(err)
 	}
@@ -948,7 +946,7 @@ func TestApplyNULLPreservation(t *testing.T) {
 
 			cmd.Run(cmd, []string{})
 
-			expected := "deployment.extensions/" + deploymentName + "\n"
+			expected := "deployment.apps/" + deploymentName + "\n"
 			if buf.String() != expected {
 				t.Fatalf("unexpected output: %s\nexpected: %s", buf.String(), expected)
 			}
@@ -1251,7 +1249,7 @@ func TestForceApply(t *testing.T) {
 						var bodyRC io.ReadCloser
 						if isScaledDownToZero {
 							rcObj := readReplicationControllerFromFile(t, filenameRC)
-							rcObj.Spec.Replicas = cmdtesting.Int32ptr(0)
+							rcObj.Spec.Replicas = utilpointer.Int32Ptr(0)
 							rcBytes, err := runtime.Encode(codec, rcObj)
 							if err != nil {
 								t.Fatal(err)
@@ -1280,7 +1278,7 @@ func TestForceApply(t *testing.T) {
 					case strings.HasSuffix(p, pathRC) && m == "PATCH":
 						counts["patch"]++
 						if counts["patch"] <= 6 {
-							statusErr := kubeerr.NewConflict(schema.GroupResource{Group: "", Resource: "rc"}, "test-rc", fmt.Errorf("the object has been modified. Please apply at first."))
+							statusErr := kubeerr.NewConflict(schema.GroupResource{Group: "", Resource: "rc"}, "test-rc", fmt.Errorf("the object has been modified. Please apply at first"))
 							bodyBytes, _ := json.Marshal(statusErr)
 							bodyErr := ioutil.NopCloser(bytes.NewReader(bodyBytes))
 							return &http.Response{StatusCode: http.StatusConflict, Header: cmdtesting.DefaultHeader(), Body: bodyErr}, nil

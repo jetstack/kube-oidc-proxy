@@ -14,12 +14,27 @@ This guide covers getting started with the `kind` command.
 
 ## Installation
 
-You can install `kind` with `go get -u sigs.k8s.io/kind`. This will put `kind` in
-`$(go env GOPATH)/bin`. You may need to add that directory to your `$PATH` as
+You can either install the latest bleeding edge kind code with `GO111MODULE="on" go get -u sigs.k8s.io/kind@master` or clone this repo 
+and run `make build` from the repository.
+
+**NOTE**: please use the latest go to do this, ideally go 1.12.5 or greater.
+
+This will put `kind` in `$(go env GOPATH)/bin`. You may need to add that directory to your `$PATH` as
 shown [here](https://golang.org/doc/code.html#GOPATH) if you encounter the error
 `kind: command not found` after installation.
 
-To use `kind`, you will also need to [install docker].  
+Without installing go, kind can be built reproducibly with docker using `make build`.
+
+Stable binaries are also available on the [releases] page. Stable releases are
+generally recommended for CI usage in particular.
+To install, download the binary for your platform from "Assets" and place this
+into your `$PATH`. E.G. for macOS:
+
+```
+wget https://github.com/kubernetes-sigs/kind/releases/download/0.2.1/kind-darwin-amd64
+chmod +x kind-darwin-amd64
+mv kind-darwin-amd64 /some-dir-in-your-PATH/kind
+```
 
 ## Creating a Cluster
 
@@ -39,23 +54,6 @@ If you want the `create cluster` command to block until the control plane
 reaches a ready status, you can use the `--wait` flag and specify a timeout.
 To use `--wait` you must specify the units of the time to wait. For example, to
 wait for 30 seconds, do `--wait 30s`, for 5 minutes do `--wait 5m`, etc.
-
-**Note**: If you are running kind on MacOS or Windows then it is recommended
-that you have at least 4GB of RAM and disk space (these are estimates for a
-single node kind cluster) dedicated to the virtual machine (VM) running the
-Docker engine otherwise the Kubernetes cluster might fail to start up.
-
-To change the resource limits for the Docker engine on Mac, you'll need to open the
-**Preferences** menu.  
-<img src="/docs/user/images/docker-pref-1.png"/>
-
-Now, go to the **Advanced** settings page, and change the
-settings there, see [changing Docker's resource limits][Docker resource lims].  
-<img src="/docs/user/images/docker-pref-2.png"/>
-
-You may also try removing any unused data left by the Docker engine - e.g.,
-`docker system prune`.
-
 
 ## Interacting With Your Cluster
 After [creating a cluster](#creating-a-cluster), you can use [kubectl][kubectl]
@@ -136,6 +134,8 @@ and / or:
 See [Kubernetes imagePullPolicy][Kubernetes imagePullPolicy] for more information.
 
 
+See also: [Using kind with Private Registries][Private Registries].
+
 ## Building Images
 
 kind runs a local Kubernetes cluster by using Docker containers as "nodes".
@@ -167,6 +167,20 @@ the resulting node image using the flag `--image`.
 If you previously changed the name and tag of the base image, you can use here
 the flag `--base-image` to specify the name and tag you used.
 
+**Note**: If you are running kind on MacOS or Windows then it is recommended
+that you have at least 4GB of RAM dedicated to the virtual machine (VM) running
+the Docker engine otherwise Building Kubernetes may fail.
+
+To change the resource limits for the Docker engine on Mac, you'll need to open the
+**Preferences** menu.  
+<img src="/docs/user/images/docker-pref-1.png"/>
+
+Now, go to the **Advanced** settings page, and change the
+settings there, see [changing Docker's resource limits][Docker resource lims].  
+<img src="/docs/user/images/docker-pref-2.png"/>
+
+You may also try removing any unused data left by the Docker engine - e.g.,
+`docker system prune`.
 
 ## Advanced
 
@@ -178,9 +192,9 @@ kind build base-image
 
 If you want to specify the path to the base image source files you can use the
 `--source` flag.
-If `--source` is not specified, kind has enbedded the contents of the in
-default base image in [`pkg/build/base/sources`][pkg/build/base/sources] and
-will use this to build it.
+
+If `--source` is not specified, kind will attempt to automatically locate
+the `images/base` base source directory.
 
 By default, the base image will be tagged as `kindest/base:latest`.
 If you want to change this, you can use the `--image` flag.
@@ -194,21 +208,51 @@ kind build base-image --image base:v0.1.0
 When creating your kind cluster, via `create cluster`, you can use a
 configuration file to run specific commands before or after systemd or kubeadm
 run.
-To specify a configuration file when creating a cluster, use the `--config`
-flag.
 For a sample kind configuration file see [kind-example-config][kind-example-config].
+To specify a configuration file when creating a cluster, use the `--config`
+flag:
+
+```
+kind create cluster --config kind-example-config.yaml
+```
 
 In particular, many users may be interested in multi-node clusters. A simple
 configuration for this can be achieved with the following config file contents:
 ```yaml
 # three node (two workers) cluster config
-kind: Config
-apiVersion: kind.sigs.k8s.io/v1alpha2
+kind: Cluster
+apiVersion: kind.sigs.k8s.io/v1alpha3
 nodes:
 - role: control-plane
 - role: worker
-  replicas: 2
+- role: worker
 ```
+
+You can also have a cluster with multiple control-plane nodes:
+```yaml
+# a cluster with 3 control-plane nodes and 3 workers
+kind: Cluster
+apiVersion: kind.sigs.k8s.io/v1alpha3
+nodes:
+- role: control-plane
+- role: control-plane
+- role: control-plane
+- role: worker
+- role: worker
+- role: worker
+```
+
+### Configure kind to use a proxy
+If you are running kind in an environment that requires a proxy, you may need to configure kind to use it.
+
+You can configure kind to use a proxy using one or more of the following [environment variables][proxy environment variables] (uppercase takes precedence):
+
+* HTTP_PROXY or http_proxy
+* HTTPS_PROXY or https_proxy
+* NO_PROXY or no_proxy
+
+**Note**: If you set a proxy it would be used for all the connections requests.
+It's important that you define what addresses doesn't need to be proxied with the NO_PROXY variable, typically you should avoid to proxy your docker network range `NO_PROXY=172.17.0.0/16`
 
 ### Exporting Cluster Logs
 kind has the ability to export all kind related logs for you to explore.
@@ -255,5 +299,7 @@ kind, the Kubernetes cluster itself, etc.
 [kubectl]: https://kubernetes.io/docs/reference/kubectl/overview/
 [Docker resource lims]: https://docs.docker.com/docker-for-mac/#advanced
 [install docker]: https://docs.docker.com/install/
+[proxy environment variables]: https://docs.docker.com/network/proxy/#use-environment-variables
 [CGO]: https://golang.org/cmd/cgo/
 [Kubernetes imagePullPolicy]: https://kubernetes.io/docs/concepts/containers/images/#updating-images
+[Private Registries]: /docs/user/private-registries

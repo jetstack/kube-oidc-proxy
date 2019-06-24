@@ -19,7 +19,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type Measure_Type int32
 
@@ -312,116 +312,14 @@ func (m *View) GetDistributionAggregation() *DistributionAggregation {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*View) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _View_OneofMarshaler, _View_OneofUnmarshaler, _View_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*View) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*View_CountAggregation)(nil),
 		(*View_SumAggregation)(nil),
 		(*View_LastValueAggregation)(nil),
 		(*View_DistributionAggregation)(nil),
 	}
-}
-
-func _View_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*View)
-	// aggregation
-	switch x := m.Aggregation.(type) {
-	case *View_CountAggregation:
-		b.EncodeVarint(5<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.CountAggregation); err != nil {
-			return err
-		}
-	case *View_SumAggregation:
-		b.EncodeVarint(6<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.SumAggregation); err != nil {
-			return err
-		}
-	case *View_LastValueAggregation:
-		b.EncodeVarint(7<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.LastValueAggregation); err != nil {
-			return err
-		}
-	case *View_DistributionAggregation:
-		b.EncodeVarint(8<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.DistributionAggregation); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("View.Aggregation has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _View_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*View)
-	switch tag {
-	case 5: // aggregation.count_aggregation
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(CountAggregation)
-		err := b.DecodeMessage(msg)
-		m.Aggregation = &View_CountAggregation{msg}
-		return true, err
-	case 6: // aggregation.sum_aggregation
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(SumAggregation)
-		err := b.DecodeMessage(msg)
-		m.Aggregation = &View_SumAggregation{msg}
-		return true, err
-	case 7: // aggregation.last_value_aggregation
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(LastValueAggregation)
-		err := b.DecodeMessage(msg)
-		m.Aggregation = &View_LastValueAggregation{msg}
-		return true, err
-	case 8: // aggregation.distribution_aggregation
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(DistributionAggregation)
-		err := b.DecodeMessage(msg)
-		m.Aggregation = &View_DistributionAggregation{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _View_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*View)
-	// aggregation
-	switch x := m.Aggregation.(type) {
-	case *View_CountAggregation:
-		s := proto.Size(x.CountAggregation)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *View_SumAggregation:
-		s := proto.Size(x.SumAggregation)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *View_LastValueAggregation:
-		s := proto.Size(x.LastValueAggregation)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *View_DistributionAggregation:
-		s := proto.Size(x.DistributionAggregation)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
 }
 
 type CountAggregation struct {
@@ -676,68 +574,12 @@ func (m *Measurement) GetTime() *timestamp.Timestamp {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*Measurement) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _Measurement_OneofMarshaler, _Measurement_OneofUnmarshaler, _Measurement_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*Measurement) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*Measurement_DoubleValue)(nil),
 		(*Measurement_IntValue)(nil),
 	}
-}
-
-func _Measurement_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*Measurement)
-	// value
-	switch x := m.Value.(type) {
-	case *Measurement_DoubleValue:
-		b.EncodeVarint(3<<3 | proto.WireFixed64)
-		b.EncodeFixed64(math.Float64bits(x.DoubleValue))
-	case *Measurement_IntValue:
-		b.EncodeVarint(4<<3 | proto.WireVarint)
-		b.EncodeVarint(uint64(x.IntValue))
-	case nil:
-	default:
-		return fmt.Errorf("Measurement.Value has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _Measurement_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*Measurement)
-	switch tag {
-	case 3: // value.double_value
-		if wire != proto.WireFixed64 {
-			return true, proto.ErrInternalBadWireType
-		}
-		x, err := b.DecodeFixed64()
-		m.Value = &Measurement_DoubleValue{math.Float64frombits(x)}
-		return true, err
-	case 4: // value.int_value
-		if wire != proto.WireVarint {
-			return true, proto.ErrInternalBadWireType
-		}
-		x, err := b.DecodeVarint()
-		m.Value = &Measurement_IntValue{int64(x)}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _Measurement_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*Measurement)
-	// value
-	switch x := m.Value.(type) {
-	case *Measurement_DoubleValue:
-		n += 1 // tag and wire
-		n += 8
-	case *Measurement_IntValue:
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(x.IntValue))
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
 }
 
 func init() {

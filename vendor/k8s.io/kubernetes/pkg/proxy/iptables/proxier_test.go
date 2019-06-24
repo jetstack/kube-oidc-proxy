@@ -41,6 +41,7 @@ import (
 	iptablestest "k8s.io/kubernetes/pkg/util/iptables/testing"
 	"k8s.io/utils/exec"
 	fakeexec "k8s.io/utils/exec/testing"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 func checkAllLines(t *testing.T, table utiliptables.Table, save []byte, expectedLines map[utiliptables.Chain]string) {
@@ -326,15 +327,6 @@ func TestDeleteEndpointConnections(t *testing.T) {
 	}
 }
 
-type fakeClosable struct {
-	closed bool
-}
-
-func (c *fakeClosable) Close() error {
-	c.closed = true
-	return nil
-}
-
 // fakePortOpener implements portOpener.
 type fakePortOpener struct {
 	openPorts []*utilproxy.LocalPort
@@ -430,6 +422,18 @@ func hasJump(rules []iptablestest.Rule, destChain, destIP string, destPort int) 
 		}
 	}
 	return match
+}
+
+func hasSrcType(rules []iptablestest.Rule, srcType string) bool {
+	for _, r := range rules {
+		if r[iptablestest.SrcType] != srcType {
+			continue
+		}
+
+		return true
+	}
+
+	return false
 }
 
 func TestHasJump(t *testing.T) {
@@ -845,10 +849,6 @@ func TestNodePortReject(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string {
-	return &s
-}
-
 func TestOnlyLocalLoadBalancing(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	fp := NewFakeProxier(ipt)
@@ -895,7 +895,7 @@ func TestOnlyLocalLoadBalancing(t *testing.T) {
 					NodeName: nil,
 				}, {
 					IP:       epIP2,
-					NodeName: strPtr(testHostname),
+					NodeName: utilpointer.StringPtr(testHostname),
 				}},
 				Ports: []v1.EndpointPort{{
 					Name: svcPortName.Port,
@@ -954,7 +954,6 @@ func TestOnlyLocalNodePorts(t *testing.T) {
 }
 
 func onlyLocalNodePorts(t *testing.T, fp *Proxier, ipt *iptablestest.FakeIPTables) {
-	shouldLBTOSVCRuleExist := len(fp.clusterCIDR) > 0
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -989,7 +988,7 @@ func onlyLocalNodePorts(t *testing.T, fp *Proxier, ipt *iptablestest.FakeIPTable
 					NodeName: nil,
 				}, {
 					IP:       epIP2,
-					NodeName: strPtr(testHostname),
+					NodeName: utilpointer.StringPtr(testHostname),
 				}},
 				Ports: []v1.EndpointPort{{
 					Name: svcPortName.Port,
@@ -1030,12 +1029,8 @@ func onlyLocalNodePorts(t *testing.T, fp *Proxier, ipt *iptablestest.FakeIPTable
 	if hasJump(lbRules, nonLocalEpChain, "", 0) {
 		errorf(fmt.Sprintf("Found jump from lb chain %v to non-local ep %v", lbChain, epStrLocal), lbRules, t)
 	}
-	if hasJump(lbRules, svcChain, "", 0) != shouldLBTOSVCRuleExist {
-		prefix := "Did not find "
-		if !shouldLBTOSVCRuleExist {
-			prefix = "Found "
-		}
-		errorf(fmt.Sprintf("%s jump from lb chain %v to svc %v", prefix, lbChain, svcChain), lbRules, t)
+	if !hasJump(lbRules, svcChain, "", 0) || !hasSrcType(lbRules, "LOCAL") {
+		errorf(fmt.Sprintf("Did not find jump from lb chain %v to svc %v with src-type LOCAL", lbChain, svcChain), lbRules, t)
 	}
 	if !hasJump(lbRules, localEpChain, "", 0) {
 		errorf(fmt.Sprintf("Didn't find jump from lb chain %v to local ep %v", lbChain, epStrLocal), lbRules, t)
@@ -2197,7 +2192,7 @@ func Test_updateEndpointsMap(t *testing.T) {
 				fp.OnEndpointsAdd(tc.previousEndpoints[i])
 			}
 		}
-		proxy.UpdateEndpointsMap(fp.endpointsMap, fp.endpointsChanges)
+		fp.endpointsMap.Update(fp.endpointsChanges)
 		compareEndpointsMaps(t, tci, fp.endpointsMap, tc.oldEndpoints)
 
 		// Now let's call appropriate handlers to get to state we want to be.
@@ -2217,7 +2212,7 @@ func Test_updateEndpointsMap(t *testing.T) {
 				fp.OnEndpointsUpdate(prev, curr)
 			}
 		}
-		result := proxy.UpdateEndpointsMap(fp.endpointsMap, fp.endpointsChanges)
+		result := fp.endpointsMap.Update(fp.endpointsChanges)
 		newMap := fp.endpointsMap
 		compareEndpointsMaps(t, tci, newMap, tc.expectedResult)
 		if len(result.StaleEndpoints) != len(tc.expectedStaleEndpoints) {

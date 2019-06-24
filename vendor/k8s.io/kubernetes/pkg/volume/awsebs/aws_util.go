@@ -29,21 +29,17 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
-	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
+	"k8s.io/cloud-provider"
+	volumehelpers "k8s.io/cloud-provider/volume/helpers"
+	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+	"k8s.io/legacy-cloud-providers/aws"
 )
 
 const (
 	diskPartitionSuffix = ""
-	diskXVDPath         = "/dev/xvd"
-	diskXVDPattern      = "/dev/xvd*"
-	maxChecks           = 60
-	maxRetries          = 10
 	checkSleepDuration  = time.Second
-	errorSleepDuration  = 5 * time.Second
-	ebsMaxReplicasInAZ  = 1
 )
 
 // AWSDiskUtil provides operations for EBS volume.
@@ -90,9 +86,9 @@ func (util *AWSDiskUtil) CreateVolume(c *awsElasticBlockStoreProvisioner, node *
 
 	capacity := c.options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
 
-	zonesWithNodes, err := cloud.GetCandidateZonesForDynamicVolume()
+	zonesWithNodes, err := getCandidateZones(cloud, node)
 	if err != nil {
-		return "", 0, nil, "", fmt.Errorf("error querying for all zones: %v", err)
+		return "", 0, nil, "", fmt.Errorf("error finding candidate zone for pvc: %v", err)
 	}
 
 	volumeOptions, err := populateVolumeOptions(c.plugin.GetPluginName(), c.options.PVC.Name, capacity, tags, c.options.Parameters, node, allowedTopologies, zonesWithNodes)
@@ -120,16 +116,32 @@ func (util *AWSDiskUtil) CreateVolume(c *awsElasticBlockStoreProvisioner, node *
 	}
 
 	fstype := ""
-	if v, ok := c.options.Parameters[volume.VolumeParameterFSType]; ok {
-		fstype = v
+	for k, v := range c.options.Parameters {
+		if strings.ToLower(k) == volume.VolumeParameterFSType {
+			fstype = v
+		}
 	}
 
 	return name, volumeOptions.CapacityGB, labels, fstype, nil
 }
 
+// getCandidateZones finds possible zones that a volume can be created in
+func getCandidateZones(cloud *aws.Cloud, selectedNode *v1.Node) (sets.String, error) {
+	if selectedNode != nil {
+		// For topology aware volume provisioning, node is already selected so we use the zone from
+		// selected node directly instead of candidate zones.
+		// We can assume the information is always available as node controller shall maintain it.
+		return sets.NewString(), nil
+	}
+
+	// For non-topology-aware volumes (those that binds immediately), we fall back to original logic to query
+	// cloud provider for possible zones
+	return cloud.GetCandidateZonesForDynamicVolume()
+}
+
 // returns volumeOptions for EBS based on storageclass parameters and node configuration
 func populateVolumeOptions(pluginName, pvcName string, capacityGB resource.Quantity, tags map[string]string, storageParams map[string]string, node *v1.Node, allowedTopologies []v1.TopologySelectorTerm, zonesWithNodes sets.String) (*aws.VolumeOptions, error) {
-	requestGiB, err := volumeutil.RoundUpToGiBInt(capacityGB)
+	requestGiB, err := volumehelpers.RoundUpToGiBInt(capacityGB)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +166,7 @@ func populateVolumeOptions(pluginName, pvcName string, capacityGB resource.Quant
 			zone = v
 		case "zones":
 			zonesPresent = true
-			zones, err = volumeutil.ZonesToSet(v)
+			zones, err = volumehelpers.ZonesToSet(v)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing zones %s, must be strings separated by commas: %v", zones, err)
 			}
@@ -177,7 +189,7 @@ func populateVolumeOptions(pluginName, pvcName string, capacityGB resource.Quant
 		}
 	}
 
-	volumeOptions.AvailabilityZone, err = volumeutil.SelectZoneForVolume(zonePresent, zonesPresent, zone, zones, zonesWithNodes, node, allowedTopologies, pvcName)
+	volumeOptions.AvailabilityZone, err = volumehelpers.SelectZoneForVolume(zonePresent, zonesPresent, zone, zones, zonesWithNodes, node, allowedTopologies, pvcName)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +199,7 @@ func populateVolumeOptions(pluginName, pvcName string, capacityGB resource.Quant
 // Returns the first path that exists, or empty string if none exist.
 func verifyDevicePath(devicePaths []string) (string, error) {
 	for _, path := range devicePaths {
-		if pathExists, err := volumeutil.PathExists(path); err != nil {
+		if pathExists, err := mount.PathExists(path); err != nil {
 			return "", fmt.Errorf("Error checking if path exists: %v", err)
 		} else if pathExists {
 			return path, nil
@@ -195,20 +207,6 @@ func verifyDevicePath(devicePaths []string) (string, error) {
 	}
 
 	return "", nil
-}
-
-// Returns the first path that exists, or empty string if none exist.
-func verifyAllPathsRemoved(devicePaths []string) (bool, error) {
-	allPathsRemoved := true
-	for _, path := range devicePaths {
-		exists, err := volumeutil.PathExists(path)
-		if err != nil {
-			return false, fmt.Errorf("Error checking if path exists: %v", err)
-		}
-		allPathsRemoved = allPathsRemoved && !exists
-	}
-
-	return allPathsRemoved, nil
 }
 
 // Returns list of all paths for given EBS mount

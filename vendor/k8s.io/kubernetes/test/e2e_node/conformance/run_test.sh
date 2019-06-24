@@ -24,9 +24,17 @@
 # TODO(random-liu): Use standard tool to start kubelet in production way (such
 # as systemd, supervisord etc.)
 
-# Refresh sudo credentials if not running on GCE.
-if ! ping -c 1 -q metadata.google.internal &> /dev/null; then
-  sudo -v || exit 1
+# Refresh sudo credentials if needed
+if ping -c 1 -q metadata.google.internal &> /dev/null; then
+  echo 'Running on CGE, not asking for sudo credentials'
+elif sudo --non-interactive "$(which bash)" -c true 2> /dev/null; then
+  # if we can run bash without a password, it's a pretty safe bet that either
+  # we can run any command without a password, or that sudo credentials
+  # are already cached - and they've just been re-cached
+  echo 'No need to refresh sudo credentials'
+else
+  echo 'Updating sudo credentials'
+  sudo --validate || exit 1
 fi
 
 # FOCUS is ginkgo focus to select which tests to run. By default, FOCUS is
@@ -76,7 +84,7 @@ CNI_CONF_DIR=${CNI_CONF_DIR:-""}
 # CNI_BIN_DIR is the path to network plugin config files.
 CNI_BIN_DIR=${CNI_BIN_DIR:-""}
 
-# KUBELET_KUBECONFIG_DIR is the path to a dir for the kubelet's kubeconfig file
+# KUBELET_KUBECONFIG is the path to a kubeconfig file, specifying how to connect to the API server.
 KUBELET_KUBECONFIG=${KUBELET_KUBECONFIG:-"/var/lib/kubelet/kubeconfig"}
 
 # Creates a kubeconfig file for the kubelet.
@@ -176,15 +184,13 @@ if [ ! -z $pid ]; then
 fi
 
 volume_stats_agg_period=10s
-allow_privileged=true
 serialize_image_pulls=false
 config_dir=`mktemp -d`
 file_check_frequency=10s
 pod_cidr=10.100.0.0/24
 log_level=4
-start_kubelet --kubeconfig "${KUBELET_KUBECONFIG_DIR}/kubelet.kubeconfig" \
+start_kubelet --kubeconfig ${KUBELET_KUBECONFIG} \
   --volume-stats-agg-period $volume_stats_agg_period \
-  --allow-privileged=$allow_privileged \
   --serialize-image-pulls=$serialize_image_pulls \
   --pod-manifest-path $config_dir \
   --file-check-frequency $file_check_frequency \

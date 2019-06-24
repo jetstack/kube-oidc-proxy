@@ -14,6 +14,9 @@
 
 workspace(name = "opencensus_proto")
 
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 # Import gRPC git repo so that we can load java_grpc_library build.
 git_repository(
     name = "grpc_java",
@@ -34,57 +37,41 @@ grpc_java_repositories(
 # This statement defines the @com_google_protobuf repo.
 http_archive(
     name = "com_google_protobuf",
-    sha256 = "826425182ee43990731217b917c5c3ea7190cfda141af4869e6d4ad9085a740f",
-    strip_prefix = "protobuf-3.5.1",
-    urls = ["https://github.com/google/protobuf/archive/v3.5.1.tar.gz"],
+    sha256 = "73fdad358857e120fd0fa19e071a96e15c0f23bb25f85d3f7009abfd4f264a2a",
+    strip_prefix = "protobuf-3.6.1.3",
+    urls = ["https://github.com/google/protobuf/archive/v3.6.1.3.tar.gz"],
 )
 
 http_archive(
     name = "com_google_protobuf_cc",
-    sha256 = "826425182ee43990731217b917c5c3ea7190cfda141af4869e6d4ad9085a740f",
-    strip_prefix = "protobuf-3.5.1",
-    urls = ["https://github.com/google/protobuf/archive/v3.5.1.tar.gz"],
+    sha256 = "73fdad358857e120fd0fa19e071a96e15c0f23bb25f85d3f7009abfd4f264a2a",
+    strip_prefix = "protobuf-3.6.1.3",
+    urls = ["https://github.com/google/protobuf/archive/v3.6.1.3.tar.gz"],
 )
 
 # java_proto_library rules implicitly depend on @com_google_protobuf_java//:java_toolchain,
 # which is the Java proto runtime (base classes and common utilities).
 http_archive(
     name = "com_google_protobuf_java",
-    sha256 = "826425182ee43990731217b917c5c3ea7190cfda141af4869e6d4ad9085a740f",
-    strip_prefix = "protobuf-3.5.1",
-    urls = ["https://github.com/google/protobuf/archive/v3.5.1.tar.gz"],
+    sha256 = "73fdad358857e120fd0fa19e071a96e15c0f23bb25f85d3f7009abfd4f264a2a",
+    strip_prefix = "protobuf-3.6.1.3",
+    urls = ["https://github.com/google/protobuf/archive/v3.6.1.3.tar.gz"],
 )
 
 # go rules related
 git_repository(
     name = "io_bazel_rules_go",
     remote = "https://github.com/bazelbuild/rules_go.git",
-    # we need rules_go of tag 0.12.0
+    # we need rules_go of tag 0.12.0 or greater
     # which includes golang protobuf that supports "paths=source_relative"
     # the "paths=source_relative" option for protoc-gen-go makes bazel works as expect
     # when go_package was declared in proto files
     # see https://github.com/bazelbuild/rules_go/blob/release-0.12/go/private/repositories.bzl#L75
     # for the included golang protobuf version and
     # see https://github.com/golang/protobuf/pull/544 for "paths=source_relative" usage
-    tag = "0.12.0",
+    tag = "0.15.8",
 )
 
 load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains")
 go_rules_dependencies()
 go_register_toolchains()
-
-# golang protobuf rules related
-git_repository(
-    name = "org_pubref_rules_protobuf",
-    commit = "5cae42382b620aa1e347ecf30b3e92fd0d97998c", # Jun 23, 2018
-    remote = "https://github.com/pubref/rules_protobuf.git",
-)
-
-load("@org_pubref_rules_protobuf//go:rules.bzl", "go_proto_repositories")
-go_proto_repositories(
-  excludes = [
-        # we have specified protobuf above
-        # so ignore it in case version collision
-        "com_google_protobuf",
-  ],
-)

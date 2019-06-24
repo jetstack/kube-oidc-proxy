@@ -18,11 +18,13 @@ limitations under the License.
 package version
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
 // Version is the kind CLI version
-const Version = "0.2.0"
+const Version = "v0.3.0"
 
 // NewCommand returns a new cobra.Command for version
 func NewCommand() *cobra.Command {
@@ -33,7 +35,7 @@ func NewCommand() *cobra.Command {
 		Short: "prints the kind CLI version",
 		Long:  "prints the kind CLI version",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			println(Version)
+			fmt.Println(Version)
 			return nil
 		},
 	}

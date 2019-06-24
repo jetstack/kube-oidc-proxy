@@ -30,7 +30,7 @@ import (
 
 // DataDirectory provides utilities for initializing and backing up an
 // etcd "data-dir" as well as managing a version.txt file to track the
-// etcd server version and storage verion of the etcd data in the
+// etcd server version and storage version of the etcd data in the
 // directory.
 type DataDirectory struct {
 	path        string
@@ -122,7 +122,7 @@ type VersionFile struct {
 	path string
 }
 
-// Exists returns true if a version.txt file exists on the filesystem.
+// Exists returns true if a version.txt file exists on the file system.
 func (v *VersionFile) Exists() (bool, error) {
 	return exists(v.path)
 }

@@ -25,26 +25,25 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/kind/pkg/util"
-
-	"k8s.io/apimachinery/pkg/util/version"
-
-	"k8s.io/apimachinery/pkg/util/sets"
-
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/version"
 
 	"sigs.k8s.io/kind/pkg/build/kube"
 	"sigs.k8s.io/kind/pkg/container/docker"
 	"sigs.k8s.io/kind/pkg/exec"
 	"sigs.k8s.io/kind/pkg/fs"
+	"sigs.k8s.io/kind/pkg/util"
 )
 
 // DefaultImage is the default name:tag for the built image
 const DefaultImage = "kindest/node:latest"
 
 // DefaultBaseImage is the default base image used
-const DefaultBaseImage = "kindest/base:v20190320-962dc1b"
+const DefaultBaseImage = "kindest/base:v20190506-d0ac573"
 
 // DefaultMode is the default kubernetes build mode for the built image
 // see pkg/build/kube.Bits
@@ -255,9 +254,11 @@ func (c *BuildContext) buildImage(dir string) error {
 		}()
 	}
 	if err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to create build container: %v", err)
 		return err
 	}
+
+	log.Info("Building in " + containerID)
 
 	// helper we will use to run "build steps"
 	execInBuild := func(command ...string) error {
@@ -273,13 +274,13 @@ func (c *BuildContext) buildImage(dir string) error {
 
 	// make artifacts directory
 	if err = execInBuild("mkdir", "/kind/"); err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to make directory %v", err)
 		return err
 	}
 
 	// copy artifacts in
 	if err = execInBuild("rsync", "-r", "/build/bits/", "/kind/"); err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to sync bits: %v", err)
 		return err
 	}
 
@@ -289,7 +290,7 @@ func (c *BuildContext) buildImage(dir string) error {
 		containerID: containerID,
 	}
 	if err = c.bits.Install(ic); err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to install Kubernetes: %v", err)
 		return err
 	}
 
@@ -297,21 +298,35 @@ func (c *BuildContext) buildImage(dir string) error {
 	if err = execInBuild("/bin/sh", "-c",
 		`echo "KUBELET_EXTRA_ARGS=--fail-swap-on=false" >> /etc/default/kubelet`,
 	); err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to add kubelet extra args: %v", err)
 		return err
 	}
 
 	// pre-pull images that were not part of the build
 	if err = c.prePullImages(dir, containerID); err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to pull Images: %v", err)
 		return err
 	}
 
 	// Save the image changes to a new image
-	cmd := exec.Command("docker", "commit", containerID, c.image)
+	cmd := exec.Command(
+		"docker", "commit",
+		/*
+			The snapshot storage must be a volume to avoid overlay on overlay
+
+			NOTE: we do this last because changing a volume with a docker image
+			must occur before defining it.
+
+			See: https://docs.docker.com/engine/reference/builder/#volume
+		*/
+		"--change", `VOLUME [ "/var/lib/containerd" ]`,
+		// we need to put this back after changing it when running the image
+		"--change", `ENTRYPOINT [ "/usr/local/bin/entrypoint", "/sbin/init" ]`,
+		containerID, c.image,
+	)
 	exec.InheritOutput(cmd)
 	if err = cmd.Run(); err != nil {
-		log.Errorf("Image build Failed! %v", err)
+		log.Errorf("Image build Failed! Failed to save image: %v", err)
 		return err
 	}
 
@@ -436,6 +451,17 @@ func (c *BuildContext) prePullImages(dir, containerID string) error {
 		log.Errorf("Image build Failed! Failed chown images dir %v", err)
 		return err
 	}
+
+	// preload images into containerd
+	// TODO(bentheelder): we can skip the move and chown steps if we go directly to this
+	if err = inheritOutputAndRun(cmder.Command(
+		"bash", "-c",
+		`containerd & find /kind/images -name *.tar -print0 | xargs -0 -n 1 -P $(nproc) ctr --namespace=k8s.io images import --no-unpack && kill %1 && rm -rf /kind/images/*`,
+	)); err != nil {
+		log.Errorf("Image build Failed! Failed to load images into containerd %v", err)
+		return err
+	}
+
 	return nil
 }
 
@@ -443,7 +469,8 @@ func (c *BuildContext) createBuildContainer(buildDir string) (id string, err err
 	// attempt to explicitly pull the image if it doesn't exist locally
 	// we don't care if this errors, we'll still try to run which also pulls
 	_, _ = docker.PullIfNotPresent(c.baseImage, 4)
-	id, err = docker.Run(
+	id = "kind-build-" + uuid.New().String()
+	err = docker.Run(
 		c.baseImage,
 		docker.WithRunArgs(
 			"-d", // make the client exit while the container continues to run
@@ -452,6 +479,7 @@ func (c *BuildContext) createBuildContainer(buildDir string) (id string, err err
 			"-v", fmt.Sprintf("%s:/build", buildDir),
 			// the container should hang forever so we can exec in it
 			"--entrypoint=sleep",
+			"--name="+id,
 		),
 		docker.WithContainerArgs(
 			"infinity", // sleep infinitely to keep the container around

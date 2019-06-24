@@ -33,26 +33,18 @@ option java_outer_classname = "MetricsProto";
 
 // Defines a Metric which has one or more timeseries.
 message Metric {
-  // The descriptor of the Metric. This is an optimization for network wire
-  // size, from data-model perspective a Metric contains always a
-  // MetricDescriptor.
-  oneof descriptor {
-    // In case of a streaming RPC can be sent only the first time a metric is
-    // reported to save network traffic.
-    MetricDescriptor metric_descriptor = 1;
-
-    // In case of a streaming RPC this can be sent for metrics that already
-    // sent the MetricDescriptor once.
-    string name = 2;
-  }
+  // The descriptor of the Metric.
+  // TODO(issue #152): consider only sending the name of descriptor for
+  // optimization.
+  MetricDescriptor metric_descriptor = 1;
 
   // One or more timeseries for a single metric, where each timeseries has
   // one or more points.
-  repeated TimeSeries timeseries = 3;
+  repeated TimeSeries timeseries = 2;
 
   // The resource for the metric. If unset, it may be set to a default value
   // provided for a sequence of messages in an RPC stream.
-  opencensus.proto.resource.v1.Resource resource = 4;
+  opencensus.proto.resource.v1.Resource resource = 3;
 }
 
 // Defines a metric type and its schema.
@@ -218,7 +210,7 @@ message DistributionValue {
     //
     // [0, bucket_bounds[i]) for i == 0
     // [bucket_bounds[i-1], bucket_bounds[i]) for 0 < i < N-1
-    // [bucket_bounds[i-1], +infinity) for i == N-1
+    // [bucket_bounds[i], +infinity) for i == N-1
     message Explicit {
       // The values must be strictly increasing and > 0.
       repeated double bounds = 1;
@@ -230,8 +222,9 @@ message DistributionValue {
   }
 
   // Don't change bucket boundaries within a TimeSeries if your backend doesn't
-  // support this. To save network bandwidth this field can be sent only the
-  // first time a metric is sent when using a streaming RPC.
+  // support this.
+  // TODO(issue #152): consider not required to send bucket options for
+  // optimization.
   BucketOptions bucket_options = 4;
 
   message Bucket {

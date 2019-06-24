@@ -12,16 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# kind cluster base image, built on ubuntu:18.04
-#
-# To this we add systemd, CNI, and other tools needed to run Kubeadm
+# kind cluster base image
 #
 # For systemd + docker configuration used below, see the following references:
 # https://www.freedesktop.org/wiki/Software/systemd/ContainerInterface/
 # https://developers.redhat.com/blog/2014/05/05/running-systemd-within-docker-container/
 # https://developers.redhat.com/blog/2016/09/13/running-systemd-in-a-non-privileged-container/
 
-ARG BASE_IMAGE="ubuntu:18.04"
+ARG BASE_IMAGE="ubuntu:19.04"
 FROM ${BASE_IMAGE}
 
 # setting DEBIAN_FRONTEND=noninteractive stops some apt warnings, this is not 
@@ -34,18 +32,35 @@ RUN chmod +x /usr/local/bin/clean-install
 # Get dependencies
 # The base image already has: ssh, apt, snapd
 # This is broken down into (each on a line):
-# - packages necessary for installing docker
 # - packages needed to run services (systemd)
-# - packages needed for docker / hyperkube / kubernetes components
-# - misc packages (utilities we use in our own tooling)
+# - CRI (containerd)
+# - packages needed for kubernetes components
+# - misc packages kind uses itself
 # Then we cleanup (removing unwanted systemd services)
-# Finally we disable kmsg in journald
+# Then we disable kmsg in journald (these log entries would be confusing)
+#
+# ********************************<TEMPORARY>***********************************
+#
+# We then download a ctr binary with a tiny additional feature
+# we use that is not yet merged / packaged.
+#
+# See: https://github.com/containerd/containerd/pull/3259
+#
+# This binary is built with hack/build/ctr/run.sh
+# Sources: https://github.com/BenTheElder/containerd/tree/kind
+# Additional commit:
+# https://github.com/BenTheElder/containerd/commit/cb7c780af2394ab08d5d8a3932ca7437074ae179
+#
+# TODO(bentheelder): remove this once --no-unpack is packaged upstream.
+#
+# *******************************</TEMPORARY>***********************************
+#
 # https://developers.redhat.com/blog/2014/05/05/running-systemd-within-docker-container/
 RUN clean-install \
-      apt-transport-https ca-certificates curl software-properties-common gnupg2 lsb-release \
       systemd systemd-sysv libsystemd0 \
-      conntrack iptables iproute2 ethtool socat util-linux mount ebtables udev kmod aufs-tools \
-      bash rsync \
+      containerd \
+      conntrack iptables iproute2 ethtool socat util-linux mount ebtables udev kmod \
+      bash ca-certificates curl rsync \
     && find /lib/systemd/system/sysinit.target.wants/ -name "systemd-tmpfiles-setup.service" -delete \
     && rm -f /lib/systemd/system/multi-user.target.wants/* \
     && rm -f /etc/systemd/system/*.wants/* \
@@ -53,33 +68,29 @@ RUN clean-install \
     && rm -f /lib/systemd/system/sockets.target.wants/*udev* \
     && rm -f /lib/systemd/system/sockets.target.wants/*initctl* \
     && rm -f /lib/systemd/system/basic.target.wants/* \
-    && echo "ReadKMsg=no" >> /etc/systemd/journald.conf
+    && echo "ReadKMsg=no" >> /etc/systemd/journald.conf \
+    && systemctl enable containerd \
+    && export ARCH=$(dpkg --print-architecture | sed 's/ppc64el/ppc64le/') \
+    && curl -fSL -o /usr/local/bin/ctr \
+      "https://storage.googleapis.com/bentheelder-kind-dev/containerd/linux/${ARCH}/ctr" \
+    && chmod +x /usr/local/bin/ctr \
+    && echo "done installing packages"
 
-# Install docker, which needs to happen after we install some of the packages above
-# based on https://docs.docker.com/install/linux/docker-ce/ubuntu/#set-up-the-repository
-# and https://kubernetes.io/docs/setup/independent/install-kubeadm/#installing-docker
-# - get docker's GPG key
-# - add the fingerprint
-# - add the repository
-# - update apt, install docker, cleanup
-# NOTE: 18.06 is officially supported by Kubernetes currently, so we pin to that.
-# https://kubernetes.io/docs/tasks/tools/install-kubeadm/
-ARG DOCKER_VERSION="18.06.*"
-# another temporary env, not a real argument. setting this to a non-zero value
-# silences this warning from apt-key:
-# "Warning: apt-key output should not be parsed (stdout is not a terminal)"
-ARG APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE="false"
-RUN curl -fsSL "https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg" | apt-key add - \
-    && apt-key fingerprint 0EBFCD88 \
-    && add-apt-repository \
-        "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" \
-    && clean-install "docker-ce=${DOCKER_VERSION}"
+# add restart override to containerd
+COPY 10-restart.conf /etc/systemd/system/containerd.service.d/
+
+# debug containerd version and create default config
+# additionally, disable some plugins we don't use / support
+RUN containerd --version \
+    && mkdir -p /etc/containerd \
+    && echo 'disabled_plugins = ["aufs", "btrfs", "zfs"]' > /etc/containerd/config.toml \
+    && containerd config default >> /etc/containerd/config.toml
 
 # Install CNI binaries to /opt/cni/bin
 # TODO(bentheelder): doc why / what here
 ARG CNI_VERSION="0.7.5"
 ARG CNI_BASE_URL="https://storage.googleapis.com/kubernetes-release/network-plugins/"
-RUN export ARCH=$(dpkg --print-architecture) \
+RUN export ARCH=$(dpkg --print-architecture | sed 's/ppc64el/ppc64le/') \
     && export CNI_TARBALL="cni-plugins-${ARCH}-v${CNI_VERSION}.tgz" \
     && export CNI_URL="${CNI_BASE_URL}${CNI_TARBALL}" \
     && curl -sSL --retry 5 --output /tmp/cni.tgz "${CNI_URL}" \
@@ -87,6 +98,12 @@ RUN export ARCH=$(dpkg --print-architecture) \
     && mkdir -p /opt/cni/bin \
     && tar -C /opt/cni/bin -xzf /tmp/cni.tgz \
     && rm -rf /tmp/cni.tgz
+
+# Install crictl to /usr/local/bin
+ARG CRICTL_VERSION="v1.14.0"
+RUN export ARCH=$(dpkg --print-architecture | sed 's/ppc64el/ppc64le/') \
+    && curl -fSL "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-${ARCH}.tar.gz" | tar xzC /usr/local/bin \
+    && echo 'runtime-endpoint: unix:///var/run/containerd/containerd.sock' > /etc/crictl.yaml
 
 # tell systemd that it is in docker (it will check for the container env)
 # https://www.freedesktop.org/wiki/Software/systemd/ContainerInterface/
@@ -99,16 +116,10 @@ STOPSIGNAL SIGRTMIN+3
 # basically this just lets us set up some things before continuing on to systemd
 # while preserving that systemd is PID1
 # for how we leverage this, see pkg/cluster
-COPY [ "entrypoint/entrypoint", "/usr/local/bin/" ]
+COPY [ "entrypoint", "/usr/local/bin/" ]
 # We need systemd to be PID1 to run the various services (docker, kubelet, etc.)
-# NOTE: this is *only* for documentation, the entrypoint is overridden at runtime
+# NOTE: this is *only* for documentation, the entrypoint is overridden by the node image
 ENTRYPOINT [ "/usr/local/bin/entrypoint", "/sbin/init" ]
-
-# the docker graph must be a volume to avoid overlay on overlay
-# NOTE: we do this last because changing a volume with a Dockerfile must
-# occur before defining it.
-# See: https://docs.docker.com/engine/reference/builder/#volume
-VOLUME [ "/var/lib/docker" ]
 
 # TODO(bentheelder): deal with systemd MAC address assignment
 # https://github.com/systemd/systemd/issues/3374#issuecomment-288882355
