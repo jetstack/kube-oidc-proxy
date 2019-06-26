@@ -101,9 +101,11 @@ func Convert_config_Cluster_To_v1alpha3_Cluster(in *config.Cluster, out *Cluster
 }
 
 func autoConvert_v1alpha3_Networking_To_config_Networking(in *Networking, out *config.Networking, s conversion.Scope) error {
+	out.IPFamily = config.ClusterIPFamily(in.IPFamily)
 	out.APIServerPort = in.APIServerPort
 	out.APIServerAddress = in.APIServerAddress
 	out.PodSubnet = in.PodSubnet
+	out.ServiceSubnet = in.ServiceSubnet
 	out.DisableDefaultCNI = in.DisableDefaultCNI
 	return nil
 }
@@ -114,9 +116,11 @@ func Convert_v1alpha3_Networking_To_config_Networking(in *Networking, out *confi
 }
 
 func autoConvert_config_Networking_To_v1alpha3_Networking(in *config.Networking, out *Networking, s conversion.Scope) error {
+	out.IPFamily = ClusterIPFamily(in.IPFamily)
 	out.APIServerPort = in.APIServerPort
 	out.APIServerAddress = in.APIServerAddress
 	out.PodSubnet = in.PodSubnet
+	out.ServiceSubnet = in.ServiceSubnet
 	out.DisableDefaultCNI = in.DisableDefaultCNI
 	return nil
 }
@@ -130,6 +134,7 @@ func autoConvert_v1alpha3_Node_To_config_Node(in *Node, out *config.Node, s conv
 	out.Role = config.NodeRole(in.Role)
 	out.Image = in.Image
 	out.ExtraMounts = *(*[]cri.Mount)(unsafe.Pointer(&in.ExtraMounts))
+	out.ExtraPortMappings = *(*[]cri.PortMapping)(unsafe.Pointer(&in.ExtraPortMappings))
 	return nil
 }
 
@@ -142,6 +147,7 @@ func autoConvert_config_Node_To_v1alpha3_Node(in *config.Node, out *Node, s conv
 	out.Role = NodeRole(in.Role)
 	out.Image = in.Image
 	out.ExtraMounts = *(*[]cri.Mount)(unsafe.Pointer(&in.ExtraMounts))
+	out.ExtraPortMappings = *(*[]cri.PortMapping)(unsafe.Pointer(&in.ExtraPortMappings))
 	return nil
 }
 

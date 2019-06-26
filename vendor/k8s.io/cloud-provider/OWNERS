@@ -40,7 +40,5 @@ reviewers:
 - wlan0
 - cheftako
 - andrewsykim
-- mcrute
 labels:
 - sig/cloud-provider
-- area/cloudprovider

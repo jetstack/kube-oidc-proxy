@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
-	//apiserverflag "k8s.io/apiserver/pkg/util/flag"
-	//"k8s.io/apiserver/pkg/util/globalflag"
 	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"

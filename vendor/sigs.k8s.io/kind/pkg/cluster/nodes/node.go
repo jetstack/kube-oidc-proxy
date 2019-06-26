@@ -33,6 +33,14 @@ import (
 	"sigs.k8s.io/kind/pkg/exec"
 )
 
+const (
+	// Docker default bridge network is named "bridge" (https://docs.docker.com/network/bridge/#use-the-default-bridge-network)
+	defaultNetwork = "bridge"
+	httpProxy      = "HTTP_PROXY"
+	httpsProxy     = "HTTPS_PROXY"
+	noProxy        = "NO_PROXY"
+)
+
 // Node represents a handle to a kind node
 // This struct must be created by one of: CreateControlPlane
 // It should not be manually instantiated
@@ -62,7 +70,8 @@ func (n *Node) Command(command string, args ...string) exec.Cmd {
 type nodeCache struct {
 	mu                sync.RWMutex
 	kubernetesVersion string
-	ip                string
+	ipv4              string
+	ipv6              string
 	ports             map[int32]int32
 	role              string
 }
@@ -79,10 +88,10 @@ func (cache *nodeCache) KubeVersion() string {
 	return cache.kubernetesVersion
 }
 
-func (cache *nodeCache) IP() string {
+func (cache *nodeCache) IP() (string, string) {
 	cache.mu.RLock()
 	defer cache.mu.RUnlock()
-	return cache.ip
+	return cache.ipv4, cache.ipv6
 }
 
 func (cache *nodeCache) HostPort(p int32) (int32, bool) {
@@ -147,25 +156,30 @@ func (n *Node) KubeVersion() (version string, err error) {
 }
 
 // IP returns the IP address of the node
-func (n *Node) IP() (ip string, err error) {
+func (n *Node) IP() (ipv4 string, ipv6 string, err error) {
 	// use the cached version first
-	cachedIP := n.cache.IP()
-	if cachedIP != "" {
-		return cachedIP, nil
+	cachedIPv4, cachedIPv6 := n.cache.IP()
+	// TODO: this assumes there are always ipv4 and ipv6 cached addresses
+	if cachedIPv4 != "" && cachedIPv6 != "" {
+		return cachedIPv4, cachedIPv6, nil
 	}
 	// retrive the IP address of the node using docker inspect
-	lines, err := docker.Inspect(n.name, "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+	lines, err := docker.Inspect(n.name, "{{range .NetworkSettings.Networks}}{{.IPAddress}},{{.GlobalIPv6Address}}{{end}}")
 	if err != nil {
-		return "", errors.Wrap(err, "failed to get file")
+		return "", "", errors.Wrap(err, "failed to get container details")
 	}
 	if len(lines) != 1 {
-		return "", errors.Errorf("file should only be one line, got %d lines", len(lines))
+		return "", "", errors.Errorf("file should only be one line, got %d lines", len(lines))
 	}
-	ip = lines[0]
+	ips := strings.Split(lines[0], ",")
+	if len(ips) != 2 {
+		return "", "", errors.Errorf("container addresses should have 2 values, got %d values", len(ips))
+	}
 	n.cache.set(func(cache *nodeCache) {
-		cache.ip = ip
+		cache.ipv4 = ips[0]
+		cache.ipv6 = ips[1]
 	})
-	return ip, nil
+	return ips[0], ips[1], nil
 }
 
 // Ports returns a specific port mapping for the node
@@ -234,6 +248,14 @@ func (n *Node) WriteFile(dest, content string) error {
 	return n.Command("cp", "/dev/stdin", dest).SetStdin(strings.NewReader(content)).Run()
 }
 
+// ImageInspect return low-level information on containers images inside a node
+func (n *Node) ImageInspect(containerNameOrID string) ([]string, error) {
+	cmd := n.Command(
+		"crictl", "inspecti", containerNameOrID,
+	)
+	return exec.CombinedOutputLines(cmd)
+}
+
 // LoadImageArchive will load the image contents in the image reader to the
 // k8s.io namespace on the node such that the image can be used from a
 // Kubernetes pod
@@ -256,22 +278,67 @@ type proxyDetails struct {
 
 // getProxyDetails returns a struct with the host environment proxy settings
 // that should be passed to the nodes
-func getProxyDetails() proxyDetails {
-	var proxyEnvs = []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"}
+func getProxyDetails() (*proxyDetails, error) {
+	var proxyEnvs = []string{httpProxy, httpsProxy, noProxy}
 	var val string
 	var details proxyDetails
 	details.Envs = make(map[string]string)
 
+	proxySupport := false
+
 	for _, name := range proxyEnvs {
 		val = os.Getenv(name)
 		if val != "" {
+			proxySupport = true
 			details.Envs[name] = val
+			details.Envs[strings.ToLower(name)] = val
 		} else {
 			val = os.Getenv(strings.ToLower(name))
 			if val != "" {
+				proxySupport = true
 				details.Envs[name] = val
+				details.Envs[strings.ToLower(name)] = val
 			}
 		}
 	}
-	return details
+
+	// Specifically add the docker network subnets to NO_PROXY if we are using proxies
+	if proxySupport {
+		subnets, err := getSubnets(defaultNetwork)
+		if err != nil {
+			return nil, err
+		}
+		noProxyList := strings.Join(append(subnets, details.Envs[noProxy]), ",")
+		details.Envs[noProxy] = noProxyList
+		details.Envs[strings.ToLower(noProxy)] = noProxyList
+	}
+
+	return &details, nil
+}
+
+// getSubnets returns a slice of subnets for a specified network
+func getSubnets(networkName string) ([]string, error) {
+	format := `{{range (index (index . "IPAM") "Config")}}{{index . "Subnet"}} {{end}}`
+	lines, err := docker.NetworkInspect([]string{networkName}, format)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(lines[0], " "), nil
+}
+
+// EnableIPv6 enables IPv6 inside the node container and in the inner docker daemon
+func (n *Node) EnableIPv6() error {
+	// enable ipv6
+	cmd := n.Command("sysctl", "net.ipv6.conf.all.disable_ipv6=0")
+	err := exec.RunLoggingOutputOnFail(cmd)
+	if err != nil {
+		return errors.Wrap(err, "failed to enable ipv6")
+	}
+	// enable ipv6 forwarding
+	cmd = n.Command("sysctl", "net.ipv6.conf.all.forwarding=1")
+	err = exec.RunLoggingOutputOnFail(cmd)
+	if err != nil {
+		return errors.Wrap(err, "failed to enable ipv6 forwarding")
+	}
+	return nil
 }
