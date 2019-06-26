@@ -11,8 +11,6 @@ help:  ## display this help
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
-	DEP_URL := https://github.com/golang/dep/releases/download/v0.5.1/dep-linux-amd64
-	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
 	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/linux/amd64/kubectl
 	KUBECTL_HASH := f3be209a48394e0e649b30ea376ce5093205fd6769c12e62c7ab39a0827c26fb
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-linux-amd64.tar.gz
@@ -20,8 +18,6 @@ ifeq ($(UNAME_S),Linux)
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
-	DEP_URL := https://github.com/golang/dep/releases/download/v0.5.1/dep-darwin-amd64
-	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
 	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/darwin/amd64/kubectl
 	KUBECTL_HASH := 2ff06345a02636f1e6934f19dbc55452b587e06b2828c775dcdb29229c8da40f
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-darwin-amd64.tar.gz
@@ -31,12 +27,6 @@ endif
 $(BINDIR)/mockgen:
 	mkdir -p $(BINDIR)
 	go build -o $(BINDIR)/mockgen ./vendor/github.com/golang/mock/mockgen
-
-$(BINDIR)/dep:
-	mkdir -p $(BINDIR)
-	curl -sL -o $@ $(DEP_URL)
-	echo "$(DEP_HASH)  $@" | $(SHASUM)
-	chmod +x $@
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
@@ -53,13 +43,13 @@ $(BINDIR)/golangci-lint:
 	mv $(BINDIR)/.golangci-lint/*/golangci-lint $(BINDIR)/golangci-lint
 	rm -rf $(BINDIR)/.golangci-lint $(BINDIR)/.golangci-lint.tar.gz
 
-depend: $(BINDIR)/mockgen $(BINDIR)/dep $(BINDIR)/kubectl $(BINDIR)/golangci-lint
+depend: $(BINDIR)/mockgen $(BINDIR)/kubectl $(BINDIR)/golangci-lint
 
 verify_boilerplate:
 	$(HACK_DIR)/verify-boilerplate.sh
 
-verify_vendor: $(BINDIR)/dep
-	$(BINDIR)/dep ensure -no-vendor -dry-run -v
+verify_vendor:
+	go mod verify
 
 go_fmt:
 	@set -e; \
@@ -73,8 +63,9 @@ go_fmt:
 go_vet:
 	go vet $$(go list ./pkg/... ./cmd/...)
 
+# We have to make sure we omit ./hack/tools
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
-	$(BINDIR)/golangci-lint run
+	go list -f '{{.Dir}}' ./...  | fgrep -v hack/tools | xargs realpath --relative-to=. | xargs $(BINDIR)/golangci-lint run
 
 clean: ## clean up created files
 	rm -rf \

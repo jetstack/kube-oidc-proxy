@@ -79,8 +79,10 @@ github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 # github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903
 github.com/golang/groupcache/lru
-# github.com/golang/mock v1.3.1
+# github.com/golang/mock v0.0.0-20160127222235-bd3c8e81be01 => github.com/golang/mock v1.3.1
+github.com/golang/mock/mockgen
 github.com/golang/mock/gomock
+github.com/golang/mock/mockgen/model
 # github.com/golang/protobuf v1.2.0
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes/any
@@ -215,6 +217,13 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20161028155119-f51c12702a4d
 golang.org/x/time/rate
 # golang.org/x/tools v0.0.0-20190425150028-36563e24a262
+golang.org/x/tools/go/packages
+golang.org/x/tools/go/gcexportdata
+golang.org/x/tools/go/internal/packagesdriver
+golang.org/x/tools/internal/gopathwalk
+golang.org/x/tools/internal/semver
+golang.org/x/tools/go/internal/gcimporter
+golang.org/x/tools/internal/fastwalk
 golang.org/x/tools/container/intsets
 # google.golang.org/appengine v1.5.0
 google.golang.org/appengine/urlfetch

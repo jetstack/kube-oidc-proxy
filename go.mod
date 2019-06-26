@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/Masterminds/semver v1.4.2
-	github.com/golang/mock v1.3.1
+	github.com/golang/mock v0.0.0-20160127222235-bd3c8e81be01
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/spf13/cobra v0.0.5
 	gopkg.in/square/go-jose.v2 v2.3.1
@@ -45,6 +45,8 @@ replace (
 	sigs.k8s.io/structured-merge-diff => sigs.k8s.io/structured-merge-diff v0.0.0-20190302045857-e85c7b244fd2
 )
 
-replace sigs.k8s.io/kind => sigs.k8s.io/kind v0.4.0
-
-replace k8s.io/kubernetes => k8s.io/kubernetes v1.15.0
+replace (
+	github.com/golang/mock => github.com/golang/mock v1.3.1
+	k8s.io/kubernetes => k8s.io/kubernetes v1.15.0
+	sigs.k8s.io/kind => sigs.k8s.io/kind v0.4.0
+)
