@@ -11,13 +11,15 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/config"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 const (
@@ -88,6 +90,8 @@ kind: ClusterConfiguration
 	for i := range conf.Nodes {
 		conf.Nodes[i].Image = nodeImage
 	}
+
+	log.SetLevel(log.DebugLevel)
 
 	// create kind cluster
 	klog.Infof("creating kind cluster '%s'", clusterContext.Name())

@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/semver v1.4.2
 	github.com/golang/mock v0.0.0-20160127222235-bd3c8e81be01
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
+	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/cobra v0.0.5
 	gopkg.in/square/go-jose.v2 v2.3.1
 	k8s.io/api v0.0.0
