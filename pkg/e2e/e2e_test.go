@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "1.14.0"
+	defaultNodeImage = "1.15.0"
 )
 
 var e2eSuite *E2E
@@ -66,26 +66,26 @@ func TestMain(m *testing.M) {
 		klog.Fatal("kind default config set node count to 0")
 	}
 
-	kubeadmConfig := `metadata:
+	if v.Compare(v13) < 0 {
+		kubeadmConfig := `metadata:
   name: config
 networking:
   serviceSubnet: 10.0.0.0/16`
 
-	if v.Compare(v13) >= 0 {
-		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1beta1
-kind: ClusterConfiguration
-`, kubeadmConfig)
-	} else if v.Compare(v12) < 0 {
-		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha2
+		if v.Compare(v12) < 0 {
+			kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha2
 kind: MasterConfiguration
 `, kubeadmConfig)
-	} else {
-		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha3
+		} else {
+			kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha3
 kind: ClusterConfiguration
 `, kubeadmConfig)
-	}
+		}
 
-	conf.KubeadmConfigPatches = []string{kubeadmConfig}
+		conf.KubeadmConfigPatches = []string{kubeadmConfig}
+	} else {
+		conf.Networking.ServiceSubnet = "10.0.0.0/16"
+	}
 
 	for i := range conf.Nodes {
 		conf.Nodes[i].Image = nodeImage
