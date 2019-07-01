@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
@@ -30,19 +31,24 @@ var (
 )
 
 type Proxy struct {
-	reqAuther         *bearertoken.Authenticator
+	oidcAuther *bearertoken.Authenticator
+	saAuther   authenticator.Token
+
 	secureServingInfo *server.SecureServingInfo
 
 	restConfig      *rest.Config
 	clientTransport http.RoundTripper
+
+	saTokenPassthrough bool
 }
 
-func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
-	ssinfo *server.SecureServingInfo) *Proxy {
+func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
+	ssinfo *server.SecureServingInfo, saTokenPassthrough bool) *Proxy {
 	return &Proxy{
-		restConfig:        restConfig,
-		reqAuther:         auther,
-		secureServingInfo: ssinfo,
+		restConfig:         restConfig,
+		oidcAuther:         oidcAuther,
+		secureServingInfo:  ssinfo,
+		saTokenPassthrough: saTokenPassthrough,
 	}
 }
 
@@ -109,9 +115,22 @@ func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{
 
 func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// auth request and handle unauthed
-	info, ok, err := p.reqAuther.AuthenticateRequest(req)
+	info, ok, err := p.oidcAuther.AuthenticateRequest(req)
 	if err != nil {
-		klog.Errorf("unable to authenticate the request due to an error: %v", err)
+
+		// attempt to pass through request if valid service account
+		if p.saTokenPassthrough {
+			saErr := p.validateServiceAccountToken(req)
+			// no error so passthrough
+			if saErr == nil {
+				return p.clientTransport.RoundTrip(req)
+			}
+
+			err = fmt.Errorf("%s\n%s", err, saErr)
+		}
+
+		klog.Errorf("unable to authenticate the request due to an error (%s): %v",
+			req.RemoteAddr, err)
 		return nil, errUnauthorized
 	}
 
@@ -169,6 +188,25 @@ func (p *Proxy) hasImpersonation(header http.Header) bool {
 	}
 
 	return false
+}
+
+func (p *Proxy) validateServiceAccountToken(req *http.Request) error {
+	headerToken := req.Header.Get("Authorization")
+	if len(headerToken) == 0 {
+		return errors.New("not bearer token found in request header")
+	}
+
+	_, b, err := p.saAuther.AuthenticateToken(req.Context(), headerToken)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate possible service account request token: %s",
+			err)
+	}
+
+	if !b {
+		return errors.New("token not authenticated")
+	}
+
+	return nil
 }
 
 func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {

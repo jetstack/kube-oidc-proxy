@@ -27,6 +27,9 @@ import (
 
 const (
 	readinessProbePort = 8080
+
+	authPassthroughCLISetName = "Authentication Passthrough (Experiential)"
+	saTokenPassthroughName    = "service-account-token-passthrough"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -100,7 +103,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo)
+			p := proxy.New(restConfig, reqAuther, secureServingInfo,
+				cmd.Flag(saTokenPassthroughName).Value.String() == "true")
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -134,6 +138,14 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 	namedFlagSets.FlagSet("misc").Bool("version",
 		false, "Print version information and quit")
+
+	//func JWTTokenAuthenticator(iss string, keys []interface{}, implicitAuds authenticator.Audiences, validator Validator) authenticator.Token {
+	namedFlagSets.FlagSet(authPassthroughCLISetName).Bool(saTokenPassthroughName,
+		false,
+		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
+	//	namedFlagSets.FlagSet(authPassthroughCLISetName).Bool("iss",
+	//		false,
+	//		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
