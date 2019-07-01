@@ -83,17 +83,20 @@ test: generate verify ## run all go tests
 
 e2e: e2e-1.14 ## run end to end tests
 
+e2e-1.15: build ## run end to end tests for kubernetes version 1.15
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.15.0 go test ./pkg/e2e/. -v --count=1
+
 e2e-1.14: build ## run end to end tests for kubernetes version 1.14
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.14.0 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.14.3 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.13: build ## run end to end tests for kubernetes version 1.13
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.13.3 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.13.7 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.12: build ## run end to end tests for kubernetes version 1.12
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.12.5 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.12.8 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.11: build ## run end to end tests for kubernetes version 1.11
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.3 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.10 go test ./pkg/e2e/. -v --count=1
 
 build: generate ## build kube-oidc-proxy
 	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'
