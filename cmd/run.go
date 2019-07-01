@@ -28,8 +28,11 @@ import (
 const (
 	readinessProbePort = 8080
 
-	authPassthroughCLISetName = "Authentication Passthrough (Experiential)"
-	saTokenPassthroughName    = "service-account-token-passthrough"
+	authPassthroughCLISetName        = "Authentication Passthrough (Alpha)"
+	saTokenPassthroughEnabledName    = "service-account-token-passthrough"
+	saTokenPassthroughIssName        = "service-account-iss"
+	saTokenPassthroughAudName        = "service-account-audiences"
+	saTokenPassthroughPublicKeysName = "service-account-public-keys"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -50,6 +53,13 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
+
+	saOptions := &proxy.ServiceAccountTokenPassthroughOptions{
+		Enabled:        false,
+		Iss:            "kubernetes/serviceaccount",
+		PublicKeyPaths: []string{},
+		Audiences:      []string{},
+	}
 
 	// proxy command
 	cmd := &cobra.Command{
@@ -103,8 +113,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo,
-				cmd.Flag(saTokenPassthroughName).Value.String() == "true")
+			p := proxy.New(restConfig, reqAuther, secureServingInfo, saOptions)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -139,13 +148,22 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	namedFlagSets.FlagSet("misc").Bool("version",
 		false, "Print version information and quit")
 
-	//func JWTTokenAuthenticator(iss string, keys []interface{}, implicitAuds authenticator.Audiences, validator Validator) authenticator.Token {
-	namedFlagSets.FlagSet(authPassthroughCLISetName).Bool(saTokenPassthroughName,
+	namedFlagSets.FlagSet(authPassthroughCLISetName).BoolVar(&saOptions.Enabled,
+		saTokenPassthroughEnabledName,
 		false,
 		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
-	//	namedFlagSets.FlagSet(authPassthroughCLISetName).Bool("iss",
-	//		false,
-	//		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
+	namedFlagSets.FlagSet(authPassthroughCLISetName).StringVar(&saOptions.Iss,
+		saTokenPassthroughIssName,
+		"kubernetes/serviceaccount",
+		"Target issuer (iss) claim service account tokens are signed by.")
+	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&saOptions.Audiences,
+		saTokenPassthroughAudName,
+		[]string{},
+		"Target audience claims of signed Service Account tokens.")
+	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&saOptions.PublicKeyPaths,
+		saTokenPassthroughPublicKeysName,
+		[]string{},
+		"List of file paths containing public keys, of which their private keys are used to sign Service Account tokens.")
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)

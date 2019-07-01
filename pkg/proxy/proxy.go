@@ -2,14 +2,18 @@
 package proxy
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
@@ -17,6 +21,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
+	"k8s.io/kubernetes/pkg/serviceaccount"
 )
 
 var (
@@ -30,6 +35,13 @@ var (
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
+type ServiceAccountTokenPassthroughOptions struct {
+	Enabled        bool
+	Iss            string
+	PublicKeyPaths []string
+	Audiences      []string
+}
+
 type Proxy struct {
 	oidcAuther *bearertoken.Authenticator
 	saAuther   authenticator.Token
@@ -39,65 +51,38 @@ type Proxy struct {
 	restConfig      *rest.Config
 	clientTransport http.RoundTripper
 
-	saTokenPassthrough bool
+	saTokenPassthroughOptions *ServiceAccountTokenPassthroughOptions
 }
 
 func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
-	ssinfo *server.SecureServingInfo, saTokenPassthrough bool) *Proxy {
+	ssinfo *server.SecureServingInfo, saTokenPassthroughOptions *ServiceAccountTokenPassthroughOptions) *Proxy {
 	return &Proxy{
-		restConfig:         restConfig,
-		oidcAuther:         oidcAuther,
-		secureServingInfo:  ssinfo,
-		saTokenPassthrough: saTokenPassthrough,
+		restConfig:                restConfig,
+		oidcAuther:                oidcAuther,
+		secureServingInfo:         ssinfo,
+		saTokenPassthroughOptions: saTokenPassthroughOptions,
 	}
 }
 
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	klog.Infof("waiting for oidc provider to become ready...")
 
-	// get golang tls config to the API server
-	tlsConfig, err := rest.TLSConfigFor(p.restConfig)
-	if err != nil {
+	if err := p.initServiceAccountAuther(); err != nil {
 		return nil, err
 	}
 
-	// create tls transport to request
-	tlsTransport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	// get kube transport config form rest client config
-	restTransportConfig, err := p.restConfig.TransportConfig()
+	proxyHandler, err := p.initServing()
 	if err != nil {
 		return nil, err
 	}
-
-	// wrap golang tls config with kube transport round tripper
-	clientRT, err := transport.HTTPWrappersForConfig(restTransportConfig, tlsTransport)
-	if err != nil {
-		return nil, err
-	}
-	p.clientTransport = clientRT
-
-	// get API server url
-	url, err := url.Parse(p.restConfig.Host)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %s", err)
-	}
-
-	// set up proxy handler using proxy
-	proxyHandler := httputil.NewSingleHostReverseProxy(url)
-	proxyHandler.Transport = p
-	proxyHandler.ErrorHandler = p.Error
-
-	// wait for oidc auther to become ready
-	time.Sleep(10 * time.Second)
 
 	waitCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {
 		return nil, err
 	}
 
+	// wait for oidc auther to become ready
+	time.Sleep(10 * time.Second)
 	klog.Infof("proxy ready")
 
 	return waitCh, nil
@@ -119,7 +104,7 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 
 		// attempt to pass through request if valid service account
-		if p.saTokenPassthrough {
+		if p.saTokenPassthroughOptions.Enabled {
 			saErr := p.validateServiceAccountToken(req)
 			// no error so passthrough
 			if saErr == nil {
@@ -242,4 +227,85 @@ func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
 		klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
 		http.Error(rw, "", http.StatusInternalServerError)
 	}
+}
+
+func (p *Proxy) initServiceAccountAuther() error {
+	if p.saTokenPassthroughOptions == nil || !p.saTokenPassthroughOptions.Enabled {
+		p.saTokenPassthroughOptions = &ServiceAccountTokenPassthroughOptions{Enabled: false}
+		return nil
+	}
+
+	var errs field.ErrorList
+	var pks []interface{}
+
+	for _, f := range p.saTokenPassthroughOptions.PublicKeyPaths {
+		b, err := ioutil.ReadFile(f)
+		if err != nil {
+			errs = append(errs, field.Invalid(field.NewPath("service-account-public-keys"), f, err.Error()))
+		}
+
+		for {
+			block, rest := pem.Decode(b)
+			if block == nil {
+				break
+			}
+
+			pk, err := x509.ParsePKIXPublicKey(block.Bytes)
+			if err != nil {
+				errs = append(errs, field.Invalid(field.NewPath("service-account-public-keys"), f, err.Error()))
+				continue
+			}
+
+			pks = append(pks, pk)
+			b = rest
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs.ToAggregate()
+	}
+
+	p.saAuther = serviceaccount.JWTTokenAuthenticator(p.saTokenPassthroughOptions.Iss,
+		pks, p.saTokenPassthroughOptions.Audiences, nil)
+
+	return nil
+}
+
+func (p *Proxy) initServing() (*httputil.ReverseProxy, error) {
+	// get golang tls config to the API server
+	tlsConfig, err := rest.TLSConfigFor(p.restConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// create tls transport to request
+	tlsTransport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	// get kube transport config form rest client config
+	restTransportConfig, err := p.restConfig.TransportConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// wrap golang tls config with kube transport round tripper
+	clientRT, err := transport.HTTPWrappersForConfig(restTransportConfig, tlsTransport)
+	if err != nil {
+		return nil, err
+	}
+	p.clientTransport = clientRT
+
+	// get API server url
+	url, err := url.Parse(p.restConfig.Host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse url: %s", err)
+	}
+
+	// set up proxy handler using proxy
+	proxyHandler := httputil.NewSingleHostReverseProxy(url)
+	proxyHandler.Transport = p
+	proxyHandler.ErrorHandler = p.Error
+
+	return proxyHandler, nil
 }
