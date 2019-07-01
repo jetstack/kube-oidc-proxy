@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 			nodeImage, err)
 	}
 
-	nodeImage = fmt.Sprintf("eu.gcr.io/jetstack-build-infra-images/kind:%s", nodeImage)
+	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
 
 	clusterContext := cluster.NewContext("kube-oidc-proxy-e2e")
 
