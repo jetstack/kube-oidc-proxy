@@ -28,11 +28,11 @@ import (
 const (
 	readinessProbePort = 8080
 
-	authPassthroughCLISetName        = "Authentication Passthrough (Alpha)"
-	saTokenPassthroughEnabledName    = "service-account-token-passthrough"
-	saTokenPassthroughIssName        = "service-account-iss"
-	saTokenPassthroughAudName        = "service-account-audiences"
-	saTokenPassthroughPublicKeysName = "service-account-public-keys"
+	authPassthroughCLISetName     = "Authentication Passthrough (Alpha)"
+	saTokenPassthroughEnabledName = "service-account-token-passthrough"
+	saTokenPassthroughIssName     = "service-account-iss"
+	saTokenPassthroughAudName     = "service-account-audiences"
+	saTokenPassthroughKeysName    = "service-account-key-files"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -144,26 +144,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags.ImpersonateGroup = nil
 	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
 
+	saTokenOptionFlags(&namedFlagSets, saOptions)
+
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 	namedFlagSets.FlagSet("misc").Bool("version",
 		false, "Print version information and quit")
-
-	namedFlagSets.FlagSet(authPassthroughCLISetName).BoolVar(&saOptions.Enabled,
-		saTokenPassthroughEnabledName,
-		false,
-		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
-	namedFlagSets.FlagSet(authPassthroughCLISetName).StringVar(&saOptions.Iss,
-		saTokenPassthroughIssName,
-		"kubernetes/serviceaccount",
-		"Target issuer (iss) claim service account tokens are signed by.")
-	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&saOptions.Audiences,
-		saTokenPassthroughAudName,
-		[]string{},
-		"Target audience claims of signed Service Account tokens.")
-	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&saOptions.PublicKeyPaths,
-		saTokenPassthroughPublicKeysName,
-		[]string{},
-		"List of file paths containing public keys, of which their private keys are used to sign Service Account tokens.")
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
@@ -183,4 +168,23 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	})
 
 	return cmd
+}
+
+func saTokenOptionFlags(namedFlagSets *cliflag.NamedFlagSets, opts *proxy.ServiceAccountTokenPassthroughOptions) {
+	namedFlagSets.FlagSet(authPassthroughCLISetName).BoolVar(&opts.Enabled,
+		saTokenPassthroughEnabledName,
+		false,
+		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
+	namedFlagSets.FlagSet(authPassthroughCLISetName).StringVar(&opts.Iss,
+		saTokenPassthroughIssName,
+		"kubernetes/serviceaccount",
+		"Target issuer (iss) claim service account tokens are signed by.")
+	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&opts.Audiences,
+		saTokenPassthroughAudName,
+		[]string{},
+		"Target audience claims of signed Service Account tokens.")
+	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&opts.PublicKeyPaths,
+		saTokenPassthroughKeysName,
+		[]string{},
+		"List of file paths containing public keys, of which their private keys are used to sign Service Account tokens.")
 }

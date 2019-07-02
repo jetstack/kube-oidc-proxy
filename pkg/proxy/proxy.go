@@ -241,7 +241,7 @@ func (p *Proxy) initServiceAccountAuther() error {
 	for _, f := range p.saTokenPassthroughOptions.PublicKeyPaths {
 		b, err := ioutil.ReadFile(f)
 		if err != nil {
-			errs = append(errs, field.Invalid(field.NewPath("service-account-public-keys"), f, err.Error()))
+			errs = append(errs, field.Invalid(field.NewPath("service-account-key-files"), f, err.Error()))
 		}
 
 		for {
@@ -252,7 +252,7 @@ func (p *Proxy) initServiceAccountAuther() error {
 
 			pk, err := x509.ParsePKIXPublicKey(block.Bytes)
 			if err != nil {
-				errs = append(errs, field.Invalid(field.NewPath("service-account-public-keys"), f, err.Error()))
+				errs = append(errs, field.Invalid(field.NewPath("service-account-key-files"), f, err.Error()))
 				continue
 			}
 

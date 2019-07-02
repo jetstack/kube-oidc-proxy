@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -40,8 +41,9 @@ type E2E struct {
 	proxyClient    *http.Client
 	proxyCmd       *exec.Cmd
 	proxyPort      string
-	proxyCert      []byte
 	proxyTransport *http.Transport
+
+	proxyKeyCertPair *utils.KeyCertPair
 
 	tmpDir string
 }
@@ -141,15 +143,15 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	}
 	e.issuer = issuer
 
-	proxyCertPath, proxyKeyPath, _, proxyCert, err := utils.NewTLSSelfSignedCertKey(pairTmpDir, "")
+	pkcp, err := utils.NewTLSSelfSignedCertKey(pairTmpDir, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key pair: %s", err)
 	}
-	e.proxyCert = proxyCert
+	e.proxyKeyCertPair = pkcp
 
 	signer, err := jose.NewSigner(jose.SigningKey{
 		Algorithm: jose.SignatureAlgorithm("RS256"),
-		Key:       issuer.Key(),
+		Key:       issuer.KeyCertPair().Key,
 	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise new jwt signer: %s", err)
@@ -157,8 +159,9 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	e.signer = signer
 
 	certPool := x509.NewCertPool()
-	if ok := certPool.AppendCertsFromPEM(proxyCert); !ok {
-		return nil, fmt.Errorf("failed to append proxy cert data to cert pool %s", proxyCertPath)
+	if ok := certPool.AppendCertsFromPEM(pkcp.Cert); !ok {
+		return nil, fmt.Errorf(
+			"failed to append proxy cert data to cert pool %s", pkcp.CertPath)
 	}
 
 	transport := &http.Transport{
@@ -173,28 +176,9 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	}
 	e.proxyPort = proxyPort
 
-	cmd := exec.Command("../../kube-oidc-proxy",
-		fmt.Sprintf("--oidc-issuer-url=https://127.0.0.1:%s", issuer.Port()),
-		fmt.Sprintf("--oidc-ca-file=%s", issuer.CertPath()),
-		"--oidc-client-id=kube-oidc-proxy_e2e_client-id",
-		"--oidc-username-claim=e2e-username-claim",
-		"--oidc-groups-claim=e2e-groups-claim",
-		"--oidc-signing-algs=RS256",
-
-		"--bind-address=127.0.0.1",
-		fmt.Sprintf("--secure-port=%s", proxyPort),
-		fmt.Sprintf("--tls-cert-file=%s", proxyCertPath),
-		fmt.Sprintf("--tls-private-key-file=%s", proxyKeyPath),
-
-		fmt.Sprintf("--kubeconfig=%s", e.kubeKubeconfig),
-	)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Start(); err != nil {
-		return nil, err
+	if err := e.runProxy(); err != nil {
+		return nil, fmt.Errorf("failed to start proxy server: %s", err)
 	}
-
-	e.proxyCmd = cmd
 
 	time.Sleep(time.Second * 13)
 
@@ -245,7 +229,7 @@ func (e *E2E) proxyRestClient() (*rest.Config, error) {
 			},
 		},
 		TLSClientConfig: rest.TLSClientConfig{
-			CAData: e.proxyCert,
+			CAData: e.proxyKeyCertPair.Cert,
 		},
 
 		APIPath: "/api",
@@ -265,5 +249,46 @@ func (e *E2E) cleanup() {
 				err)
 		}
 
+		if _, err := e.proxyCmd.Process.Wait(); err != nil {
+			klog.Errorf("failed to wait for kube-oidc-proxy process to exit: %s",
+				err)
+		}
 	}
+}
+
+func (e *E2E) runProxy(extraArgs ...string) error {
+	if e.issuer == nil {
+		return errors.New("failed to run proxy: not issuer ready")
+	}
+
+	args := append(
+		[]string{
+			fmt.Sprintf("--oidc-issuer-url=https://127.0.0.1:%s", e.issuer.Port()),
+			fmt.Sprintf("--oidc-ca-file=%s", e.issuer.KeyCertPair().CertPath),
+			"--oidc-client-id=kube-oidc-proxy_e2e_client-id",
+			"--oidc-username-claim=e2e-username-claim",
+			"--oidc-groups-claim=e2e-groups-claim",
+			"--oidc-signing-algs=RS256",
+
+			"--bind-address=127.0.0.1",
+			fmt.Sprintf("--secure-port=%s", e.proxyPort),
+			fmt.Sprintf("--tls-cert-file=%s", e.proxyKeyCertPair.CertPath),
+			fmt.Sprintf("--tls-private-key-file=%s", e.proxyKeyCertPair.KeyPath),
+
+			fmt.Sprintf("--kubeconfig=%s", e.kubeKubeconfig),
+		},
+		extraArgs...,
+	)
+
+	cmd := exec.Command("../../kube-oidc-proxy", args...)
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	e.proxyCmd = cmd
+
+	return nil
 }

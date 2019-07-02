@@ -2,22 +2,21 @@
 package issuer
 
 import (
-	"crypto/rsa"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 	"k8s.io/klog"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 type Issuer struct {
-	tlsDir            string
-	listenPort        string
-	certPath, keyPath string
+	tlsDir     string
+	listenPort string
 
-	sk *rsa.PrivateKey
+	keyCertPair *utils.KeyCertPair
 }
 
 func New(tlsDir string) *Issuer {
@@ -33,18 +32,16 @@ func (i *Issuer) Run() error {
 	}
 	i.listenPort = listenPort
 
-	certPath, keyPath, sk, _, err := utils.NewTLSSelfSignedCertKey(i.tlsDir, "oidc-issuer")
+	kcp, err := utils.NewTLSSelfSignedCertKey(i.tlsDir, "oidc-issuer")
 	if err != nil {
 		return fmt.Errorf("failed to create issuer key pair: %s", err)
 	}
-	i.certPath = certPath
-	i.keyPath = keyPath
-	i.sk = sk
+	i.keyCertPair = kcp
 
 	serveAddr := fmt.Sprintf("127.0.0.1:%s", i.listenPort)
 
 	go func() {
-		err = http.ListenAndServeTLS(serveAddr, i.certPath, i.keyPath, i)
+		err = http.ListenAndServeTLS(serveAddr, i.keyCertPair.CertPath, i.keyCertPair.KeyPath, i)
 		if err != nil {
 			klog.Errorf("failed to server secure tls: %s", err)
 		}
@@ -80,16 +77,8 @@ func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (i *Issuer) CertPath() string {
-	return i.certPath
-}
-
-func (i *Issuer) KeyPath() string {
-	return i.keyPath
-}
-
-func (i *Issuer) Key() *rsa.PrivateKey {
-	return i.sk
+func (i *Issuer) KeyCertPair() *utils.KeyCertPair {
+	return i.keyCertPair
 }
 
 func (i *Issuer) Port() string {
@@ -128,7 +117,7 @@ func (i *Issuer) wellKnownResponse() []byte {
 }
 
 func (i *Issuer) CertsDisc() []byte {
-	n := base64.RawURLEncoding.EncodeToString(i.sk.N.Bytes())
+	n := base64.RawURLEncoding.EncodeToString(i.keyCertPair.Key.N.Bytes())
 
 	return []byte(fmt.Sprintf(`{
 	  "keys": [
