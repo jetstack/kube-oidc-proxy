@@ -17,6 +17,8 @@ import (
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
 	authtypes "k8s.io/kubernetes/pkg/apis/authentication"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 var (
@@ -138,8 +140,11 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, errNoName
 	}
 
+	groups := user.GetGroups()
 	// ensure AllAuthenticated exists in the group list
-	groups := p.ensureAllAuthenticatedGroup(user.GetGroups())
+	if !utils.StringsContain(groups, authuser.AllAuthenticated) {
+		groups = append(groups, authuser.AllAuthenticated)
+	}
 
 	// ensure we set prefixes for username and groups
 	username, groups := p.addUserInfoPrefixes(user.GetName(), groups)
@@ -169,24 +174,6 @@ func (p *Proxy) addUserInfoPrefixes(username string, groups []string) (string, [
 	}
 
 	return username, groups
-}
-
-// ensure group contains allauthenticated builtin
-func (p *Proxy) ensureAllAuthenticatedGroup(groups []string) []string {
-	var found bool
-
-	for _, elem := range groups {
-		if elem == authuser.AllAuthenticated {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		groups = append(groups, authuser.AllAuthenticated)
-	}
-
-	return groups
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {

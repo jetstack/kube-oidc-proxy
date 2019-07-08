@@ -439,7 +439,8 @@ func Test_RoundTrip(t *testing.T) {
 
 	authResponse = &authenticator.Response{
 		User: &user.DefaultInfo{
-			Name: "a-user",
+			Name:   "a-user",
+			Groups: []string{authuser.AllAuthenticated},
 		},
 	}
 	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
