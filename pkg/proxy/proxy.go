@@ -33,17 +33,23 @@ var (
 type Proxy struct {
 	reqAuther         *bearertoken.Authenticator
 	secureServingInfo *server.SecureServingInfo
+	prefixes          UserInfoPrefixes
 
 	restConfig      *rest.Config
 	clientTransport http.RoundTripper
 }
 
+type UserInfoPrefixes struct {
+	Username, Groups string
+}
+
 func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
-	ssinfo *server.SecureServingInfo) *Proxy {
+	ssinfo *server.SecureServingInfo, prefixes UserInfoPrefixes) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
 		reqAuther:         auther,
 		secureServingInfo: ssinfo,
+		prefixes:          prefixes,
 	}
 }
 
@@ -132,23 +138,15 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, errNoName
 	}
 
-	// ensure group contains allauthenticated builtin
-	found := false
-	groups := user.GetGroups()
-	for _, elem := range groups {
-		if elem == authuser.AllAuthenticated {
-			found = true
-			break
-		}
-	}
-	if !found {
-		groups = append(groups, authuser.AllAuthenticated)
-	}
+	// ensure AllAuthenticated exists in the group list
+	groups := p.ensureAllAuthenticatedGroup(user.GetGroups())
+
+	// ensure we set prefixes for username and groups
+	username, groups := p.addUserInfoPrefixes(user.GetName(), groups)
 
 	// set impersonation header using authenticated user identity
-
 	conf := transport.ImpersonationConfig{
-		UserName: user.GetName(),
+		UserName: username,
 		Groups:   groups,
 		Extra:    user.GetExtra(),
 	}
@@ -157,6 +155,38 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// push request through round trippers to the API server
 	return rt.RoundTrip(req)
+}
+
+func (p *Proxy) addUserInfoPrefixes(username string, groups []string) (string, []string) {
+	if len(p.prefixes.Username) > 0 {
+		username = p.prefixes.Username + username
+	}
+
+	if len(p.prefixes.Groups) > 0 {
+		for i := range groups {
+			groups[i] = p.prefixes.Groups + groups[i]
+		}
+	}
+
+	return username, groups
+}
+
+// ensure group contains allauthenticated builtin
+func (p *Proxy) ensureAllAuthenticatedGroup(groups []string) []string {
+	var found bool
+
+	for _, elem := range groups {
+		if elem == authuser.AllAuthenticated {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		groups = append(groups, authuser.AllAuthenticated)
+	}
+
+	return groups
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {

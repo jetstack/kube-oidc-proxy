@@ -62,6 +62,12 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
+			// user info prefix options
+			prefixes := proxy.UserInfoPrefixes{
+				Username: oidcOptions.OIDC.UsernamePrefix,
+				Groups:   oidcOptions.OIDC.GroupsPrefix,
+			}
+
 			// oidc config
 			oidcAuther, err := oidc.New(oidc.Options{
 				APIAudiences:         oidcOptions.APIAudiences,
@@ -86,7 +92,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo)
+			p := proxy.New(restConfig, reqAuther,
+				secureServingInfo, prefixes)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)

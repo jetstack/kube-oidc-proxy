@@ -161,6 +161,83 @@ func Test_Error(t *testing.T) {
 	}
 }
 
+func Test_HasPrefix(t *testing.T) {
+	for n, c := range map[string]struct {
+		username string
+		groups   []string
+
+		usernamePrefix, groupsPrefix string
+
+		expUsername string
+		expGroups   []string
+	}{
+		"no prefixes should change nothing": {
+			username: "foo",
+			groups:   []string{"bar", "boo"},
+
+			usernamePrefix: "",
+			groupsPrefix:   "",
+
+			expUsername: "foo",
+			expGroups:   []string{"bar", "boo"},
+		},
+
+		"a prefix on username should only add prefix to username": {
+			username: "foo",
+			groups:   []string{"bar", "boo"},
+
+			usernamePrefix: "a-prefix:",
+			groupsPrefix:   "",
+
+			expUsername: "a-prefix:foo",
+			expGroups:   []string{"bar", "boo"},
+		},
+
+		"a prefix on groups should only add prefix to groups": {
+			username: "foo",
+			groups:   []string{"bar", "boo"},
+
+			usernamePrefix: "",
+			groupsPrefix:   "another-prefix:",
+
+			expUsername: "foo",
+			expGroups:   []string{"another-prefix:bar", "another-prefix:boo"},
+		},
+
+		"a prefix on both username and groups add prefix to username and groups": {
+			username: "foo",
+			groups:   []string{"bar", "boo"},
+
+			usernamePrefix: "user-prefix:",
+			groupsPrefix:   "group-prefix:",
+
+			expUsername: "user-prefix:foo",
+			expGroups:   []string{"group-prefix:bar", "group-prefix:boo"},
+		},
+	} {
+
+		p := &Proxy{
+			prefixes: UserInfoPrefixes{
+				Username: c.usernamePrefix,
+				Groups:   c.groupsPrefix,
+			},
+		}
+
+		gotUsername, gotGroups := p.addUserInfoPrefixes(
+			c.username, c.groups)
+
+		if c.expUsername != gotUsername {
+			t.Errorf("%s: unexpected username, exp=%s got=%s",
+				n, c.expUsername, gotUsername)
+		}
+
+		if !reflect.DeepEqual(c.expGroups, gotGroups) {
+			t.Errorf("%s: unexpected groups, exp=%s got=%s",
+				n, c.expGroups, gotGroups)
+		}
+	}
+}
+
 func Test_hasImpersonation(t *testing.T) {
 	p := new(Proxy)
 
@@ -188,6 +265,12 @@ func Test_hasImpersonation(t *testing.T) {
 			"b": []string{"Impersonate-Group"},
 			"c": []string{"Impersonate-Extra-"},
 		},
+	}
+
+	for _, h := range noImpersonation {
+		if p.hasImpersonation(h) {
+			t.Errorf("expected no impersonation but got true, '%s'", h)
+		}
 	}
 
 	// impersonation headers
@@ -232,12 +315,6 @@ func Test_hasImpersonation(t *testing.T) {
 			"impersonate-User":   []string{"bar"},
 			"bar2":               []string{"bar"},
 		},
-	}
-
-	for _, h := range noImpersonation {
-		if p.hasImpersonation(h) {
-			t.Errorf("expected no impersonation but got true, '%s'", h)
-		}
 	}
 
 	for _, h := range hasImpersonation {
