@@ -256,9 +256,16 @@ func (e *E2E) cleanup() {
 	}
 }
 
+func (e *E2E) skipNotReady(t *testing.T) {
+	if e == nil {
+		t.Skip("e2e suit is nil")
+		t.SkipNow()
+	}
+}
+
 func (e *E2E) runProxy(extraArgs ...string) error {
 	if e.issuer == nil {
-		return errors.New("failed to run proxy: not issuer ready")
+		return errors.New("failed to run proxy: issuer not ready")
 	}
 
 	args := append(

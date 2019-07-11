@@ -15,10 +15,7 @@ const (
 )
 
 func Test_Rbac(t *testing.T) {
-	if e2eSuite == nil {
-		t.Skip("e2eSuite not defined")
-		return
-	}
+	e2eSuite.skipNotReady(t)
 
 	coreclient := e2eSuite.kubeclient.CoreV1()
 	rbacclient := e2eSuite.kubeclient.RbacV1()

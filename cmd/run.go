@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
@@ -16,23 +17,22 @@ import (
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/keyutil"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
+	serviceaccount "github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount/authenticator"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
 const (
 	readinessProbePort = 8080
 
-	authPassthroughCLISetName     = "Authentication Passthrough (Alpha)"
+	authPassthroughCLISetName     = "Service Account Passthrough (Alpha)"
 	saTokenPassthroughEnabledName = "service-account-token-passthrough"
-	saTokenPassthroughIssName     = "service-account-iss"
-	saTokenPassthroughAudName     = "service-account-audiences"
-	saTokenPassthroughKeysName    = "service-account-key-files"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -50,16 +50,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
 
+	saOptions := new(options.ServiceAccountAuthenticationOptions)
+
+	var saPassthroughEnabled bool
+
+	secureServingOptions := apiserveroptions.NewSecureServingOptions()
+	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
-
-	saOptions := &proxy.ServiceAccountTokenPassthroughOptions{
-		Enabled:        false,
-		Iss:            "kubernetes/serviceaccount",
-		PublicKeyPaths: []string{},
-		Audiences:      []string{},
-	}
 
 	// proxy command
 	cmd := &cobra.Command{
@@ -89,31 +88,22 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// oidc config
-			oidcAuther, err := oidc.New(oidc.Options{
-				APIAudiences:         oidcOptions.APIAudiences,
-				CAFile:               oidcOptions.CAFile,
-				ClientID:             oidcOptions.ClientID,
-				GroupsClaim:          oidcOptions.GroupsClaim,
-				GroupsPrefix:         oidcOptions.GroupsPrefix,
-				IssuerURL:            oidcOptions.IssuerURL,
-				RequiredClaims:       oidcOptions.RequiredClaims,
-				SupportedSigningAlgs: oidcOptions.SigningAlgs,
-				UsernameClaim:        oidcOptions.UsernameClaim,
-				UsernamePrefix:       oidcOptions.UsernamePrefix,
-			})
+			if !saPassthroughEnabled {
+				//oidcOptions.ServiceAccounts = saOptions.ServiceAccounts
+				saOptions = nil
+			}
+
+			oidcAuther, saAuther, err := buildAuthenticators(oidcOptions, saOptions)
 			if err != nil {
 				return err
 			}
 
-			// oidc auther from config
-			reqAuther := bearertoken.New(oidcAuther)
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo, saOptions)
+			p := proxy.New(restConfig, secureServingInfo, oidcAuther, saAuther)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -137,14 +127,23 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
 
+	safs := namedFlagSets.FlagSet(authPassthroughCLISetName)
+	saOptions.AddFlags(safs)
+
+	namedFlagSets.FlagSet(authPassthroughCLISetName).BoolVar(&saPassthroughEnabled,
+		saTokenPassthroughEnabledName,
+		false,
+		"Requests with a Service Account token are forwarded onto the API server"+
+			" as is, rather than being rejected. No impersonation takes place."+
+			" (Experiential)",
+	)
+
 	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 
 	clientConfigFlags.CacheDir = nil
 	clientConfigFlags.Impersonate = nil
 	clientConfigFlags.ImpersonateGroup = nil
 	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
-
-	saTokenOptionFlags(&namedFlagSets, saOptions)
 
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 	namedFlagSets.FlagSet("misc").Bool("version",
@@ -170,21 +169,43 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	return cmd
 }
 
-func saTokenOptionFlags(namedFlagSets *cliflag.NamedFlagSets, opts *proxy.ServiceAccountTokenPassthroughOptions) {
-	namedFlagSets.FlagSet(authPassthroughCLISetName).BoolVar(&opts.Enabled,
-		saTokenPassthroughEnabledName,
-		false,
-		"Requests with Service Account token are forwarded onto the API server as is, rather than being rejected. No impersonation takes place. (Experiential)")
-	namedFlagSets.FlagSet(authPassthroughCLISetName).StringVar(&opts.Iss,
-		saTokenPassthroughIssName,
-		"kubernetes/serviceaccount",
-		"Target issuer (iss) claim service account tokens are signed by.")
-	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&opts.Audiences,
-		saTokenPassthroughAudName,
-		[]string{},
-		"Target audience claims of signed Service Account tokens.")
-	namedFlagSets.FlagSet(authPassthroughCLISetName).StringSliceVar(&opts.PublicKeyPaths,
-		saTokenPassthroughKeysName,
-		[]string{},
-		"List of file paths containing public keys, of which their private keys are used to sign Service Account tokens.")
+// Build OIDC authenticator and SA authenticator if enabled
+func buildAuthenticators(oidcOptions *options.OIDCAuthenticationOptions,
+	saOptions *options.ServiceAccountAuthenticationOptions) (*bearertoken.Authenticator, authenticator.Token, error) {
+	oidcAuther, err := oidc.New(oidc.Options{
+		APIAudiences:         oidcOptions.APIAudiences,
+		CAFile:               oidcOptions.CAFile,
+		ClientID:             oidcOptions.ClientID,
+		GroupsClaim:          oidcOptions.GroupsClaim,
+		GroupsPrefix:         oidcOptions.GroupsPrefix,
+		IssuerURL:            oidcOptions.IssuerURL,
+		RequiredClaims:       oidcOptions.RequiredClaims,
+		SupportedSigningAlgs: oidcOptions.SigningAlgs,
+		UsernameClaim:        oidcOptions.UsernameClaim,
+		UsernamePrefix:       oidcOptions.UsernamePrefix,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// oidc auther from config
+	reqAuther := bearertoken.New(oidcAuther)
+
+	var saAuther authenticator.Token
+	if saOptions != nil {
+		allPublicKeys := []interface{}{}
+		for _, keyfile := range saOptions.KeyFiles {
+			publicKeys, err := keyutil.PublicKeysFromFile(keyfile)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			allPublicKeys = append(allPublicKeys, publicKeys...)
+		}
+
+		//tokenAuthenticator := serviceaccount.JWTTokenAuthenticator(saOptions.Issuer, allPublicKeys, options.APIAudiences, serviceaccount.NewValidator(serviceAccountGetter))
+		saAuther = serviceaccount.JWTTokenAuthenticator(saOptions.Issuer, allPublicKeys, oidcOptions.APIAudiences, nil)
+	}
+
+	return reqAuther, saAuther, nil
 }

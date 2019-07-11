@@ -29,10 +29,7 @@ const (
 )
 
 func Test_Upgrade(t *testing.T) {
-	if e2eSuite == nil {
-		t.Skip("e2eSuite not defined")
-		return
-	}
+	e2eSuite.skipNotReady(t)
 
 	// create upgrade namespace
 	_, err := e2eSuite.kubeclient.CoreV1().Namespaces().Create(&corev1.Namespace{
