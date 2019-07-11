@@ -11,15 +11,15 @@ help:  ## display this help
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
-	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/linux/amd64/kubectl
-	KUBECTL_HASH := f3be209a48394e0e649b30ea376ce5093205fd6769c12e62c7ab39a0827c26fb
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/linux/amd64/kubectl
+	KUBECTL_HASH := ecec7fe4ffa03018ff00f14e228442af5c2284e57771e4916b977c20ba4e5b39
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-linux-amd64.tar.gz
 	GOLANGCILINT_HASH := f37f4a15eb309578b0546703da5ea96bc5bd472f45f204338051aaca6fbbfc5b
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
-	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/darwin/amd64/kubectl
-	KUBECTL_HASH := 2ff06345a02636f1e6934f19dbc55452b587e06b2828c775dcdb29229c8da40f
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/darwin/amd64/kubectl
+	KUBECTL_HASH := 63f1ace419edffa1f5ebb64a6c63597afd48f8d94a61d4fb44e820139adbbe54
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-darwin-amd64.tar.gz
 	GOLANGCILINT_HASH := 083941efa692bfe3c29ba709964e9fe5896889316d51813e523157c96c3153e0
 endif
@@ -63,7 +63,9 @@ go_fmt:
 go_vet:
 	go vet $$(go list ./pkg/... ./cmd/...)
 
-# We have to make sure we omit ./hack/tools
+# We vendor packages using ./hack/tools with go modules for building binaries.
+# These files will fail linting since they use '_' importing with no usage so
+# must be ommited.
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 	go list -f '{{.Dir}}' ./...  | fgrep -v hack/tools | xargs realpath --relative-to=. | xargs $(BINDIR)/golangci-lint run
 
