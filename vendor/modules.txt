@@ -333,12 +333,12 @@ k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/pkg/util/version
 # k8s.io/apiserver v0.0.0-20190721103406-1e59c150c171
-k8s.io/apiserver/pkg/authentication/authenticator
 k8s.io/apiserver/pkg/authentication/request/bearertoken
 k8s.io/apiserver/pkg/server
 k8s.io/apiserver/pkg/server/options
 k8s.io/apiserver/pkg/util/term
 k8s.io/apiserver/plugin/pkg/authenticator/token/oidc
+k8s.io/apiserver/pkg/authentication/authenticator
 k8s.io/apiserver/pkg/authentication/user
 k8s.io/apiserver/pkg/authentication/serviceaccount
 k8s.io/apiserver/pkg/admission
@@ -453,12 +453,12 @@ k8s.io/cli-runtime/pkg/kustomize/k8sdeps/transformer/patch
 k8s.io/cli-runtime/pkg/kustomize/k8sdeps/kv
 # k8s.io/client-go v11.0.0+incompatible => k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
 k8s.io/client-go/rest
-k8s.io/client-go/util/keyutil
 k8s.io/client-go/kubernetes
 k8s.io/client-go/kubernetes/scheme
 k8s.io/client-go/plugin/pkg/client/auth/oidc
 k8s.io/client-go/tools/clientcmd/api
 k8s.io/client-go/transport
+k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/cert
 k8s.io/client-go/informers
 k8s.io/client-go/kubernetes/typed/core/v1

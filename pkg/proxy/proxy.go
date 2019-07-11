@@ -10,20 +10,20 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount"
 )
 
 var (
 	errUnauthorized      = errors.New("Unauthorized")
 	errImpersonateHeader = errors.New("Impersonate-User in header")
 	errNoName            = errors.New("No name in OIDC info")
-	errTokenParse        = errors.New("no bearer token found in request header")
 
 	// http headers are case-insensitive
 	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
@@ -33,7 +33,7 @@ var (
 
 type Proxy struct {
 	oidcAuther *bearertoken.Authenticator
-	saAuther   authenticator.Token
+	saAuther   *serviceaccount.Authenticator
 
 	secureServingInfo *server.SecureServingInfo
 
@@ -42,7 +42,7 @@ type Proxy struct {
 }
 
 func New(restConfig *rest.Config, ssinfo *server.SecureServingInfo,
-	oidcAuther *bearertoken.Authenticator, saAuther authenticator.Token) *Proxy {
+	oidcAuther *bearertoken.Authenticator, saAuther *serviceaccount.Authenticator) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
 		oidcAuther:        oidcAuther,
@@ -91,7 +91,7 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 			klog.V(5).Infof("attempting to validate a service account token in request (%s)",
 				req.RemoteAddr)
 
-			saErr := p.validateServiceAccountToken(req)
+			saErr := p.saAuther.Request(req)
 			// no error so passthrough the request
 			if saErr == nil {
 				klog.V(5).Infof("passing request with valid service account token through (%s)",

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
@@ -19,15 +18,15 @@ import (
 	//clientgoinformers "k8s.io/client-go/informers"
 	//"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/util/keyutil"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	//serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
+	//apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
-	serviceaccount "github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount/authenticator"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
@@ -138,6 +137,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		false,
 		"Requests with a Service Account token are forwarded onto the API server"+
 			" as is, rather than being rejected. No impersonation takes place."+
+			"Lookup is required to enable scoped service account token validation."+
 			" (Experiential)",
 	)
 
@@ -174,7 +174,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 // Build OIDC authenticator and SA authenticator if enabled
 func buildAuthenticators(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
-	saOptions *options.ServiceAccountAuthenticationOptions) (*bearertoken.Authenticator, authenticator.Token, error) {
+	saOptions *options.ServiceAccountAuthenticationOptions) (*bearertoken.Authenticator, *serviceaccount.Authenticator, error) {
 	oidcAuther, err := oidc.New(oidc.Options{
 		APIAudiences:         oidcOptions.APIAudiences,
 		CAFile:               oidcOptions.CAFile,
@@ -194,39 +194,12 @@ func buildAuthenticators(restConfig *rest.Config, oidcOptions *options.OIDCAuthe
 	// oidc auther from config
 	reqAuther := bearertoken.New(oidcAuther)
 
-	var saAuther authenticator.Token
+	var saAuther *serviceaccount.Authenticator
 	if saOptions != nil {
-		allPublicKeys := []interface{}{}
-		for _, keyfile := range saOptions.KeyFiles {
-			publicKeys, err := keyutil.PublicKeysFromFile(keyfile)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			allPublicKeys = append(allPublicKeys, publicKeys...)
+		saAuther, err = serviceaccount.New(restConfig, saOptions, oidcOptions.APIAudiences)
+		if err != nil {
+			return nil, nil, err
 		}
-
-		var getter serviceaccount.ServiceAccountTokenGetter
-		// TODO: Add both legacy and new SA validators.
-		// TODO: set up fake getter for new validator if lookup is false.
-		if saOptions.Lookup {
-			//client, err := kubernetes.NewForConfig(restConfig)
-			//if err != nil {
-			//	return nil, nil, err
-			//}
-
-			//informer := clientgoinformers.NewSharedInformerFactory(client, 10*time.Minute)
-
-			//getter = serviceaccountcontroller.NewGetterFromClient(
-			//	client,
-			//	informer.Core().V1().Secrets().Lister(),
-			//	informer.Core().V1().ServiceAccounts().Lister(),
-			//	informer.Core().V1().Pods().Lister(),
-			//)
-		}
-
-		validator := serviceaccount.NewValidator(getter)
-		saAuther = serviceaccount.JWTTokenAuthenticator(saOptions.Issuer, allPublicKeys, oidcOptions.APIAudiences, validator)
 	}
 
 	return reqAuther, saAuther, nil
