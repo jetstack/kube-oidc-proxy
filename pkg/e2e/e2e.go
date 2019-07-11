@@ -180,8 +180,6 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 		return nil, fmt.Errorf("failed to start proxy server: %s", err)
 	}
 
-	time.Sleep(time.Second * 13)
-
 	return transport, nil
 }
 
@@ -252,7 +250,12 @@ func (e *E2E) cleanup() {
 		if _, err := e.proxyCmd.Process.Wait(); err != nil {
 			klog.Errorf("failed to wait for kube-oidc-proxy process to exit: %s",
 				err)
+			return
 		}
+
+		e.proxyCmd = nil
+
+		klog.V(10).Info("kube-oidc-proy process shut down")
 	}
 }
 
@@ -260,6 +263,13 @@ func (e *E2E) skipNotReady(t *testing.T) {
 	if e == nil {
 		t.Skip("e2e suit is nil")
 		t.SkipNow()
+	}
+
+	if e.proxyCmd == nil {
+		if err := e.runProxy(); err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
 	}
 }
 
@@ -296,6 +306,8 @@ func (e *E2E) runProxy(extraArgs ...string) error {
 	}
 
 	e.proxyCmd = cmd
+
+	time.Sleep(time.Second * 13)
 
 	return nil
 }

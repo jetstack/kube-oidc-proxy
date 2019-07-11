@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -57,7 +58,7 @@ func TestMain(m *testing.M) {
 
 	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
 
-	clusterContext := cluster.NewContext("kube-oidc-proxy-e2e")
+	ctx := cluster.NewContext("kube-oidc-proxy-e2e")
 
 	// build default config
 	conf := new(config.Cluster)
@@ -94,47 +95,65 @@ kind: ClusterConfiguration
 	log.SetLevel(log.DebugLevel)
 
 	// create kind cluster
-	klog.Infof("creating kind cluster '%s'", clusterContext.Name())
-	if err := clusterContext.Create(conf); err != nil {
+	klog.Infof("creating kind cluster '%s'", ctx.Name())
+	if err := ctx.Create(conf); err != nil {
 		klog.Fatalf("error creating cluster: %s", err)
 	}
 
-	// generate rest config to kind cluster
-	kubeconfig := clusterContext.KubeConfigPath()
-	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		klog.Errorf("failed to build kind rest client: %s", err)
-		os.Exit(cleanup(tmpDir, clusterContext, 1))
+	nodes, err := ctx.ListNodes()
+	mustExit(err, "failed to list kind cluster nodes", tmpDir, ctx)
+
+	if len(nodes) == 0 {
+		mustExit(errors.New("no kind cluster nodes found"), "", tmpDir, ctx)
 	}
+
+	// copy kube service account public and private signing key to host
+	for _, s := range []string{
+		"sa.pub", "sa.key",
+	} {
+		err = nodes[0].CopyFrom("/etc/kubernetes/pki/"+s, filepath.Join(tmpDir, s))
+		mustExit(err, "failed to copy file from node", tmpDir, ctx)
+	}
+
+	// generate rest config to kind cluster
+	kubeconfig := ctx.KubeConfigPath()
+	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	mustExit(err, "failed to build kind rest client", tmpDir, ctx)
 
 	kubeclient, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		klog.Errorf("failed to build kind kubernetes client: %s", err)
-		os.Exit(cleanup(tmpDir, clusterContext, 1))
-	}
+	mustExit(err, "failed to build kind kubernetes client", tmpDir, ctx)
 
-	if err := waitOnCoreDNS(kubeclient); err != nil {
-		klog.Errorf("failed to wait for CoreDNS to become ready: %s", err)
-		os.Exit(cleanup(tmpDir, clusterContext, 1))
-	}
+	err = waitOnCoreDNS(kubeclient)
+	mustExit(err, "failed to wait for CoreDNS to become ready", tmpDir, ctx)
 
 	e2eSuite = New(kubeconfig, tmpDir, kubeclient)
-	if err := e2eSuite.Run(); err != nil {
-		klog.Errorf("failed to start e2e suite: %s", err)
-		os.Exit(cleanup(tmpDir, clusterContext, 1))
-	}
+	err = e2eSuite.Run()
+	mustExit(err, "failed to start e2e suite", tmpDir, ctx)
 
 	// run tests
 	runErr := m.Run()
 
 	// clean up and exit
 	e2eSuite.cleanup()
-	exitCode := cleanup(tmpDir, clusterContext, runErr)
+	exitCode := cleanup(tmpDir, ctx, runErr)
 
 	os.Exit(exitCode)
 }
 
-func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) int {
+func mustExit(err error, errPrefix, tmpDir string, ctx *cluster.Context) {
+	if err == nil {
+		return
+	}
+
+	if len(errPrefix) > 0 {
+		err = fmt.Errorf("%s: %s", errPrefix, err)
+	}
+
+	klog.Error(err)
+	os.Exit(cleanup(tmpDir, ctx, 1))
+}
+
+func cleanup(tmpDir string, ctx *cluster.Context, exitCode int) int {
 	err := os.RemoveAll(tmpDir)
 	if err != nil {
 		klog.Errorf("failed to delete temp dir %s: %s", tmpDir, err)
@@ -146,7 +165,7 @@ func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) int {
 			"get",
 			"events",
 			"--all-namespaces",
-			fmt.Sprintf("--kubeconfig=%s", clusterContext.KubeConfigPath()),
+			fmt.Sprintf("--kubeconfig=%s", ctx.KubeConfigPath()),
 		)
 		exportOut, err := exportCmd.Output()
 		if err != nil {
@@ -157,8 +176,8 @@ func cleanup(tmpDir string, clusterContext *cluster.Context, exitCode int) int {
 		}
 	}
 
-	klog.Infof("destroying kind cluster '%s'", clusterContext.Name())
-	kindErr := clusterContext.Delete()
+	klog.Infof("destroying kind cluster '%s'", ctx.Name())
+	kindErr := ctx.Delete()
 	if kindErr != nil {
 		klog.Errorf("error destroying kind cluster: %s", err)
 	}

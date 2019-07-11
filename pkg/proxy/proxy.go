@@ -23,6 +23,7 @@ var (
 	errUnauthorized      = errors.New("Unauthorized")
 	errImpersonateHeader = errors.New("Impersonate-User in header")
 	errNoName            = errors.New("No name in OIDC info")
+	errTokenParse        = errors.New("no bearer token found in request header")
 
 	// http headers are case-insensitive
 	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
@@ -87,16 +88,21 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// attempt to pass through request if valid service account
 		if p.saAuther != nil {
+			klog.V(5).Infof("attempting to validate a service account token in request (%s)",
+				req.RemoteAddr)
+
 			saErr := p.validateServiceAccountToken(req)
 			// no error so passthrough the request
 			if saErr == nil {
+				klog.V(5).Infof("passing request with valid service account token through (%s)",
+					req.RemoteAddr)
 				return p.clientTransport.RoundTrip(req)
 			}
 
-			err = fmt.Errorf("%s\n%s", err, saErr)
+			err = fmt.Errorf("%s, %s", err, saErr)
 		}
 
-		klog.Errorf("unable to authenticate the request due to an error (%s): %v",
+		klog.Errorf("unable to authenticate the request due to an error (%s): %s",
 			req.RemoteAddr, err)
 		return nil, errUnauthorized
 	}
@@ -154,26 +160,6 @@ func (p *Proxy) hasImpersonation(header http.Header) bool {
 	}
 
 	return false
-}
-
-// validate service account token
-func (p *Proxy) validateServiceAccountToken(req *http.Request) error {
-	headerToken := req.Header.Get("Authorization")
-	if len(headerToken) == 0 {
-		return errors.New("no bearer token found in request header")
-	}
-
-	_, ok, err := p.saAuther.AuthenticateToken(req.Context(), headerToken)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate possible service account request token: %s",
-			err)
-	}
-
-	if !ok {
-		return errors.New("service account token failed authentication")
-	}
-
-	return nil
 }
 
 func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {

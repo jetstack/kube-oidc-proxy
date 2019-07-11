@@ -16,10 +16,13 @@ import (
 	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	//clientgoinformers "k8s.io/client-go/informers"
+	//"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/keyutil"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
+	//serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
@@ -93,7 +96,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				saOptions = nil
 			}
 
-			oidcAuther, saAuther, err := buildAuthenticators(oidcOptions, saOptions)
+			oidcAuther, saAuther, err := buildAuthenticators(restConfig, oidcOptions, saOptions)
 			if err != nil {
 				return err
 			}
@@ -170,7 +173,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 }
 
 // Build OIDC authenticator and SA authenticator if enabled
-func buildAuthenticators(oidcOptions *options.OIDCAuthenticationOptions,
+func buildAuthenticators(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
 	saOptions *options.ServiceAccountAuthenticationOptions) (*bearertoken.Authenticator, authenticator.Token, error) {
 	oidcAuther, err := oidc.New(oidc.Options{
 		APIAudiences:         oidcOptions.APIAudiences,
@@ -203,8 +206,27 @@ func buildAuthenticators(oidcOptions *options.OIDCAuthenticationOptions,
 			allPublicKeys = append(allPublicKeys, publicKeys...)
 		}
 
-		//tokenAuthenticator := serviceaccount.JWTTokenAuthenticator(saOptions.Issuer, allPublicKeys, options.APIAudiences, serviceaccount.NewValidator(serviceAccountGetter))
-		saAuther = serviceaccount.JWTTokenAuthenticator(saOptions.Issuer, allPublicKeys, oidcOptions.APIAudiences, nil)
+		var getter serviceaccount.ServiceAccountTokenGetter
+		// TODO: Add both legacy and new SA validators.
+		// TODO: set up fake getter for new validator if lookup is false.
+		if saOptions.Lookup {
+			//client, err := kubernetes.NewForConfig(restConfig)
+			//if err != nil {
+			//	return nil, nil, err
+			//}
+
+			//informer := clientgoinformers.NewSharedInformerFactory(client, 10*time.Minute)
+
+			//getter = serviceaccountcontroller.NewGetterFromClient(
+			//	client,
+			//	informer.Core().V1().Secrets().Lister(),
+			//	informer.Core().V1().ServiceAccounts().Lister(),
+			//	informer.Core().V1().Pods().Lister(),
+			//)
+		}
+
+		validator := serviceaccount.NewValidator(getter)
+		saAuther = serviceaccount.JWTTokenAuthenticator(saOptions.Issuer, allPublicKeys, oidcOptions.APIAudiences, validator)
 	}
 
 	return reqAuther, saAuther, nil
