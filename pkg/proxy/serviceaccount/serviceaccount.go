@@ -82,7 +82,7 @@ func New(restConfig *rest.Config,
 }
 
 func (a *Authenticator) Request(req *http.Request) error {
-	token, err := a.parseTokenFromHeader(req)
+	token, err := parseTokenFromHeader(req)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,11 @@ func (a *Authenticator) Request(req *http.Request) error {
 }
 
 // Return just the token from the header of the request, without 'bearer'.
-func (v *Authenticator) parseTokenFromHeader(req *http.Request) (string, error) {
+func parseTokenFromHeader(req *http.Request) (string, error) {
+	if req == nil || req.Header == nil {
+		return "", ErrTokenParse
+	}
+
 	auth := strings.TrimSpace(req.Header.Get("Authorization"))
 	if auth == "" {
 		return "", ErrTokenParse
