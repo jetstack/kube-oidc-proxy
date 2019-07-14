@@ -29,6 +29,8 @@ var (
 type Authenticator struct {
 	scopedAuther authenticator.Token
 	legacyAuther authenticator.Token
+
+	lookup bool
 }
 
 // Returns a new validator to validate service account tokens. Supports both
@@ -78,6 +80,7 @@ func New(restConfig *rest.Config,
 	return &Authenticator{
 		legacyAuther: legacyAuther,
 		scopedAuther: scopedAuther,
+		lookup:       options.Lookup,
 	}, nil
 }
 
@@ -87,11 +90,11 @@ func (a *Authenticator) Request(req *http.Request) error {
 		return err
 	}
 
-	if a.scopedAuther != nil {
+	if a.lookup {
 		_, b, err := a.scopedAuther.AuthenticateToken(req.Context(), token)
 
 		if err == nil && b {
-			klog.V(5).Infof("token authenticated as scoped token %s", req.RemoteAddr)
+			klog.Infof("token authenticated as scoped token %s", req.RemoteAddr)
 			return nil
 		}
 
@@ -110,7 +113,7 @@ func (a *Authenticator) Request(req *http.Request) error {
 		return ErrUnAuthed
 	}
 
-	klog.V(5).Infof("token authenticated as legacy token %s", req.RemoteAddr)
+	klog.Infof("token authenticated as legacy token %s", req.RemoteAddr)
 
 	return nil
 }
