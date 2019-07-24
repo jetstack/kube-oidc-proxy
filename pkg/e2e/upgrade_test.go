@@ -14,13 +14,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/exec"
-	cmdportforward "k8s.io/kubernetes/pkg/kubectl/cmd/portforward"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
@@ -119,56 +118,9 @@ func Test_Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// wait for our echo server to become ready
 	err = utils.WaitForPodReady(e2eSuite.kubeclient,
 		"echoserver", namespaceUpgradeTest)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var execOut bytes.Buffer
-	var execErr bytes.Buffer
-
-	// curl echo server from within pod
-	ioStreams := genericclioptions.IOStreams{In: nil, Out: &execOut, ErrOut: &execErr}
-	execOptions := &exec.ExecOptions{
-		StreamOptions: exec.StreamOptions{
-			IOStreams: ioStreams,
-			PodName:   pod.Name,
-			Namespace: pod.Namespace,
-		},
-		Command: []string{
-			"curl", "127.0.0.1:8080", "-s", "-d", "hello world",
-		},
-		PodClient: kubeclient.CoreV1(),
-		Config:    restConfig,
-		Executor:  &exec.DefaultRemoteExecutor{},
-	}
-
-	if err := execOptions.Validate(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := execOptions.Run(); err != nil {
-		t.Fatal(err)
-	}
-
-	// should have no stderr output
-	if execErr.String() != "" {
-		t.Errorf("got curl error: %s", execErr.String())
-	}
-
-	// should have correct stdout output from echo server
-	if !strings.HasSuffix(execOut.String(), "BODY:\nhello world") {
-		t.Errorf("got unexpected echoserver response: exp=...hello world got=%s",
-			execOut.String())
-	}
-
-	// test we can port forward to the echo server and curl on localhost to it
-
-	var portOut bytes.Buffer
-	var portErr bytes.Buffer
-
-	freePort, err := utils.FreePort()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,31 +130,88 @@ func Test_Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ioStreams = genericclioptions.IOStreams{In: nil, Out: &portOut, ErrOut: &portErr}
+	// curl echo server from within pod
+	req := RESTClient.Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: "echoserver",
+			Command: []string{
+				"curl", "127.0.0.1:8080", "-s", "-d", "hello world",
+			},
+			Stdin:  false,
+			Stdout: true,
+			Stderr: true,
+			TTY:    false,
+		}, scheme.ParameterCodec)
 
-	portForwardOptions := &cmdportforward.PortForwardOptions{
-		Namespace:  pod.Namespace,
-		PodName:    pod.Name,
-		RESTClient: RESTClient,
-		Config:     restConfig,
-		PodClient:  kubeclient.CoreV1(),
-		Address:    []string{"127.0.0.1"},
-		Ports:      []string{freePort + ":8080"},
-		PortForwarder: &defaultPortForwarder{
-			IOStreams: ioStreams,
-		},
-		StopChannel:  make(chan struct{}, 1),
-		ReadyChannel: make(chan struct{}),
+	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	if err != nil {
+		t.Fatalf("failed to create SPDY executor: %s", err)
+	}
+	execOut := &bytes.Buffer{}
+	execErr := &bytes.Buffer{}
+
+	sopt := remotecommand.StreamOptions{
+		Stdout: execOut,
+		Stderr: execErr,
+		Tty:    false,
+	}
+
+	err = exec.Stream(sopt)
+	if err != nil {
+		t.Fatalf("failed to execute stream command: %s", err)
+	}
+
+	// should have no stderr output
+	if execErr.String() != "" {
+		t.Errorf("got curl error: %s", execErr.String())
+	}
+
+	t.Logf("%s/%s: %s", pod.Namespace, pod.Name, execOut.String())
+
+	// should have correct stdout output from echo server
+	if !strings.HasSuffix(execOut.String(), "BODY:\nhello world") {
+		t.Errorf("got unexpected echoserver response: exp=...hello world got=%s",
+			execOut.String())
+	}
+
+	// test we can port forward to the echo server and curl on localhost to it
+	portOut := &bytes.Buffer{}
+	portErr := &bytes.Buffer{}
+
+	freePort, err := utils.FreePort()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req = RESTClient.Post().
+		Resource("pods").
+		Namespace(pod.Namespace).
+		Name(pod.Name).
+		SubResource("portforward")
+
+	pfopts := &portForwardOptions{
+		address:    []string{"127.0.0.1"},
+		ports:      []string{freePort + ":8080"},
+		stopCh:     make(chan struct{}, 1),
+		readyCh:    make(chan struct{}),
+		outBuf:     portOut,
+		errBuf:     portErr,
+		restConfig: restConfig,
 	}
 
 	go func() {
-		defer close(portForwardOptions.StopChannel)
+		defer close(pfopts.stopCh)
 
 		// give a chance to establish a connection
 		time.Sleep(time.Second * 2)
 
 		portInR := bytes.NewReader([]byte("hello world"))
 
+		// send message through port forward
 		resp, err := http.Post(
 			fmt.Sprintf("http://127.0.0.1:%s", freePort), "", portInR)
 		if err != nil {
@@ -210,6 +219,7 @@ func Test_Upgrade(t *testing.T) {
 			return
 		}
 
+		// expect 200 resp and correct body
 		if resp.StatusCode != 200 {
 			t.Errorf("got unexpected response code from server, exp=200 got=%d",
 				resp.StatusCode)
@@ -228,31 +238,31 @@ func Test_Upgrade(t *testing.T) {
 		}
 	}()
 
-	if err := portForwardOptions.Validate(); err != nil {
-		t.Fatal(err)
+	if err := forwardPorts("POST", req.URL(), pfopts); err != nil {
+		t.Error(err)
+		return
 	}
 
-	if err := portForwardOptions.RunPortForward(); err != nil {
-		t.Fatal(err)
-	}
 }
 
-// taken from k8s.io/kubernetes/pkg/kubectl/cmd/portforward
-type defaultPortForwarder struct {
-	genericclioptions.IOStreams
+type portForwardOptions struct {
+	address, ports  []string
+	readyCh, stopCh chan struct{}
+	outBuf, errBuf  *bytes.Buffer
+	restConfig      *rest.Config
 }
 
-func (f *defaultPortForwarder) ForwardPorts(method string, url *url.URL, opts cmdportforward.PortForwardOptions) error {
-	transport, upgrader, err := spdy.RoundTripperFor(opts.Config)
+func forwardPorts(method string, url *url.URL, opts *portForwardOptions) error {
+	transport, upgrader, err := spdy.RoundTripperFor(opts.restConfig)
 	if err != nil {
 		return err
 	}
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, method, url)
-	fw, err := portforward.NewOnAddresses(dialer, opts.Address, opts.Ports, opts.StopChannel, opts.ReadyChannel, f.Out, f.ErrOut)
+	fw, err := portforward.NewOnAddresses(dialer, opts.address,
+		opts.ports, opts.stopCh, opts.readyCh, opts.outBuf, opts.errBuf)
 	if err != nil {
 		return err
 	}
+
 	return fw.ForwardPorts()
 }
-
-//

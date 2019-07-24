@@ -43,7 +43,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		},
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
-	//secureServingOptions = secureServingOptions.WithLoopback()
 
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
