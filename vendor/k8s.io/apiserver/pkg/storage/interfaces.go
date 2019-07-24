@@ -73,16 +73,13 @@ type ResponseMeta struct {
 	ResourceVersion uint64
 }
 
-// MatchValue defines a pair (<index name>, <value for that index>).
-type MatchValue struct {
-	IndexName string
-	Value     string
-}
+// IndexerFunc is a function that for a given object computes
+// <value of an index> for a particular <index>.
+type IndexerFunc func(obj runtime.Object) string
 
-// TriggerPublisherFunc is a function that takes an object, and returns a list of pairs
-// (<index name>, <index value for the given object>) for all indexes known
-// to that function.
-type TriggerPublisherFunc func(obj runtime.Object) []MatchValue
+// IndexerFuncs is a mapping from <index name> to function that
+// for a given object computes <value for that index>.
+type IndexerFuncs map[string]IndexerFunc
 
 // Everything accepts all objects.
 var Everything = SelectionPredicate{

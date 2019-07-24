@@ -83,7 +83,7 @@ generate: depend ## generates mocks and assets files
 test: generate verify ## run all go tests
 	go test $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e)
 
-e2e: e2e-1.14 ## run end to end tests
+e2e: e2e-1.15 ## run end to end tests
 
 e2e-1.15: build ## run end to end tests for kubernetes version 1.15
 	KUBE_OIDC_PROXY_NODE_IMAGE=1.15.0 go test ./pkg/e2e/. -v --count=1

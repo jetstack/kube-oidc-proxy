@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
-	authtypes "k8s.io/kubernetes/pkg/apis/authentication"
 )
 
 var (
@@ -25,9 +24,9 @@ var (
 	errNoName            = errors.New("No name in OIDC info")
 
 	// http headers are case-insensitive
-	impersonateUserHeader  = strings.ToLower(authtypes.ImpersonateUserHeader)
-	impersonateGroupHeader = strings.ToLower(authtypes.ImpersonateGroupHeader)
-	impersonateExtraHeader = strings.ToLower(authtypes.ImpersonateUserExtraHeaderPrefix)
+	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
+	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
+	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
 type Proxy struct {
