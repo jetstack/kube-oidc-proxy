@@ -104,24 +104,24 @@ kind: ClusterConfiguration
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		klog.Errorf("failed to build kind rest client: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	kubeclient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		klog.Errorf("failed to build kind kubernetes client: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	if err := waitOnCoreDNS(kubeclient); err != nil {
 		klog.Errorf("failed to wait for CoreDNS to become ready: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	e2eSuite = New(kubeconfig, tmpDir, kubeclient)
 	if err := e2eSuite.Run(); err != nil {
 		klog.Errorf("failed to start e2e suite: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	// run tests
