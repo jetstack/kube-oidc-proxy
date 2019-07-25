@@ -58,7 +58,10 @@ func TestNew(t *testing.T) {
 		Type:  "PUBLIC KEY",
 		Bytes: der,
 	}
-	pem.Encode(goodKey, &block)
+	if err := pem.Encode(goodKey, &block); err != nil {
+		t.Errorf("failed to encode to good key file: %s", err)
+		t.FailNow()
+	}
 
 	_, err = badKey.Write([]byte("bad key"))
 	if err != nil {

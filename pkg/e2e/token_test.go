@@ -16,7 +16,10 @@ const (
 )
 
 func Test_Token(t *testing.T) {
-	e2eSuite.skipNotReady(t)
+	if e2eSuite == nil {
+		t.Skip("e2eSuite not defined")
+		return
+	}
 
 	_, err := e2eSuite.kubeclient.CoreV1().Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{

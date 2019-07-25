@@ -87,6 +87,8 @@ func (a *Authenticator) Request(req *http.Request) error {
 		return err
 	}
 
+	klog.Infof("got token: %s", token)
+
 	if a.lookup {
 		_, b, err := a.scopedAuther.AuthenticateToken(req.Context(), token)
 
@@ -107,6 +109,7 @@ func (a *Authenticator) Request(req *http.Request) error {
 	}
 
 	if !ok {
+		klog.Errorf("got failed legacy auth check: %t", ok)
 		return ErrUnAuthed
 	}
 

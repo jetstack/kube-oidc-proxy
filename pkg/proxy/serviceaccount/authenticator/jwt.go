@@ -32,6 +32,7 @@ import (
 	"k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/klog"
 )
 
 // ServiceAccountTokenGetter defines functions to retrieve a named service account and secret
@@ -144,11 +145,13 @@ type Validator interface {
 
 func (j *jwtTokenAuthenticator) AuthenticateToken(ctx context.Context, tokenData string) (*authenticator.Response, bool, error) {
 	if !j.hasCorrectIssuer(tokenData) {
+		klog.Errorf("has wrong issuer: %s", tokenData)
 		return nil, false, nil
 	}
 
 	tok, err := jwt.ParseSigned(tokenData)
 	if err != nil {
+		klog.Errorf("failed to parse: %s", err)
 		return nil, false, nil
 	}
 
@@ -211,10 +214,12 @@ func (j *jwtTokenAuthenticator) AuthenticateToken(ctx context.Context, tokenData
 func (j *jwtTokenAuthenticator) hasCorrectIssuer(tokenData string) bool {
 	parts := strings.Split(tokenData, ".")
 	if len(parts) != 3 {
+		klog.Errorf("not 3 parts: %d\n", len(parts))
 		return false
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
+		klog.Errorf("failed to decode string: %s", err)
 		return false
 	}
 	claims := struct {
@@ -222,9 +227,12 @@ func (j *jwtTokenAuthenticator) hasCorrectIssuer(tokenData string) bool {
 		Issuer string `json:"iss"`
 	}{}
 	if err := json.Unmarshal(payload, &claims); err != nil {
+		klog.Errorf("failed to unmarshal: %s", err)
 		return false
 	}
 	if claims.Issuer != j.iss {
+		klog.Errorf("claims.Isser %s != %s j.iss",
+			claims.Issuer, j.iss)
 		return false
 	}
 	return true

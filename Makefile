@@ -66,8 +66,10 @@ go_vet:
 # We vendor packages using ./hack/tools with go modules for building binaries.
 # These files will fail linting since they use '_' importing with no usage so
 # must be ommited.
+# We also need to exclude the package that we have copied from upstream
+# `k8s.io/kubernetes`.
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
-	go list -f '{{.Dir}}' ./...  | fgrep -v hack/tools | xargs realpath --relative-to=. | xargs $(BINDIR)/golangci-lint run
+	go list -f '{{.Dir}}' ./...  | fgrep -v hack/tools | fgrep -v pkg/proxy/serviceaccount/authenticator | xargs realpath --relative-to=. | xargs $(BINDIR)/golangci-lint run
 
 clean: ## clean up created files
 	rm -rf \
