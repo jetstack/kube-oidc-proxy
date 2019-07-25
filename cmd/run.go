@@ -4,19 +4,22 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
-	apiserverflag "k8s.io/apiserver/pkg/util/flag"
-	"k8s.io/apiserver/pkg/util/globalflag"
+	apiserveroptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
-	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/cli/globalflag"
 
+	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
@@ -28,25 +31,37 @@ const (
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	// flag option structs
-	oidcOptions := &apiserveroptions.BuiltInAuthenticationOptions{
-		OIDC: &apiserveroptions.OIDCAuthenticationOptions{},
+	oidcOptions := new(options.OIDCAuthenticationOptions)
+
+	ssoptions := &apiserveroptions.SecureServingOptions{
+		BindAddress: net.ParseIP("0.0.0.0"),
+		BindPort:    6443,
+		Required:    true,
+		ServerCert: apiserveroptions.GeneratableKeyCert{
+			PairName:      "kube-oidc-proxy",
+			CertDirectory: "/var/run/kubernetes",
+		},
 	}
-	secureServingOptions := apiserveroptions.NewSecureServingOptions()
-	secureServingOptions.ServerCert.PairName = "kube-oidc-proxy"
-	clientConfigFlags := genericclioptions.NewConfigFlags()
+	ssoptionsWithLB := ssoptions.WithLoopback()
+
+	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
 
 	// proxy command
 	cmd := &cobra.Command{
-		Use:  "k8s-oidc-proxy",
-		Long: "k8s-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
+		Use:  "kube-oidc-proxy",
+		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flag("version").Value.String() == "true" {
 				version.PrintVersionAndExit()
 			}
 
-			if secureServingOptions.SecureServingOptions.BindPort == readinessProbePort {
+			if err := oidcOptions.Validate(); err != nil {
+				return err
+			}
+
+			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
@@ -64,15 +79,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			// oidc config
 			oidcAuther, err := oidc.New(oidc.Options{
 				APIAudiences:         oidcOptions.APIAudiences,
-				CAFile:               oidcOptions.OIDC.CAFile,
-				ClientID:             oidcOptions.OIDC.ClientID,
-				GroupsClaim:          oidcOptions.OIDC.GroupsClaim,
-				GroupsPrefix:         oidcOptions.OIDC.GroupsPrefix,
-				IssuerURL:            oidcOptions.OIDC.IssuerURL,
-				RequiredClaims:       oidcOptions.OIDC.RequiredClaims,
-				SupportedSigningAlgs: oidcOptions.OIDC.SigningAlgs,
-				UsernameClaim:        oidcOptions.OIDC.UsernameClaim,
-				UsernamePrefix:       oidcOptions.OIDC.UsernamePrefix,
+				CAFile:               oidcOptions.CAFile,
+				ClientID:             oidcOptions.ClientID,
+				GroupsClaim:          oidcOptions.GroupsClaim,
+				GroupsPrefix:         oidcOptions.GroupsPrefix,
+				IssuerURL:            oidcOptions.IssuerURL,
+				RequiredClaims:       oidcOptions.RequiredClaims,
+				SupportedSigningAlgs: oidcOptions.SigningAlgs,
+				UsernameClaim:        oidcOptions.UsernameClaim,
+				UsernamePrefix:       oidcOptions.UsernamePrefix,
 			})
 			if err != nil {
 				return err
@@ -81,34 +96,35 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			// oidc auther from config
 			reqAuther := bearertoken.New(oidcAuther)
 			secureServingInfo := new(server.SecureServingInfo)
-			if err := secureServingOptions.ApplyTo(&secureServingInfo, nil); err != nil {
+			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
 				return err
 			}
 
 			p := proxy.New(restConfig, reqAuther, secureServingInfo)
 
 			// run proxy
-			if err := p.Run(stopCh); err != nil {
+			waitCh, err := p.Run(stopCh)
+			if err != nil {
 				return err
 			}
 
 			time.Sleep(time.Second * 3)
 			healthCheck.SetReady()
 
-			<-stopCh
+			<-waitCh
 
 			return nil
 		},
 	}
 
 	// add flags to command sets
-	var namedFlagSets apiserverflag.NamedFlagSets
+	var namedFlagSets cliflag.NamedFlagSets
 	fs := cmd.Flags()
 
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
 
-	secureServingOptions.AddFlags(namedFlagSets.FlagSet("secure serving"))
+	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 
 	clientConfigFlags.CacheDir = nil
 	clientConfigFlags.Impersonate = nil
@@ -125,15 +141,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	// pretty output from kube-apiserver
 	usageFmt := "Usage:\n  %s\n"
-	cols, _, _ := apiserverflag.TerminalSize(cmd.OutOrStdout())
+	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
-		apiserverflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
+		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
-		apiserverflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
+		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
 	})
 
 	return cmd

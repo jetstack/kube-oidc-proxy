@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 
 	"sigs.k8s.io/kind/pkg/cluster/config"
 	"sigs.k8s.io/kind/pkg/cluster/constants"
+	"sigs.k8s.io/kind/pkg/cluster/internal/loadbalancer"
 	"sigs.k8s.io/kind/pkg/cluster/nodes"
+	"sigs.k8s.io/kind/pkg/concurrent"
 	"sigs.k8s.io/kind/pkg/container/cri"
 	logutil "sigs.k8s.io/kind/pkg/log"
 )
@@ -79,8 +80,7 @@ func provisionNodes(
 ) error {
 	defer status.End(false)
 
-	_, err := createNodeContainers(status, cfg, clusterName, clusterLabel)
-	if err != nil {
+	if err := createNodeContainers(status, cfg, clusterName, clusterLabel); err != nil {
 		return err
 	}
 
@@ -90,95 +90,50 @@ func provisionNodes(
 
 func createNodeContainers(
 	status *logutil.Status, cfg *config.Cluster, clusterName, clusterLabel string,
-) ([]nodes.Node, error) {
+) error {
 	defer status.End(false)
 
-	// create all of the node containers, concurrently
+	// compute the desired nodes, and inform the user that we are setting them up
 	desiredNodes := nodesToCreate(cfg, clusterName)
 	status.Start("Preparing nodes " + strings.Repeat("📦", len(desiredNodes)))
-	nodeChan := make(chan *nodes.Node, len(desiredNodes))
-	errChan := make(chan error)
-	defer close(nodeChan)
-	defer close(errChan)
+
+	// create all of the node containers, concurrently
+	fns := []func() error{}
 	for _, desiredNode := range desiredNodes {
 		desiredNode := desiredNode // capture loop variable
-		go func() {
-			// create the node into a container (docker run, but it is paused, see createNode)
+		fns = append(fns, func() error {
+			// create the node into a container (~= docker run -d)
 			node, err := desiredNode.Create(clusterLabel)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
-			err = fixupNode(node)
-			if err != nil {
-				errChan <- err
-				return
+			if desiredNode.IPv6 {
+				err = node.EnableIPv6()
 			}
-			nodeChan <- node
-		}()
-	}
+			return err
+		})
 
-	// collect nodes
-	allNodes := []nodes.Node{}
-	for {
-		select {
-		case node := <-nodeChan:
-			// TODO(bentheelder): nodes should maybe not be pointers /shrug
-			allNodes = append(allNodes, *node)
-			if len(allNodes) == len(desiredNodes) {
-				status.End(true)
-				return allNodes, nil
-			}
-		case err := <-errChan:
-			return nil, err
-		}
 	}
-}
-
-func fixupNode(node *nodes.Node) error {
-	// we need to change a few mounts once we have the container
-	// we'd do this ahead of time if we could, but --privileged implies things
-	// that don't seem to be configurable, and we need that flag
-	if err := node.FixMounts(); err != nil {
-		// TODO(bentheelder): logging here
+	if err := concurrent.UntilError(fns); err != nil {
 		return err
 	}
 
-	if nodes.NeedProxy() {
-		if err := node.SetProxy(); err != nil {
-			// TODO: logging here
-			return errors.Wrapf(err, "failed to set proxy for node %s", node.Name())
-		}
-	}
-
-	// signal the node container entrypoint to continue booting into systemd
-	if err := node.SignalStart(); err != nil {
-		// TODO(bentheelder): logging here
-		return err
-	}
-
-	// wait for docker to be ready
-	if !node.WaitForDocker(time.Now().Add(time.Second * 30)) {
-		// TODO(bentheelder): logging here
-		return errors.Errorf("timed out waiting for docker to be ready on node %s", node.Name())
-	}
-
-	// load the docker image artifacts into the docker daemon
-	node.LoadImages()
-
+	status.End(true)
 	return nil
 }
 
 // nodeSpec describes a node to create purely from the container aspect
 // this does not inlude eg starting kubernetes (see actions for that)
 type nodeSpec struct {
-	Name        string
-	Role        string
-	Image       string
-	ExtraMounts []cri.Mount
+	Name              string
+	Role              string
+	Image             string
+	ExtraMounts       []cri.Mount
+	ExtraPortMappings []cri.PortMapping
 	// TODO(bentheelder): replace with a cri.PortMapping when we have that
 	APIServerPort    int32
 	APIServerAddress string
+	IPv6             bool
 }
 
 func nodesToCreate(cfg *config.Cluster, clusterName string) []nodeSpec {
@@ -208,6 +163,11 @@ func nodesToCreate(cfg *config.Cluster, clusterName string) []nodeSpec {
 		}
 	}
 	isHA := controlPlanes > 1
+	// obtain IP family
+	ipv6 := false
+	if cfg.Networking.IPFamily == "ipv6" {
+		ipv6 = true
+	}
 
 	// add all of the config nodes as desired nodes
 	for _, configNode := range configNodes {
@@ -221,12 +181,14 @@ func nodesToCreate(cfg *config.Cluster, clusterName string) []nodeSpec {
 			apiServerAddress = "127.0.0.1" // only the LB needs to be non-local
 		}
 		desiredNodes = append(desiredNodes, nodeSpec{
-			Name:             nameNode(role),
-			Image:            configNode.Image,
-			Role:             role,
-			ExtraMounts:      configNode.ExtraMounts,
-			APIServerAddress: apiServerAddress,
-			APIServerPort:    apiServerPort,
+			Name:              nameNode(role),
+			Image:             configNode.Image,
+			Role:              role,
+			ExtraMounts:       configNode.ExtraMounts,
+			ExtraPortMappings: configNode.ExtraPortMappings,
+			APIServerAddress:  apiServerAddress,
+			APIServerPort:     apiServerPort,
+			IPv6:              ipv6,
 		})
 	}
 
@@ -234,10 +196,13 @@ func nodesToCreate(cfg *config.Cluster, clusterName string) []nodeSpec {
 	if controlPlanes > 1 {
 		role := constants.ExternalLoadBalancerNodeRoleValue
 		desiredNodes = append(desiredNodes, nodeSpec{
-			Name:        nameNode(role),
-			Image:       controlPlaneImage, // TODO(bentheelder): get from config instead
-			Role:        role,
-			ExtraMounts: []cri.Mount{},
+			Name:             nameNode(role),
+			Image:            loadbalancer.Image, // TODO(bentheelder): get from config instead
+			Role:             role,
+			ExtraMounts:      []cri.Mount{},
+			APIServerAddress: cfg.Networking.APIServerAddress,
+			APIServerPort:    cfg.Networking.APIServerPort,
+			IPv6:             ipv6,
 		})
 	}
 
@@ -252,9 +217,9 @@ func (d *nodeSpec) Create(clusterLabel string) (node *nodes.Node, err error) {
 	case constants.ExternalLoadBalancerNodeRoleValue:
 		node, err = nodes.CreateExternalLoadBalancerNode(d.Name, d.Image, clusterLabel, d.APIServerAddress, d.APIServerPort)
 	case constants.ControlPlaneNodeRoleValue:
-		node, err = nodes.CreateControlPlaneNode(d.Name, d.Image, clusterLabel, d.APIServerAddress, d.APIServerPort, d.ExtraMounts)
+		node, err = nodes.CreateControlPlaneNode(d.Name, d.Image, clusterLabel, d.APIServerAddress, d.APIServerPort, d.ExtraMounts, d.ExtraPortMappings)
 	case constants.WorkerNodeRoleValue:
-		node, err = nodes.CreateWorkerNode(d.Name, d.Image, clusterLabel, d.ExtraMounts)
+		node, err = nodes.CreateWorkerNode(d.Name, d.Image, clusterLabel, d.ExtraMounts, d.ExtraPortMappings)
 	default:
 		return nil, errors.Errorf("unknown node role: %s", d.Role)
 	}

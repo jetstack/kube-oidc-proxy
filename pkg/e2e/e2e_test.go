@@ -11,17 +11,19 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/config"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
 )
 
 const (
-	defaultNodeImage = "1.14.0"
+	defaultNodeImage = "1.15.0"
 )
 
 var e2eSuite *E2E
@@ -64,30 +66,32 @@ func TestMain(m *testing.M) {
 		klog.Fatal("kind default config set node count to 0")
 	}
 
-	kubeadmConfig := `metadata:
+	if v.Compare(v13) < 0 {
+		kubeadmConfig := `metadata:
   name: config
 networking:
   serviceSubnet: 10.0.0.0/16`
 
-	if v.Compare(v13) >= 0 {
-		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1beta1
-kind: ClusterConfiguration
-`, kubeadmConfig)
-	} else if v.Compare(v12) < 0 {
-		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha2
+		if v.Compare(v12) < 0 {
+			kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha2
 kind: MasterConfiguration
 `, kubeadmConfig)
-	} else {
-		kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha3
+		} else {
+			kubeadmConfig = fmt.Sprint(`apiVersion: kubeadm.k8s.io/v1alpha3
 kind: ClusterConfiguration
 `, kubeadmConfig)
-	}
+		}
 
-	conf.KubeadmConfigPatches = []string{kubeadmConfig}
+		conf.KubeadmConfigPatches = []string{kubeadmConfig}
+	} else {
+		conf.Networking.ServiceSubnet = "10.0.0.0/16"
+	}
 
 	for i := range conf.Nodes {
 		conf.Nodes[i].Image = nodeImage
 	}
+
+	log.SetLevel(log.DebugLevel)
 
 	// create kind cluster
 	klog.Infof("creating kind cluster '%s'", clusterContext.Name())
@@ -100,24 +104,24 @@ kind: ClusterConfiguration
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		klog.Errorf("failed to build kind rest client: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	kubeclient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		klog.Errorf("failed to build kind kubernetes client: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	if err := waitOnCoreDNS(kubeclient); err != nil {
 		klog.Errorf("failed to wait for CoreDNS to become ready: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	e2eSuite = New(kubeconfig, tmpDir, kubeclient)
 	if err := e2eSuite.Run(); err != nil {
 		klog.Errorf("failed to start e2e suite: %s", err)
-		cleanup(tmpDir, clusterContext, 1)
+		os.Exit(cleanup(tmpDir, clusterContext, 1))
 	}
 
 	// run tests

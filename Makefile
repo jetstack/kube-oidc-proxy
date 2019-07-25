@@ -11,19 +11,15 @@ help:  ## display this help
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
-	DEP_URL := https://github.com/golang/dep/releases/download/v0.5.1/dep-linux-amd64
-	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
-	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/linux/amd64/kubectl
-	KUBECTL_HASH := f3be209a48394e0e649b30ea376ce5093205fd6769c12e62c7ab39a0827c26fb
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/linux/amd64/kubectl
+	KUBECTL_HASH := ecec7fe4ffa03018ff00f14e228442af5c2284e57771e4916b977c20ba4e5b39
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-linux-amd64.tar.gz
 	GOLANGCILINT_HASH := f37f4a15eb309578b0546703da5ea96bc5bd472f45f204338051aaca6fbbfc5b
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
-	DEP_URL := https://github.com/golang/dep/releases/download/v0.5.1/dep-darwin-amd64
-	DEP_HASH := 7479cca72da0596bb3c23094d363ea32b7336daa5473fa785a2099be28ecd0e3
-	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/darwin/amd64/kubectl
-	KUBECTL_HASH := 2ff06345a02636f1e6934f19dbc55452b587e06b2828c775dcdb29229c8da40f
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/darwin/amd64/kubectl
+	KUBECTL_HASH := 63f1ace419edffa1f5ebb64a6c63597afd48f8d94a61d4fb44e820139adbbe54
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-darwin-amd64.tar.gz
 	GOLANGCILINT_HASH := 083941efa692bfe3c29ba709964e9fe5896889316d51813e523157c96c3153e0
 endif
@@ -31,12 +27,6 @@ endif
 $(BINDIR)/mockgen:
 	mkdir -p $(BINDIR)
 	go build -o $(BINDIR)/mockgen ./vendor/github.com/golang/mock/mockgen
-
-$(BINDIR)/dep:
-	mkdir -p $(BINDIR)
-	curl -sL -o $@ $(DEP_URL)
-	echo "$(DEP_HASH)  $@" | $(SHASUM)
-	chmod +x $@
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
@@ -53,13 +43,13 @@ $(BINDIR)/golangci-lint:
 	mv $(BINDIR)/.golangci-lint/*/golangci-lint $(BINDIR)/golangci-lint
 	rm -rf $(BINDIR)/.golangci-lint $(BINDIR)/.golangci-lint.tar.gz
 
-depend: $(BINDIR)/mockgen $(BINDIR)/dep $(BINDIR)/kubectl $(BINDIR)/golangci-lint
+depend: $(BINDIR)/mockgen $(BINDIR)/kubectl $(BINDIR)/golangci-lint
 
 verify_boilerplate:
 	$(HACK_DIR)/verify-boilerplate.sh
 
-verify_vendor: $(BINDIR)/dep
-	$(BINDIR)/dep ensure -no-vendor -dry-run -v
+verify_vendor:
+	go mod verify
 
 go_fmt:
 	@set -e; \
@@ -73,8 +63,11 @@ go_fmt:
 go_vet:
 	go vet $$(go list ./pkg/... ./cmd/...)
 
+# We vendor packages using ./hack/tools with go modules for building binaries.
+# These files will fail linting since they use '_' importing with no usage so
+# must be ommited.
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
-	$(BINDIR)/golangci-lint run
+	go list -f '{{.Dir}}' ./...  | fgrep -v hack/tools | xargs realpath --relative-to=. | xargs $(BINDIR)/golangci-lint run
 
 clean: ## clean up created files
 	rm -rf \
@@ -90,19 +83,22 @@ generate: depend ## generates mocks and assets files
 test: generate verify ## run all go tests
 	go test $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e)
 
-e2e: e2e-1.14 ## run end to end tests
+e2e: e2e-1.15 ## run end to end tests
+
+e2e-1.15: build ## run end to end tests for kubernetes version 1.15
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.15.0 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.14: build ## run end to end tests for kubernetes version 1.14
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.14.0 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.14.3 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.13: build ## run end to end tests for kubernetes version 1.13
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.13.3 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.13.7 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.12: build ## run end to end tests for kubernetes version 1.12
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.12.5 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.12.8 go test ./pkg/e2e/. -v --count=1
 
 e2e-1.11: build ## run end to end tests for kubernetes version 1.11
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.3 go test ./pkg/e2e/. -v --count=1
+	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.10 go test ./pkg/e2e/. -v --count=1
 
 build: generate ## build kube-oidc-proxy
 	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'

@@ -18,6 +18,7 @@ package encoding
 
 import (
 	"io/ioutil"
+	"os"
 
 	"github.com/pkg/errors"
 
@@ -26,7 +27,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"sigs.k8s.io/kind/pkg/cluster/config"
-	"sigs.k8s.io/kind/pkg/cluster/config/v1alpha2"
 	"sigs.k8s.io/kind/pkg/cluster/config/v1alpha3"
 )
 
@@ -44,19 +44,27 @@ func init() {
 func AddToScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(config.AddToScheme(scheme))
 	utilruntime.Must(v1alpha3.AddToScheme(scheme))
-	utilruntime.Must(v1alpha2.AddToScheme(scheme))
 	utilruntime.Must(scheme.SetVersionPriority(v1alpha3.SchemeGroupVersion))
 }
 
 // Load reads the file at path and attempts to convert into a `kind` Config; the file
 // can be one of the different API versions defined in scheme.
 // If path == "" then the default config is returned
+// If path == "-" then reads from stdin
 func Load(path string) (*config.Cluster, error) {
 	var latestPublicConfig = &v1alpha3.Cluster{}
 
 	if path != "" {
-		// read in file
-		contents, err := ioutil.ReadFile(path)
+		var err error
+		var contents []byte
+
+		if path == "-" {
+			// read in stdin
+			contents, err = ioutil.ReadAll(os.Stdin)
+		} else {
+			// read in file
+			contents, err = ioutil.ReadFile(path)
+		}
 		if err != nil {
 			return nil, err
 		}

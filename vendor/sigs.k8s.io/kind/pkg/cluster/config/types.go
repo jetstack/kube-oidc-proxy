@@ -71,6 +71,10 @@ type Node struct {
 	// ExtraMounts describes additional mount points for the node container
 	// These may be used to bind a hostPath
 	ExtraMounts []cri.Mount
+
+	// ExtraPortMappings describes additional port mappings for the node container
+	// binded to a host Port
+	ExtraPortMappings []cri.PortMapping
 }
 
 // NodeRole defines possible role for nodes in a Kubernetes cluster managed by `kind`
@@ -88,6 +92,8 @@ const (
 
 // Networking contains cluster wide network settings
 type Networking struct {
+	// IPFamily is the network cluster model, currently it can be ipv4 or ipv6
+	IPFamily ClusterIPFamily
 	// APIServerPort is the listen port on the host for the Kubernetes API Server
 	// Defaults to a random port on the host
 	APIServerPort int32
@@ -96,4 +102,23 @@ type Networking struct {
 	//
 	// Defaults to 127.0.0.1
 	APIServerAddress string
+	// PodSubnet is the CIDR used for pod IPs
+	// kind will select a default if unspecified
+	PodSubnet string
+	// ServiceSubnet is the CIDR used for services VIPs
+	// kind will select a default if unspecified
+	ServiceSubnet string
+	// If DisableDefaultCNI is true, kind will not install the default CNI setup.
+	// Instead the user should install their own CNI after creating the cluster.
+	DisableDefaultCNI bool
 }
+
+// ClusterIPFamily defines cluster network IP family
+type ClusterIPFamily string
+
+const (
+	// IPv4Family sets ClusterIPFamily to ipv4
+	IPv4Family ClusterIPFamily = "ipv4"
+	// IPv6Family sets ClusterIPFamily to ipv6
+	IPv6Family ClusterIPFamily = "ipv6"
+)

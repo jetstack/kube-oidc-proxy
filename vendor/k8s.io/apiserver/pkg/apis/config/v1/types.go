@@ -16,7 +16,9 @@ limitations under the License.
 
 package v1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -84,4 +86,7 @@ type KMSConfiguration struct {
 	CacheSize int32 `json:"cachesize,omitempty"`
 	// endpoint is the gRPC server listening address, for example "unix:///var/run/kms-provider.sock".
 	Endpoint string `json:"endpoint"`
+	// Timeout for gRPC calls to kms-plugin (ex. 5s). The default is 3 seconds.
+	// +optional
+	Timeout *metav1.Duration `json:"timeout,omitempty"`
 }

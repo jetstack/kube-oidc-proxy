@@ -33,10 +33,18 @@ import (
 	logutil "sigs.k8s.io/kind/pkg/log"
 
 	configaction "sigs.k8s.io/kind/pkg/cluster/internal/create/actions/config"
+	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions/installcni"
+	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions/installstorage"
 	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions/kubeadminit"
 	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions/kubeadmjoin"
 	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions/loadbalancer"
 	"sigs.k8s.io/kind/pkg/cluster/internal/create/actions/waitforready"
+)
+
+const (
+	// Typical host name max limit is 64 characters (https://linux.die.net/man/2/sethostname)
+	// We append -control-plane (14 characters) to the cluster name on the control plane container
+	clusterNameMax = 50
 )
 
 // Options holds cluster creation options
@@ -54,6 +62,11 @@ func Cluster(ctx *context.Context, cfg *config.Cluster, opts *Options) error {
 	// default config fields (important for usage as a library, where the config
 	// may be constructed in memory rather than from disk)
 	encoding.Scheme.Default(cfg)
+
+	// warn if cluster name might typically be too long
+	if len(ctx.Name()) > clusterNameMax {
+		log.Warnf("cluster name %q is probably too long, this might not work properly on some systems", ctx.Name())
+	}
 
 	// then validate
 	if err := cfg.Validate(); err != nil {
@@ -84,7 +97,17 @@ func Cluster(ctx *context.Context, cfg *config.Cluster, opts *Options) error {
 	}
 	if opts.SetupKubernetes {
 		actionsToRun = append(actionsToRun,
-			kubeadminit.NewAction(),                   // run kubeadm init
+			kubeadminit.NewAction(), // run kubeadm init
+		)
+		// this step might be skipped, but is next after init
+		if !cfg.Networking.DisableDefaultCNI {
+			actionsToRun = append(actionsToRun,
+				installcni.NewAction(), // install CNI
+			)
+		}
+		// add remaining steps
+		actionsToRun = append(actionsToRun,
+			installstorage.NewAction(),                // install StorageClass
 			kubeadmjoin.NewAction(),                   // run kubeadm join
 			waitforready.NewAction(opts.WaitForReady), // wait for cluster readiness
 		)

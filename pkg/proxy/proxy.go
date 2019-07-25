@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
-	authtypes "k8s.io/kubernetes/pkg/apis/authentication"
 )
 
 var (
@@ -25,9 +24,9 @@ var (
 	errNoName            = errors.New("No name in OIDC info")
 
 	// http headers are case-insensitive
-	impersonateUserHeader  = strings.ToLower(authtypes.ImpersonateUserHeader)
-	impersonateGroupHeader = strings.ToLower(authtypes.ImpersonateGroupHeader)
-	impersonateExtraHeader = strings.ToLower(authtypes.ImpersonateUserExtraHeaderPrefix)
+	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
+	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
+	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
 type Proxy struct {
@@ -47,13 +46,13 @@ func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
 	}
 }
 
-func (p *Proxy) Run(stopCh <-chan struct{}) error {
+func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	klog.Infof("waiting for oidc provider to become ready...")
 
 	// get golang tls config to the API server
 	tlsConfig, err := rest.TLSConfigFor(p.restConfig)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// create tls transport to request
@@ -64,20 +63,20 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	// get kube transport config form rest client config
 	restTransportConfig, err := p.restConfig.TransportConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// wrap golang tls config with kube transport round tripper
 	clientRT, err := transport.HTTPWrappersForConfig(restTransportConfig, tlsTransport)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p.clientTransport = clientRT
 
 	// get API server url
 	url, err := url.Parse(p.restConfig.Host)
 	if err != nil {
-		return fmt.Errorf("failed to parse url: %s", err)
+		return nil, fmt.Errorf("failed to parse url: %s", err)
 	}
 
 	// set up proxy handler using proxy
@@ -88,23 +87,24 @@ func (p *Proxy) Run(stopCh <-chan struct{}) error {
 	// wait for oidc auther to become ready
 	time.Sleep(10 * time.Second)
 
-	if err := p.serve(proxyHandler, stopCh); err != nil {
-		return err
+	waitCh, err := p.serve(proxyHandler, stopCh)
+	if err != nil {
+		return nil, err
 	}
 
 	klog.Infof("proxy ready")
 
-	return nil
+	return waitCh, nil
 }
 
-func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{}) error {
+func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{}) (<-chan struct{}, error) {
 	// securely serve using serving config
-	err := p.secureServingInfo.Serve(proxyHandler, time.Second*60, stopCh)
+	waitCh, err := p.secureServingInfo.Serve(proxyHandler, time.Second*60, stopCh)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return waitCh, nil
 }
 
 func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
