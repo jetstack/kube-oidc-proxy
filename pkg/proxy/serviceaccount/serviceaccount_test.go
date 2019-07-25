@@ -17,8 +17,8 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"k8s.io/client-go/rest"
-	apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 
+	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
 )
 
@@ -67,12 +67,12 @@ func TestNew(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		options         *apiserveroptions.ServiceAccountAuthenticationOptions
+		options         *options.ServiceAccountAuthenticationOptions
 		err             error
 		scopedAutherNil bool
 	}{
 		"if lookup is disabled, scoped auther should be nil": {
-			options: &apiserveroptions.ServiceAccountAuthenticationOptions{
+			options: &options.ServiceAccountAuthenticationOptions{
 				Issuer:        "my-iss",
 				KeyFiles:      nil,
 				Lookup:        false,
@@ -82,7 +82,7 @@ func TestNew(t *testing.T) {
 			scopedAutherNil: true,
 		},
 		"if lookup is enabled, scoped auther should be not nil": {
-			options: &apiserveroptions.ServiceAccountAuthenticationOptions{
+			options: &options.ServiceAccountAuthenticationOptions{
 				Issuer:        "my-iss",
 				KeyFiles:      nil,
 				Lookup:        true,
@@ -92,7 +92,7 @@ func TestNew(t *testing.T) {
 			scopedAutherNil: false,
 		},
 		"if lookup is enabled, scoped auther should be not nil but should fail with bad public key files": {
-			options: &apiserveroptions.ServiceAccountAuthenticationOptions{
+			options: &options.ServiceAccountAuthenticationOptions{
 				Issuer:        "my-iss",
 				KeyFiles:      []string{badKey.Name()},
 				Lookup:        true,
@@ -105,7 +105,7 @@ func TestNew(t *testing.T) {
 			scopedAutherNil: false,
 		},
 		"if lookup is enabled, scoped auther should be not nil and should not fail with good public key files": {
-			options: &apiserveroptions.ServiceAccountAuthenticationOptions{
+			options: &options.ServiceAccountAuthenticationOptions{
 				Issuer:        "my-iss",
 				KeyFiles:      []string{goodKey.Name()},
 				Lookup:        true,

@@ -15,13 +15,9 @@ import (
 	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	//clientgoinformers "k8s.io/client-go/informers"
-	//"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
-	//serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
-	//apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"

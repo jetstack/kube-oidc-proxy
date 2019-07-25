@@ -142,6 +142,10 @@ skipped_dirs = [
     "hack",
     "pkg/mocks",
     "bin",
+
+    # This is required as this package contains copied code from upstream
+    # `k8s.io/kubernetes` that we cannot vendor here.
+    "pkg/proxy/serviceaccount/authenticator",
 ]
 
 

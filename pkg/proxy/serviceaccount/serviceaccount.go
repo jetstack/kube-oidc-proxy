@@ -5,20 +5,18 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	//clientgoinformers "k8s.io/client-go/informers"
-	//"k8s.io/client-go/kubernetes"
+	clientgoinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/keyutil"
 	"k8s.io/klog"
-	//serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
-	//apiserveroptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
-	//"k8s.io/kubernetes/pkg/serviceaccount"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	serviceaccount "github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount/authenticator"
-	fakegetter "github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount/getter"
+	serviceaccountgetter "github.com/jetstack/kube-oidc-proxy/pkg/proxy/serviceaccount/getter"
 )
 
 var (
@@ -55,20 +53,19 @@ func New(restConfig *rest.Config,
 	// Only build scoped token validator and init getter if we have lookup enabled.
 	// Scoped token validator requires API lookups so this also disables it.
 	if options.Lookup {
-		//client, err := kubernetes.NewForConfig(restConfig)
-		//if err != nil {
-		//	return nil, err
-		//}
+		client, err := kubernetes.NewForConfig(restConfig)
+		if err != nil {
+			return nil, err
+		}
 
-		//informer := clientgoinformers.NewSharedInformerFactory(client, 10*time.Minute)
+		informer := clientgoinformers.NewSharedInformerFactory(client, 10*time.Minute)
 
-		//getter = serviceaccountcontroller.NewGetterFromClient(
-		//	client,
-		//	informer.Core().V1().Secrets().Lister(),
-		//	informer.Core().V1().ServiceAccounts().Lister(),
-		//	informer.Core().V1().Pods().Lister(),
-		//)
-		getter = &fakegetter.FakeGetter{}
+		getter = serviceaccountgetter.NewGetterFromClient(
+			client,
+			informer.Core().V1().Secrets().Lister(),
+			informer.Core().V1().ServiceAccounts().Lister(),
+			informer.Core().V1().Pods().Lister(),
+		)
 
 		scopedValidator := serviceaccount.NewValidator(getter)
 		scopedAuther = serviceaccount.JWTTokenAuthenticator(options.Issuer, allPublicKeys, apiAudiences, scopedValidator)

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package serviceaccount
+package authenticator
 
 import (
 	"errors"
@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"gopkg.in/square/go-jose.v2/jwt"
+	core "k8s.io/api/core/v1"
 	"k8s.io/klog"
 
-	corev1 "k8s.io/api/core/v1"
 	apiserverserviceaccount "k8s.io/apiserver/pkg/authentication/serviceaccount"
 )
 
@@ -47,7 +47,7 @@ type ref struct {
 	UID  string `json:"uid,omitempty"`
 }
 
-func Claims(sa corev1.ServiceAccount, pod *corev1.Pod, secret *corev1.Secret, expirationSeconds int64, audience []string) (*jwt.Claims, interface{}) {
+func Claims(sa core.ServiceAccount, pod *core.Pod, secret *core.Secret, expirationSeconds int64, audience []string) (*jwt.Claims, interface{}) {
 	now := now()
 	sc := &jwt.Claims{
 		Subject:   apiserverserviceaccount.MakeUsername(sa.Namespace, sa.Name),
