@@ -17,7 +17,7 @@ require (
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v0.3.3
-	sigs.k8s.io/kind v0.0.0-00010101000000-000000000000
+	sigs.k8s.io/kind v0.4.0
 )
 
 replace (
