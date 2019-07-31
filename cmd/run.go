@@ -44,6 +44,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
 
+	tpOptions := new(options.TokenPassthroughOptions)
+
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
@@ -123,6 +125,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
+
+	tpfs := namedFlagSets.FlagSet("Token Passthrough (Alpha)")
+	tpOptions.AddFlags(tpfs)
 
 	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 
