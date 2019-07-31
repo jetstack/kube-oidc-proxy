@@ -27,6 +27,7 @@ spec:
       labels:
         app: kube-oidc-proxy
     spec:
+      serviceAccountName: kube-oidc-proxy
       containers:
       - image: quay.io/jetstack/kube-oidc-proxy:v0.1.1
         ports:
@@ -112,8 +113,9 @@ roleRef:
   kind: ClusterRole
   name: kube-oidc-proxy
 subjects:
-- kind: User
-  name: system:serviceaccount:kube-oidc-proxy:default
+- kind: ServiceAccount
+  name: kube-oidc-proxy
+  namespace: kube-oidc-proxy
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
