@@ -44,6 +44,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
 
+	xfoptions := new(options.XForward)
+
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
@@ -100,7 +102,12 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo)
+			proxyOptions := &proxy.Options{
+				XForwardFor: xfoptions.XForwardFor,
+			}
+
+			p := proxy.New(restConfig, reqAuther,
+				secureServingInfo, proxyOptions)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -123,6 +130,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
+
+	xffs := namedFlagSets.FlagSet("X-Forward (Alpha)")
+	xfoptions.AddFlags(xffs)
 
 	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 

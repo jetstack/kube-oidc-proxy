@@ -9,6 +9,10 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 )
 
+type XForward struct {
+	XForwardFor bool
+}
+
 type OIDCAuthenticationOptions struct {
 	APIAudiences   []string
 	CAFile         string
@@ -20,6 +24,12 @@ type OIDCAuthenticationOptions struct {
 	GroupsPrefix   string
 	SigningAlgs    []string
 	RequiredClaims map[string]string
+}
+
+func (x *XForward) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&x.XForwardFor, "x-forward-for", x.XForwardFor, ""+
+		"If enabled, proxied requests will append the source client IP to the "+
+		"X-Forward-For header.")
 }
 
 func (o *OIDCAuthenticationOptions) Validate() error {

@@ -259,6 +259,7 @@ func newTestProxy(t *testing.T) *fakeProxy {
 		Proxy: &Proxy{
 			reqAuther:       bearertoken.New(fakeToken),
 			clientTransport: fakeRT,
+			options:         new(Options),
 		},
 	}
 }

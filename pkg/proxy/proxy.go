@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
@@ -29,20 +30,27 @@ var (
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
+type Options struct {
+	XForwardFor bool
+}
+
 type Proxy struct {
 	reqAuther         *bearertoken.Authenticator
 	secureServingInfo *server.SecureServingInfo
+
+	options *Options
 
 	restConfig      *rest.Config
 	clientTransport http.RoundTripper
 }
 
 func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
-	ssinfo *server.SecureServingInfo) *Proxy {
+	ssinfo *server.SecureServingInfo, options *Options) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
 		reqAuther:         auther,
 		secureServingInfo: ssinfo,
+		options:           options,
 	}
 }
 
@@ -150,6 +158,11 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		UserName: user.GetName(),
 		Groups:   groups,
 		Extra:    user.GetExtra(),
+	}
+
+	// If XForwardFor is enabled, append the source client IP to X-Forward-For
+	if p.options.XForwardFor {
+		net.AppendForwardedForHeader(req)
 	}
 
 	rt := transport.NewImpersonatingRoundTripper(conf, p.clientTransport)
