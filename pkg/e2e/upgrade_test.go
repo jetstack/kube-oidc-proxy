@@ -29,23 +29,11 @@ const (
 )
 
 func Test_Upgrade(t *testing.T) {
-	if e2eSuite == nil {
-		t.Skip("e2eSuite not defined")
-		return
-	}
-
-	// create upgrade namespace
-	_, err := e2eSuite.kubeclient.CoreV1().Namespaces().Create(&corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespaceUpgradeTest,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustSkipMissingSuite(t)
+	mustNamespace(t, namespaceUpgradeTest)
 
 	// create auth for user in namespace
-	_, err = e2eSuite.kubeclient.RbacV1().Roles(namespaceUpgradeTest).Create(&rbacv1.Role{
+	_, err := e2eSuite.kubeclient.RbacV1().Roles(namespaceUpgradeTest).Create(&rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-username-role",
 			Namespace: namespaceUpgradeTest,

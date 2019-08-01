@@ -3,6 +3,7 @@ package tokenreview
 
 import (
 	"errors"
+	"net/http"
 	"reflect"
 	"testing"
 
@@ -76,7 +77,13 @@ func runTest(t *testing.T, test testT) {
 		reviewRequester: fake.New().WithCreate(test.reviewResp, test.errResp),
 	}
 
-	authed, err := tReviewer.Review("test-token")
+	authed, err := tReviewer.Review(
+		&http.Request{
+			Header: map[string][]string{
+				"Authorization": []string{"bearer test-token"},
+			},
+		},
+	)
 
 	if !reflect.DeepEqual(test.expErr, err) {
 		t.Errorf("got unexpected error, exp=%v got=%v",

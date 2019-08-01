@@ -12,39 +12,50 @@ import (
 	"k8s.io/client-go/util/cert"
 )
 
-func NewTLSSelfSignedCertKey(dir, prefix string) (certPath, keyPath string, sk *rsa.PrivateKey, certBytes []byte, err error) {
+type KeyCertPair struct {
+	CertPath string
+	KeyPath  string
+	Cert     []byte
+	Key      *rsa.PrivateKey
+}
+
+func NewTLSSelfSignedCertKey(dir, prefix string) (*KeyCertPair, error) {
 	if prefix == "" {
 		prefix = "kube-oidc-proxy"
 	}
 
 	certBytes, keyBytes, err := cert.GenerateSelfSignedCertKey("127.0.0.1", nil, []string{""})
 	if err != nil {
-		return "", "", nil, nil, err
+		return nil, err
 	}
 
-	certPath = filepath.Join(dir, fmt.Sprintf("%s-ca.pem", prefix))
-	keyPath = filepath.Join(dir, fmt.Sprintf("%s-key.pem", prefix))
+	certPath := filepath.Join(dir, fmt.Sprintf("%s-ca.pem", prefix))
+	keyPath := filepath.Join(dir, fmt.Sprintf("%s-key.pem", prefix))
 
 	err = ioutil.WriteFile(certPath, certBytes, 0600)
 	if err != nil {
-		return "", "", nil, nil, err
+		return nil, err
 	}
 
 	err = ioutil.WriteFile(keyPath, keyBytes, 0600)
 	if err != nil {
-		return "", "", nil, nil, err
+		return nil, err
 	}
 
 	p, rest := pem.Decode(keyBytes)
 	if len(rest) != 0 {
-		return "", "", nil, nil,
-			fmt.Errorf("got rest decoding pem file %s: %s", keyPath, rest)
+		return nil, fmt.Errorf("got rest decoding pem file %s: %s", keyPath, rest)
 	}
 
-	sk, err = x509.ParsePKCS1PrivateKey(p.Bytes)
+	sk, err := x509.ParsePKCS1PrivateKey(p.Bytes)
 	if err != nil {
-		return "", "", nil, nil, err
+		return nil, err
 	}
 
-	return certPath, keyPath, sk, certBytes, nil
+	return &KeyCertPair{
+		CertPath: certPath,
+		KeyPath:  keyPath,
+		Cert:     certBytes,
+		Key:      sk,
+	}, nil
 }

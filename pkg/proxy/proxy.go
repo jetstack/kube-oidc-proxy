@@ -16,6 +16,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
 var (
@@ -30,18 +32,20 @@ var (
 )
 
 type Proxy struct {
-	reqAuther         *bearertoken.Authenticator
+	oidcAuther        *bearertoken.Authenticator
+	tokenAuther       *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
 	restConfig      *rest.Config
 	clientTransport http.RoundTripper
 }
 
-func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
-	ssinfo *server.SecureServingInfo) *Proxy {
+func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
+	tokenAuther *tokenreview.TokenReview, ssinfo *server.SecureServingInfo) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
-		reqAuther:         auther,
+		oidcAuther:        oidcAuther,
+		tokenAuther:       tokenAuther,
 		secureServingInfo: ssinfo,
 	}
 }
@@ -109,9 +113,31 @@ func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{
 
 func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// auth request and handle unauthed
-	info, ok, err := p.reqAuther.AuthenticateRequest(req)
+	info, ok, err := p.oidcAuther.AuthenticateRequest(req)
+
 	if err != nil {
-		klog.Errorf("unable to authenticate the request due to an error: %v", err)
+
+		// attempt to passthrough request if valid token
+		if p.tokenAuther != nil {
+			klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
+				req.RemoteAddr)
+
+			ok, tkErr := p.tokenAuther.Review(req)
+			// no error so passthrough the request
+			if tkErr == nil && ok {
+				klog.V(4).Infof("passing request with valid token through (%s)",
+					req.RemoteAddr)
+				// don't set impersonation headers
+				return p.clientTransport.RoundTrip(req)
+			}
+
+			if tkErr != nil {
+				err = fmt.Errorf("%s, %s", err, tkErr)
+			}
+		}
+
+		klog.Errorf("unable to authenticate the request due to an error (%s): %s",
+			req.RemoteAddr, err)
 		return nil, errUnauthorized
 	}
 

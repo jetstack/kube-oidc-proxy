@@ -2,12 +2,16 @@
 package tokenreview
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 
 	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/client-go/kubernetes"
 	clientauthv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 type TokenReview struct {
@@ -27,7 +31,12 @@ func New(restConfig *rest.Config, audiences []string) (*TokenReview, error) {
 	}, nil
 }
 
-func (t *TokenReview) Review(token string) (bool, error) {
+func (t *TokenReview) Review(req *http.Request) (bool, error) {
+	token, ok := util.ParseTokenFromRequest(req)
+	if !ok {
+		return false, errors.New("bearer token not found in request")
+	}
+
 	review := t.buildReview(token)
 
 	resp, err := t.reviewRequester.Create(review)
