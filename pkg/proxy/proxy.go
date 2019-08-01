@@ -31,23 +31,31 @@ var (
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
+type Options struct {
+	DisableImpersonation bool
+	TokenReview          bool
+}
+
 type Proxy struct {
 	oidcAuther        *bearertoken.Authenticator
-	tokenAuther       *tokenreview.TokenReview
+	tokenReviewer     *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
 	noAuthClientTransport http.RoundTripper
+
+	options *Options
 }
 
 func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
-	tokenAuther *tokenreview.TokenReview, ssinfo *server.SecureServingInfo) *Proxy {
+	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo, options *Options) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
 		oidcAuther:        oidcAuther,
-		tokenAuther:       tokenAuther,
+		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
+		options:           options,
 	}
 }
 
@@ -59,7 +67,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	p.clientTransport = clientRT
 
 	// No auth round tripper for no impersonation
-	if p.tokenAuther != nil {
+	if p.options.TokenReview {
 		noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
 			APIPath: p.restConfig.APIPath,
 			Host:    p.restConfig.Host,
@@ -118,11 +126,11 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 
 		// attempt to passthrough request if valid token
-		if p.tokenAuther != nil {
+		if p.options.TokenReview {
 			klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
 				req.RemoteAddr)
 
-			ok, tkErr := p.tokenAuther.Review(req)
+			ok, tkErr := p.tokenReviewer.Review(req)
 			// no error so passthrough the request
 			if tkErr == nil && ok {
 				klog.V(4).Infof("passing request with valid token through (%s)",
@@ -142,8 +150,14 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, errUnauthorized
 	}
 
+	// failed authorization
 	if !ok {
 		return nil, errUnauthorized
+	}
+
+	// if we have disabled impersonation we can forward the request right away
+	if p.options.DisableImpersonation {
+		return p.clientTransport.RoundTrip(req)
 	}
 
 	// check for incoming impersonation headers and reject if any exists

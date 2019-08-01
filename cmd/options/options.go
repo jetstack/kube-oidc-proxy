@@ -14,6 +14,23 @@ type TokenPassthroughOptions struct {
 	Enabled   bool
 }
 
+type ImpersonationOptions struct {
+	Disable bool
+}
+
+type OIDCAuthenticationOptions struct {
+	APIAudiences   []string
+	CAFile         string
+	ClientID       string
+	IssuerURL      string
+	UsernameClaim  string
+	UsernamePrefix string
+	GroupsClaim    string
+	GroupsPrefix   string
+	SigningAlgs    []string
+	RequiredClaims map[string]string
+}
+
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&t.Audiences, "token-passthrough-audiences", t.Audiences, ""+
 		"List of the identifiers that the resource server presented with the token "+
@@ -28,17 +45,10 @@ func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
 		"is sent on as is, with no impersonation.")
 }
 
-type OIDCAuthenticationOptions struct {
-	APIAudiences   []string
-	CAFile         string
-	ClientID       string
-	IssuerURL      string
-	UsernameClaim  string
-	UsernamePrefix string
-	GroupsClaim    string
-	GroupsPrefix   string
-	SigningAlgs    []string
-	RequiredClaims map[string]string
+func (i *ImpersonationOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&i.Disable, "disable-impersonation", i.Disable, ""+
+		"Disable the impersonation of authenticated requests. All authenticated "+
+		"requests will be forwarded as is.")
 }
 
 func (o *OIDCAuthenticationOptions) Validate() error {

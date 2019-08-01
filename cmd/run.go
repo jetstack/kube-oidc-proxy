@@ -46,6 +46,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	ssoptionsWithLB := ssoptions.WithLoopback()
 
 	tpOptions := new(options.TokenPassthroughOptions)
+	impOptions := new(options.ImpersonationOptions)
 
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
@@ -112,8 +113,13 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, tokenReviewer,
-				secureServingInfo)
+			proxyOptions := &proxy.Options{
+				DisableImpersonation: impOptions.Disable,
+				TokenReview:          tpOptions.Enabled,
+			}
+
+			p := proxy.New(restConfig, reqAuther,
+				tokenReviewer, secureServingInfo, proxyOptions)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -139,6 +145,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	tpfs := namedFlagSets.FlagSet("Token Passthrough (Alpha)")
 	tpOptions.AddFlags(tpfs)
+
+	impfs := namedFlagSets.FlagSet("Impersonation (Alpha)")
+	impOptions.AddFlags(impfs)
 
 	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 
