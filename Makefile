@@ -3,6 +3,8 @@ BINDIR   ?= $(CURDIR)/bin
 HACK_DIR ?= hack
 PATH     := $(BINDIR):$(PATH)
 
+export GO111MODULE=on
+
 help:  ## display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
@@ -26,7 +28,7 @@ endif
 
 $(BINDIR)/mockgen:
 	mkdir -p $(BINDIR)
-	GO111MODULE=on go build -o $(BINDIR)/mockgen github.com/golang/mock/mockgen
+	go build -o $(BINDIR)/mockgen github.com/golang/mock/mockgen
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
@@ -98,7 +100,7 @@ e2e-1.11: build ## run end to end tests for kubernetes version 1.11
 	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.10 go test ./pkg/e2e/. -v --count=1
 
 build: generate ## build kube-oidc-proxy
-	GO111MODULE=on CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'
+	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'
 
 docker_build: generate test build ## build docker image
 	docker build -t kube-oidc-proxy .
