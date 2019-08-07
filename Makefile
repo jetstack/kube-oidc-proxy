@@ -50,9 +50,6 @@ depend: $(BINDIR)/mockgen $(BINDIR)/kubectl $(BINDIR)/golangci-lint
 verify_boilerplate:
 	$(HACK_DIR)/verify-boilerplate.sh
 
-verify_mod:
-	go mod verify
-
 go_fmt:
 	@set -e; \
 	GO_FMT=$$(git ls-files *.go | xargs gofmt -d); \
@@ -74,7 +71,7 @@ clean: ## clean up created files
 		kube-oidc-proxy \
 		pkg/mocks/authenticator.go
 
-verify: depend verify_boilerplate verify_mod go_fmt go_vet go_lint ## verify code and mod
+verify: depend verify_boilerplate go_fmt go_vet go_lint ## verify code and mod
 
 generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)
