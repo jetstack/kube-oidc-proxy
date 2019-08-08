@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/config"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 const (
@@ -186,7 +186,7 @@ func waitOnCoreDNS(kubeclient *kubernetes.Clientset) error {
 	}
 
 	for _, pod := range pods.Items {
-		err := utils.WaitForPodReady(kubeclient, pod.Name, pod.Namespace)
+		err := util.WaitForPodReady(kubeclient, pod.Name, pod.Namespace)
 		if err != nil {
 			return fmt.Errorf("failed to wait for dns pods to become ready: %s", err)
 		}

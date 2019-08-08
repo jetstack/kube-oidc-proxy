@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"k8s.io/klog"
 )
 
@@ -27,13 +27,13 @@ func New(tlsDir string) *Issuer {
 }
 
 func (i *Issuer) Run() error {
-	listenPort, err := utils.FreePort()
+	listenPort, err := util.FreePort()
 	if err != nil {
 		return err
 	}
 	i.listenPort = listenPort
 
-	certPath, keyPath, sk, _, err := utils.NewTLSSelfSignedCertKey(i.tlsDir, "oidc-issuer")
+	certPath, keyPath, sk, _, err := util.NewTLSSelfSignedCertKey(i.tlsDir, "oidc-issuer")
 	if err != nil {
 		return fmt.Errorf("failed to create issuer key pair: %s", err)
 	}
