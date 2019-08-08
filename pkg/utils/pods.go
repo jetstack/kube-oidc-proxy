@@ -25,8 +25,8 @@ func WaitForPodReady(kubeclient *kubernetes.Clientset,
 		}
 
 		if i == 15 {
-			return fmt.Errorf("pod %s in namespace %s, failed to become ready in time",
-				name, namespace)
+			return fmt.Errorf("pod %s/%s failed to become ready in time: %+v",
+				namespace, name, pod)
 		}
 
 		time.Sleep(time.Second * 5)
