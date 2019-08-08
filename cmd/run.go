@@ -45,8 +45,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
 
-	tpOptions := new(options.TokenPassthroughOptions)
-	impOptions := new(options.ImpersonationOptions)
+	kopOptions := new(options.KubeOIDCProxyOptions)
 
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
@@ -99,8 +98,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			// Init token reviewer if enabled
 			var tokenReviewer *tokenreview.TokenReview
-			if tpOptions.Enabled {
-				tokenReviewer, err = tokenreview.New(restConfig, tpOptions.Audiences)
+			if kopOptions.TokenPassthrough.Enabled {
+				tokenReviewer, err = tokenreview.New(restConfig, kopOptions.TokenPassthrough.Audiences)
 				if err != nil {
 					return err
 				}
@@ -114,8 +113,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			}
 
 			proxyOptions := &proxy.Options{
-				DisableImpersonation: impOptions.Disable,
-				TokenReview:          tpOptions.Enabled,
+				TokenReview:          kopOptions.TokenPassthrough.Enabled,
+				DisableImpersonation: kopOptions.DisableImpersonation,
 			}
 
 			p := proxy.New(restConfig, reqAuther,
@@ -140,14 +139,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	var namedFlagSets cliflag.NamedFlagSets
 	fs := cmd.Flags()
 
+	kopfs := namedFlagSets.FlagSet("Kube-OIDC-Proxy")
+	kopOptions.AddFlags(kopfs)
+
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
-
-	tpfs := namedFlagSets.FlagSet("Token Passthrough (Alpha)")
-	tpOptions.AddFlags(tpfs)
-
-	impfs := namedFlagSets.FlagSet("Impersonation (Alpha)")
-	impOptions.AddFlags(impfs)
 
 	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 

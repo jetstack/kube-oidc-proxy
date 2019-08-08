@@ -175,30 +175,9 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	}
 	e.proxyPort = proxyPort
 
-	cmd := exec.Command("../../kube-oidc-proxy",
-		fmt.Sprintf("--oidc-issuer-url=https://127.0.0.1:%s", issuer.Port()),
-		fmt.Sprintf("--oidc-ca-file=%s", e.issuer.KeyCertPair().CertPath),
-		"--oidc-client-id=kube-oidc-proxy_e2e_client-id",
-		"--oidc-username-claim=e2e-username-claim",
-		"--oidc-groups-claim=e2e-groups-claim",
-		"--oidc-signing-algs=RS256",
-
-		"--bind-address=127.0.0.1",
-		fmt.Sprintf("--secure-port=%s", e.proxyPort),
-		fmt.Sprintf("--tls-cert-file=%s", e.proxyKeyCertPair.CertPath),
-		fmt.Sprintf("--tls-private-key-file=%s", e.proxyKeyCertPair.KeyPath),
-
-		fmt.Sprintf("--kubeconfig=%s", e.kubeKubeconfig),
-	)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Start(); err != nil {
+	if err := e.runProxy(); err != nil {
 		return nil, err
 	}
-
-	e.proxyCmd = cmd
-
-	time.Sleep(time.Second * 13)
 
 	return transport, nil
 }
@@ -266,9 +245,9 @@ func (e *E2E) cleanup() {
 			klog.Errorf("failed to kill kube-oidc-proxy process: %s",
 				err)
 		}
-
-		e.proxyCmd = nil
 	}
+
+	e.proxyCmd = nil
 }
 
 func (e *E2E) runProxy(extraArgs ...string) error {
