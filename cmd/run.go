@@ -23,37 +23,35 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
 const (
-	readinessProbePort = 8080
+	appName = "kube-oidc-proxy"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	// flag option structs
 	oidcOptions := new(options.OIDCAuthenticationOptions)
+	kopOptions := new(options.KubeOIDCProxyOptions)
 
 	ssoptions := &apiserveroptions.SecureServingOptions{
 		BindAddress: net.ParseIP("0.0.0.0"),
 		BindPort:    6443,
 		Required:    true,
 		ServerCert: apiserveroptions.GeneratableKeyCert{
-			PairName:      "kube-oidc-proxy",
+			PairName:      appName,
 			CertDirectory: "/var/run/kubernetes",
 		},
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
 
-	kopOptions := new(options.KubeOIDCProxyOptions)
-
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
-
-	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
 
 	// proxy command
 	cmd := &cobra.Command{
-		Use:  "kube-oidc-proxy",
+		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flag("version").Value.String() == "true" {
@@ -64,7 +62,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
+			if err := ssoptionsWithLB.Validate(); len(err) > 0 {
+				return fmt.Errorf("%s", err)
+			}
+
+			if ssoptionsWithLB.SecureServingOptions.BindPort == kopOptions.ProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
@@ -77,6 +79,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				if err != nil {
 					return err
 				}
+			}
+
+			healthCheck, err := probe.New(strconv.Itoa(kopOptions.ProbePort))
+			if err != nil {
+				return err
 			}
 
 			// oidc config
@@ -109,6 +116,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			reqAuther := bearertoken.New(oidcAuther)
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
+				return err
+			}
+
+			if err := watchFiles(kopOptions.WatchFiles,
+				kopOptions.WatchRefreshPeriod); err != nil {
 				return err
 			}
 
@@ -174,4 +186,18 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	})
 
 	return cmd
+}
+
+func watchFiles(files []string, durationStr string) error {
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		return err
+	}
+
+	if duration < time.Second {
+		return fmt.Errorf("expected reload duration to a second or higher, got=%s",
+			durationStr)
+	}
+
+	return util.WatchFiles(duration, files)
 }
