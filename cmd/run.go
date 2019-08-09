@@ -9,15 +9,20 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
+	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
+	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
@@ -26,7 +31,9 @@ import (
 )
 
 const (
-	readinessProbePort = 8080
+	readinessProbePort   = 8080
+	informerResyncPeriod = time.Millisecond * 500
+	appName              = "kube-oidc-proxy"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -38,19 +45,20 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		BindPort:    6443,
 		Required:    true,
 		ServerCert: apiserveroptions.GeneratableKeyCert{
-			PairName:      "kube-oidc-proxy",
+			PairName:      appName,
 			CertDirectory: "/var/run/kubernetes",
 		},
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
-
+	auditOptions := apiserveroptions.NewAuditOptions()
+	wbhkOptions := apiserveroptions.NewWebhookOptions()
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
 
 	// proxy command
 	cmd := &cobra.Command{
-		Use:  "kube-oidc-proxy",
+		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flag("version").Value.String() == "true" {
@@ -63,6 +71,10 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
+			}
+
+			if errs := auditOptions.Validate(); len(errs) > 0 {
+				return fmt.Errorf("%s", errs)
 			}
 
 			// client rest config
@@ -100,7 +112,33 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo)
+			clientset, err := kubernetes.NewForConfig(restConfig)
+			if err != nil {
+				return err
+			}
+
+			informers := kubeinformers.NewSharedInformerFactory(
+				clientset, informerResyncPeriod)
+			processInfo := apiserveroptions.NewProcessInfo(
+				appName, appName)
+			serverConfig := &server.Config{
+				ExternalAddress: ssoptionsWithLB.BindAddress.String(),
+				SecureServing:   secureServingInfo,
+				// Default to treating watch as a long-running operation
+				// Generic API servers have no inherent long-running subresources
+				LongRunningFunc: genericfilters.BasicLongRunningRequestCheck(
+					sets.NewString("watch"), sets.NewString()),
+				Authentication: server.AuthenticationInfo{
+					APIAudiences:      oidcOptions.APIAudiences,
+					Authenticator:     reqAuther,
+					SupportsBasicAuth: false,
+				},
+			}
+
+			auditOptions.ApplyTo(
+				serverConfig, restConfig, informers, processInfo, wbhkOptions)
+
+			p := proxy.New(restConfig, reqAuther, serverConfig)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -112,6 +150,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			healthCheck.SetReady()
 
 			<-waitCh
+
+			if serverConfig.AuditBackend != nil {
+				klog.Infof("shutting down audit backend")
+				serverConfig.AuditBackend.Shutdown()
+			}
 
 			return nil
 		},
@@ -130,6 +173,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	clientConfigFlags.Impersonate = nil
 	clientConfigFlags.ImpersonateGroup = nil
 	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
+
+	auditfs := namedFlagSets.FlagSet("Audit")
+	auditOptions.AddFlags(auditfs)
 
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
 	namedFlagSets.FlagSet("misc").Bool("version",

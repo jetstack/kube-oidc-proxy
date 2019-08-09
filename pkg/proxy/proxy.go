@@ -10,8 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
+	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -27,28 +30,32 @@ var (
 	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
 	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
+
+	// Scheme defines methods for serializing and deserializing API objects.
+	scheme = runtime.NewScheme()
+	// Codecs provides methods for retrieving codecs and serializers for specific
+	// versions and content types.
+	codecs = serializer.NewCodecFactory(scheme)
 )
 
 type Proxy struct {
-	reqAuther         *bearertoken.Authenticator
-	secureServingInfo *server.SecureServingInfo
+	reqAuther    *bearertoken.Authenticator
+	serverConfig *server.Config
 
 	restConfig      *rest.Config
 	clientTransport http.RoundTripper
 }
 
 func New(restConfig *rest.Config, auther *bearertoken.Authenticator,
-	ssinfo *server.SecureServingInfo) *Proxy {
+	serverConfig *server.Config) *Proxy {
 	return &Proxy{
-		restConfig:        restConfig,
-		reqAuther:         auther,
-		secureServingInfo: ssinfo,
+		restConfig:   restConfig,
+		reqAuther:    auther,
+		serverConfig: serverConfig,
 	}
 }
 
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
-	klog.Infof("waiting for oidc provider to become ready...")
-
 	// get golang tls config to the API server
 	tlsConfig, err := rest.TLSConfigFor(p.restConfig)
 	if err != nil {
@@ -84,7 +91,14 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler.Transport = p
 	proxyHandler.ErrorHandler = p.Error
 
-	// wait for oidc auther to become ready
+	if p.serverConfig.AuditBackend != nil {
+		klog.Infof("starting audit backend")
+		if err := p.serverConfig.AuditBackend.Run(stopCh); err != nil {
+			return nil, err
+		}
+	}
+
+	klog.Infof("waiting for oidc auth provider to become ready...")
 	time.Sleep(10 * time.Second)
 
 	waitCh, err := p.serve(proxyHandler, stopCh)
@@ -97,9 +111,17 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	return waitCh, nil
 }
 
-func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{}) (<-chan struct{}, error) {
+func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan struct{}, error) {
+	c := p.serverConfig
+	handler = genericapifilters.WithAudit(
+		handler, c.AuditBackend, c.AuditPolicyChecker, c.LongRunningFunc)
+
+	failedHandler := genericapifilters.Unauthorized(codecs, c.Authentication.SupportsBasicAuth)
+	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyChecker)
+	handler = genericapifilters.WithAuthentication(handler, p.reqAuther, failedHandler, c.Authentication.APIAudiences)
+
 	// securely serve using serving config
-	waitCh, err := p.secureServingInfo.Serve(proxyHandler, time.Second*60, stopCh)
+	waitCh, err := p.serverConfig.SecureServing.Serve(handler, time.Second*60, stopCh)
 	if err != nil {
 		return nil, err
 	}
