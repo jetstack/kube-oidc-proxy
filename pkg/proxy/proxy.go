@@ -36,8 +36,9 @@ type Proxy struct {
 	tokenAuther       *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
-	restConfig      *rest.Config
-	clientTransport http.RoundTripper
+	restConfig            *rest.Config
+	clientTransport       http.RoundTripper
+	noAuthClientTransport http.RoundTripper
 }
 
 func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
@@ -51,31 +52,29 @@ func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
 }
 
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
-	klog.Infof("waiting for oidc provider to become ready...")
-
-	// get golang tls config to the API server
-	tlsConfig, err := rest.TLSConfigFor(p.restConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// create tls transport to request
-	tlsTransport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	// get kube transport config form rest client config
-	restTransportConfig, err := p.restConfig.TransportConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	// wrap golang tls config with kube transport round tripper
-	clientRT, err := transport.HTTPWrappersForConfig(restTransportConfig, tlsTransport)
+	clientRT, err := p.roundTripperForRestConfig(p.restConfig)
 	if err != nil {
 		return nil, err
 	}
 	p.clientTransport = clientRT
+
+	// No auth round tripper for no impersonation
+	if p.tokenAuther != nil {
+		noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
+			APIPath: p.restConfig.APIPath,
+			Host:    p.restConfig.Host,
+			Timeout: p.restConfig.Timeout,
+			TLSClientConfig: rest.TLSClientConfig{
+				CAFile: p.restConfig.CAFile,
+				CAData: p.restConfig.CAData,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		p.noAuthClientTransport = noAuthClientRT
+	}
 
 	// get API server url
 	url, err := url.Parse(p.restConfig.Host)
@@ -89,6 +88,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler.ErrorHandler = p.Error
 
 	// wait for oidc auther to become ready
+	klog.Infof("waiting for oidc provider to become ready...")
 	time.Sleep(10 * time.Second)
 
 	waitCh, err := p.serve(proxyHandler, stopCh)
@@ -127,8 +127,9 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 			if tkErr == nil && ok {
 				klog.V(4).Infof("passing request with valid token through (%s)",
 					req.RemoteAddr)
-				// don't set impersonation headers
-				return p.clientTransport.RoundTrip(req)
+				// Don't set impersonation headers and pass through without proxy auth
+				// and headers still set
+				return p.noAuthClientTransport.RoundTrip(req)
 			}
 
 			if tkErr != nil {
@@ -230,4 +231,31 @@ func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
 		klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
 		http.Error(rw, "", http.StatusInternalServerError)
 	}
+}
+
+func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTripper, error) {
+	// get golang tls config to the API server
+	tlsConfig, err := rest.TLSConfigFor(config)
+	if err != nil {
+		return nil, err
+	}
+
+	// create tls transport to request
+	tlsTransport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	// get kube transport config form rest client config
+	restTransportConfig, err := config.TransportConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// wrap golang tls config with kube transport round tripper
+	clientRT, err := transport.HTTPWrappersForConfig(restTransportConfig, tlsTransport)
+	if err != nil {
+		return nil, err
+	}
+
+	return clientRT, nil
 }
