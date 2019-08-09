@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
@@ -30,12 +31,6 @@ var (
 	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
 	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
-
-	// Scheme defines methods for serializing and deserializing API objects.
-	scheme = runtime.NewScheme()
-	// Codecs provides methods for retrieving codecs and serializers for specific
-	// versions and content types.
-	codecs = serializer.NewCodecFactory(scheme)
 )
 
 type Proxy struct {
@@ -112,6 +107,14 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 }
 
 func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan struct{}, error) {
+	// Codecs provides methods for retrieving codecs and serializers for specific
+	// versions and content types.
+	scheme := runtime.NewScheme()
+	if err := audit.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	codecs := serializer.NewCodecFactory(scheme)
+
 	c := p.serverConfig
 	handler = genericapifilters.WithAudit(
 		handler, c.AuditBackend, c.AuditPolicyChecker, c.LongRunningFunc)
@@ -119,6 +122,7 @@ func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan stru
 	failedHandler := genericapifilters.Unauthorized(codecs, c.Authentication.SupportsBasicAuth)
 	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyChecker)
 	handler = genericapifilters.WithAuthentication(handler, p.reqAuther, failedHandler, c.Authentication.APIAudiences)
+	handler = genericapifilters.WithRequestInfo(handler, server.NewRequestInfoResolver(c))
 
 	// securely serve using serving config
 	waitCh, err := p.serverConfig.SecureServing.Serve(handler, time.Second*60, stopCh)

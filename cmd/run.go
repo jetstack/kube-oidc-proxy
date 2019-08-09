@@ -135,8 +135,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				},
 			}
 
-			auditOptions.ApplyTo(
-				serverConfig, restConfig, informers, processInfo, wbhkOptions)
+			if err := auditOptions.ApplyTo(
+				serverConfig, restConfig, informers, processInfo, wbhkOptions,
+			); err != nil {
+				return err
+			}
 
 			p := proxy.New(restConfig, reqAuther, serverConfig)
 
