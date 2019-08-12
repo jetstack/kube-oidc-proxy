@@ -6,11 +6,11 @@ import (
 	"os"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd"
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 func main() {
-	stopCh := utils.SignalHandler()
+	stopCh := util.SignalHandler()
 	cmd := cmd.NewRunCommand(stopCh)
 
 	if err := cmd.Execute(); err != nil {

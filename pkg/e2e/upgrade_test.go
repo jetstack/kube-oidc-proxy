@@ -21,7 +21,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 const (
@@ -119,7 +119,7 @@ func Test_Upgrade(t *testing.T) {
 	}
 
 	// wait for our echo server to become ready
-	err = utils.WaitForPodReady(e2eSuite.kubeclient,
+	err = util.WaitForPodReady(e2eSuite.kubeclient,
 		"echoserver", namespaceUpgradeTest)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func Test_Upgrade(t *testing.T) {
 	portOut := &bytes.Buffer{}
 	portErr := &bytes.Buffer{}
 
-	freePort, err := utils.FreePort()
+	freePort, err := util.FreePort()
 	if err != nil {
 		t.Fatal(err)
 	}

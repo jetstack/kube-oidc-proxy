@@ -26,7 +26,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/e2e/issuer"
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 type E2E struct {
@@ -141,7 +141,7 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 	}
 	e.issuer = issuer
 
-	proxyCertPath, proxyKeyPath, _, proxyCert, err := utils.NewTLSSelfSignedCertKey(pairTmpDir, "")
+	proxyCertPath, proxyKeyPath, _, proxyCert, err := util.NewTLSSelfSignedCertKey(pairTmpDir, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key pair: %s", err)
 	}
@@ -167,7 +167,7 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 		},
 	}
 
-	proxyPort, err := utils.FreePort()
+	proxyPort, err := util.FreePort()
 	if err != nil {
 		return nil, err
 	}

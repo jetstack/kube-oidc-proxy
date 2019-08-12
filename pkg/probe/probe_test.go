@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 func Test_Check(t *testing.T) {
-	port, err := utils.FreePort()
+	port, err := util.FreePort()
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
