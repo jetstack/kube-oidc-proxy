@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/utils"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 func Test_WatchSecretFiles(t *testing.T) {
@@ -18,7 +18,7 @@ func Test_WatchSecretFiles(t *testing.T) {
 		return
 	}
 
-	proxyPort, err := utils.FreePort()
+	proxyPort, err := util.FreePort()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func Test_WatchSecretFiles(t *testing.T) {
 		}
 	}()
 
-	proxyCertPath, proxyKeyPath, _, _, err := utils.NewTLSSelfSignedCertKey(pairTmpDir, "")
+	proxyCertPath, proxyKeyPath, _, _, err := util.NewTLSSelfSignedCertKey(pairTmpDir, "")
 	if err != nil {
 		t.Error(err)
 		return
