@@ -5,10 +5,30 @@ function(cloud='google') main {
   // this will only run the google cluster
   clouds: {
     google: main.clouds.google,
+    amazon: null,
+    digitalocean: null,
   },
   base_domain: '.kubernetes.example.net',
   cert_manager+: {
     letsencrypt_contact_email:: 'certificates@example.net',
+    solvers+: [
+      //{
+      //  http01: {
+      //    ingress: {},
+      //  },
+      //},
+      {
+        dns01: {
+          clouddns: {
+            project: $.config.cert_manager.project,
+            serviceAccountSecretRef: {
+              name: $.cert_manager.google_secret.metadata.name,
+              key: 'credentials.json',
+            },
+          },
+        },
+      },
+    ],
   },
   dex+: if $.master then {
     users: [
