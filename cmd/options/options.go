@@ -15,11 +15,11 @@ type TokenPassthroughOptions struct {
 }
 
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&t.Audiences, "token-audiences", t.Audiences, ""+
+	fs.StringSliceVar(&t.Audiences, "token-passthrough-audiences", t.Audiences, ""+
 		"List of the identifiers that the resource server presented with the token "+
-		"identifies as. Audience-aware token authenticators will verify that the token "+
-		"was intended for at least one of the audiences in this list. If no audiences "+
-		"are provided, the audience will default to the audience of the Kubernetes "+
+		"identifies as. The resoure server will verify that non OIDC tokens are intended "+
+		"for at least one of the audiences in this list. If no audiences are "+
+		"provided, the audience will default to the audience of the Kubernetes "+
 		"apiserver.")
 
 	fs.BoolVar(&t.Enabled, "token-passthrough", t.Enabled, ""+
@@ -52,7 +52,8 @@ func (o *OIDCAuthenticationOptions) Validate() error {
 func (o *OIDCAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&o.APIAudiences, "api-audiences", o.APIAudiences, ""+
 		"Identifiers of the API. This can be used as an additional list of "+
-		"identifiers that exist in the target audiences of requests.")
+		"identifiers that exist in the target audiences of requests when "+
+		"authenticating with OIDC.")
 
 	fs.StringVar(&o.IssuerURL, "oidc-issuer-url", o.IssuerURL, ""+
 		"The URL of the OpenID issuer, only HTTPS scheme will be accepted.")
