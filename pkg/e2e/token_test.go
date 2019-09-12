@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -16,57 +12,9 @@ const (
 )
 
 func Test_Token(t *testing.T) {
-	if e2eSuite == nil {
-		t.Skip("e2eSuite not defined")
-		return
-	}
-
-	_, err := e2eSuite.kubeclient.CoreV1().Namespaces().Create(&corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespaceTokenTest,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = e2eSuite.kubeclient.RbacV1().Roles(namespaceTokenTest).Create(&rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-username-role",
-			Namespace: namespaceTokenTest,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get", "list"},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = e2eSuite.kubeclient.RbacV1().RoleBindings(namespaceTokenTest).Create(
-		&rbacv1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-username-binding",
-				Namespace: namespaceTokenTest,
-			},
-			Subjects: []rbacv1.Subject{
-				{
-					Name: "test-username",
-					Kind: "User",
-				},
-			},
-			RoleRef: rbacv1.RoleRef{
-				Name: "test-username-role",
-				Kind: "Role",
-			},
-		})
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustSkipMissingSuite(t)
+	mustNamespace(t, namespaceTokenTest)
+	mustCreatePodRbac(t, "test-username", namespaceTokenTest, "User")
 
 	url := fmt.Sprintf(
 		"https://127.0.0.1:%s/api/v1/namespaces/%s/pods",

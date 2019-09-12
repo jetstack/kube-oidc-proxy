@@ -22,6 +22,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
@@ -43,6 +44,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		},
 	}
 	ssoptionsWithLB := ssoptions.WithLoopback()
+
+	tpOptions := new(options.TokenPassthroughOptions)
 
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
@@ -93,6 +96,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
+			// Init token reviewer if enabled
+			var tokenReviewer *tokenreview.TokenReview
+			if tpOptions.Enabled {
+				tokenReviewer, err = tokenreview.New(restConfig, tpOptions.Audiences)
+				if err != nil {
+					return err
+				}
+			}
+
 			// oidc auther from config
 			reqAuther := bearertoken.New(oidcAuther)
 			secureServingInfo := new(server.SecureServingInfo)
@@ -100,7 +112,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			p := proxy.New(restConfig, reqAuther, secureServingInfo)
+			p := proxy.New(restConfig, reqAuther, tokenReviewer,
+				secureServingInfo)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
@@ -123,6 +136,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
+
+	tpfs := namedFlagSets.FlagSet("Token Passthrough (Alpha)")
+	tpOptions.AddFlags(tpfs)
 
 	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
 
