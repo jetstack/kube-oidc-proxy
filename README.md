@@ -125,5 +125,8 @@ users:
       name: oidc
 ```
 
+## Configuration
+ - [Token Passthrough](./docs/tasks/token-passthrough.md)
+
 ## Development
 *NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.
