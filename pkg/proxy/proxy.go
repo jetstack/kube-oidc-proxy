@@ -71,7 +71,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	p.clientTransport = clientRT
 
 	// No auth round tripper for no impersonation
-	if p.options.DisableImpersonation {
+	if p.options.DisableImpersonation || p.options.TokenReview {
 		noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
 			APIPath: p.restConfig.APIPath,
 			Host:    p.restConfig.Host,
