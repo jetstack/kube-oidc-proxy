@@ -63,7 +63,7 @@ func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	klog.Infof("waiting for oidc provider to become ready...")
 
-	// standard round tripprt for proxy to API Server
+	// standard round tripper for proxy to API Server
 	clientRT, err := p.roundTripperForRestConfig(p.restConfig)
 	if err != nil {
 		return nil, err
