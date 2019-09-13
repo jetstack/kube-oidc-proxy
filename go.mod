@@ -25,6 +25,7 @@ replace (
 	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
+	k8s.io/apiserver => github.com/dlipovetsky/apiserver v0.0.0-20190913163249-24eb9c2a3a6d
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.0.0-20190620085706-2090e6d8f84c
 	k8s.io/client-go => k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
 	k8s.io/component-base => k8s.io/component-base v0.0.0-20190620085130-185d68e6e6ea

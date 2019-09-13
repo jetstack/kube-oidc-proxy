@@ -87,10 +87,6 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler.Transport = p
 	proxyHandler.ErrorHandler = p.Error
 
-	// wait for oidc auther to become ready
-	klog.Infof("waiting for oidc provider to become ready...")
-	time.Sleep(10 * time.Second)
-
 	waitCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {
 		return nil, err

@@ -45,6 +45,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgrijalva/jwt-go v0.0.0-20160705203006-01aeca54ebda h1:NyywMz59neOoVRFDz+ccfKWxn784fiHMDnZSy6T+JXY=
 github.com/dgrijalva/jwt-go v0.0.0-20160705203006-01aeca54ebda/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
+github.com/dlipovetsky/apiserver v0.0.0-20190913163249-24eb9c2a3a6d h1:gm7SgfHWkIKEQD6EbXxpZR+rEDxR7jhol62kJSD1EMM=
+github.com/dlipovetsky/apiserver v0.0.0-20190913163249-24eb9c2a3a6d/go.mod h1:q5EZ3GqA/yRBi2/XDDMamgLMeAJKAtUV9lzvBjyLB54=
 github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0 h1:w3NnFcKR5241cfmQU5ZZAsf0xcpId6mWOupTvJlUX2U=
 github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0/go.mod h1:eEKB0N0r5NX/I1kEveEz05bcu8tLC/8azJZsviup8Sk=
 github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96 h1:cenwrSVm+Z7QLSV/BsnenAOcDXdX4cMv4wP0B/5QbPg=
@@ -332,8 +334,6 @@ k8s.io/api v0.0.0-20190620084959-7cf5895f2711 h1:BblVYz/wE5WtBsD/Gvu54KyBUTJMflo
 k8s.io/api v0.0.0-20190620084959-7cf5895f2711/go.mod h1:TBhBqb1AWbBQbW3XRusr7n7E4v2+5ZY8r8sAMnyFC5A=
 k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719 h1:uV4S5IB5g4Nvi+TBVNf3e9L4wrirlwYJ6w88jUQxTUw=
 k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719/go.mod h1:I4A+glKBHiTgiEjQiCCQfCAIcIMFGt291SmsvcrFzJA=
-k8s.io/apiserver v0.0.0-20190721103406-1e59c150c171 h1:Rnj4En7uEFiuY2+nLmSZTJ57h3ctjfARqwCkJU69Jho=
-k8s.io/apiserver v0.0.0-20190721103406-1e59c150c171/go.mod h1:q5EZ3GqA/yRBi2/XDDMamgLMeAJKAtUV9lzvBjyLB54=
 k8s.io/cli-runtime v0.0.0-20190620085706-2090e6d8f84c h1:w9/2LqD258mHJmpbLczVn5bnsK6ppTqlA64NTsjXZMY=
 k8s.io/cli-runtime v0.0.0-20190620085706-2090e6d8f84c/go.mod h1:fkxp0BXLu9gu3r8x8X8gLrfDgWfqusKEJUnMUIqpDcg=
 k8s.io/client-go v0.0.0-20190620085101-78d2af792bab h1:E8Fecph0qbNsAbijJJQryKu4Oi9QTp5cVpjTE+nqg6g=

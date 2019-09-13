@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
@@ -121,7 +122,14 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			time.Sleep(time.Second * 3)
+			// wait for oidc auther to initialize
+			err = wait.PollUntil(10*time.Second, func() (bool, error) {
+				return oidcAuther.HasVerifier(), nil
+			}, stopCh)
+			if err != nil {
+				return err
+			}
+
 			healthCheck.SetReady()
 
 			<-waitCh
