@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/Masterminds/semver v1.4.2
+	github.com/coreos/go-oidc v0.0.0-20180117170138-065b426bd416
 	github.com/golang/mock v0.0.0-20160127222235-bd3c8e81be01
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/sirupsen/logrus v1.4.2

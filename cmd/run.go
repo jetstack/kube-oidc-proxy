@@ -2,11 +2,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
@@ -23,6 +23,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
@@ -121,7 +122,12 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			time.Sleep(time.Second * 3)
+			// try initializing provider
+			ctx := context.Background()
+			err = util.InitProvider(ctx, oidcOptions, stopCh)
+			if err != nil {
+				return err
+			}
 			healthCheck.SetReady()
 
 			<-waitCh
