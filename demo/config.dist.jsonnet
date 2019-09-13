@@ -5,8 +5,8 @@ function(cloud='google') main {
   // this will only run the google cluster
   clouds: {
     google: main.clouds.google,
-    amazon: null,
-    digitalocean: null,
+    amazon: main.clouds.amazon,
+    digitalocean: main.clouds.digitalocean,
   },
   base_domain: '.kubernetes.example.net',
   cert_manager+: {
