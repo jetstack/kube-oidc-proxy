@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ func Test_WatchSecretFiles(t *testing.T) {
 		return
 	}
 
-	proxyPort, err := util.FreePort()
+	readinessPort, err := util.FreePort()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,57 +32,36 @@ func Test_WatchSecretFiles(t *testing.T) {
 		}
 	}()
 
-	proxyCertPath, proxyKeyPath, _, _, err := util.NewTLSSelfSignedCertKey(pairTmpDir, "")
+	keyCertPair, err := util.NewTLSSelfSignedCertKey(pairTmpDir, "")
 	if err != nil {
 		t.Error(err)
-		return
+		t.FailNow()
 	}
 
-	cmd := exec.Command("../../kube-oidc-proxy",
-		"--oidc-issuer-url=https://127.0.0.1:1234",
-		"--oidc-client-id=kube-oidc-proy_e2e_client-id",
-		"--oidc-username-claim=e2e-username-claim",
-
-		"--readiness-probe-port=8081",
+	err = e2eSuite.runProxy(
+		"--readiness-probe-port="+readinessPort,
 		"--reload-watch-refresh-period=5s",
 		fmt.Sprintf("--reload-watch-files=%s,%s",
-			proxyCertPath, proxyKeyPath),
-
-		"--bind-address=127.0.0.1",
-		fmt.Sprintf("--secure-port=%s", proxyPort),
-		fmt.Sprintf("--tls-cert-file=%s", proxyCertPath),
-		fmt.Sprintf("--tls-private-key-file=%s", proxyKeyPath),
-
-		"--v=10",
+			keyCertPair.CertPath, keyCertPair.KeyPath),
+		"--tls-cert-file="+keyCertPair.CertPath,
+		"--tls-private-key-file="+keyCertPair.KeyPath,
 	)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
+
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
 	}
 
-	defer func() {
-		// process already exited
-		if cmd.ProcessState != nil &&
-			cmd.ProcessState.Exited() {
-			return
-		}
-
-		if cmd.Process == nil {
-			t.Fatalf("failed to kill process, was nil: %v", cmd.Process)
-		}
-
-		if err := cmd.Process.Kill(); err != nil {
-			t.Errorf("failed to kill kube-oidc-proxy process: %s", err)
-		}
-	}()
+	defer e2eSuite.cleanup()
 
 	time.Sleep(time.Second * 10)
 
-	if err := ioutil.WriteFile(proxyCertPath, []byte("aa"), 0600); err != nil {
+	if err := ioutil.WriteFile(keyCertPair.CertPath, []byte("aa"), 0600); err != nil {
 		t.Error(err)
 		return
 	}
+
+	cmd := e2eSuite.proxyCmd
 
 	waitCh := make(chan error)
 	go func() {
