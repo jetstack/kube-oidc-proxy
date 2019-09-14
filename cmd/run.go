@@ -80,7 +80,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// oidc config
+			// oidc config; initializes provider asynchronously
 			oidcAuther, err := oidc.New(oidc.Options{
 				APIAudiences:         oidcOptions.APIAudiences,
 				CAFile:               oidcOptions.CAFile,
@@ -116,18 +116,19 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			p := proxy.New(restConfig, reqAuther, tokenReviewer,
 				secureServingInfo)
 
-			// run proxy
-			waitCh, err := p.Run(stopCh)
-			if err != nil {
-				return err
-			}
-
 			// try initializing provider
 			ctx := context.Background()
 			err = util.InitProviderUntil(ctx, oidcOptions, stopCh)
 			if err != nil {
 				return err
 			}
+
+			// run proxy
+			waitCh, err := p.Run(stopCh)
+			if err != nil {
+				return err
+			}
+
 			healthCheck.SetReady()
 
 			<-waitCh
