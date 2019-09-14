@@ -30,6 +30,10 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
+const (
+	readinessProbeURL = "http://127.0.0.1:8080/ready"
+)
+
 type E2E struct {
 	kubeclient     *kubernetes.Clientset
 	kubeKubeconfig string
@@ -198,7 +202,10 @@ func (e *E2E) newIssuerProxyPair() (*http.Transport, error) {
 
 	e.proxyCmd = cmd
 
-	time.Sleep(time.Second * 13)
+	_, err = verifyProxyReadinessPoll(readinessProbeURL, 2*time.Second, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
 
 	return transport, nil
 }
@@ -306,8 +313,10 @@ func (e *E2E) runProxy(extraArgs ...string) error {
 
 	e.proxyCmd = cmd
 
-	// wait more than enough for proxy to become ready
-	time.Sleep(time.Second * 13)
+	_, err := verifyProxyReadinessPoll(readinessProbeURL, 2*time.Second, 30*time.Second)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

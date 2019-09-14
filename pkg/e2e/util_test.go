@@ -2,6 +2,8 @@
 package e2e
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func mustSkipMissingSuite(t *testing.T) {
@@ -118,4 +121,16 @@ func mustCreatePodRbac(t *testing.T, name, ns, kind string) {
 		t.Error(err)
 		t.FailNow()
 	}
+}
+
+func verifyProxyReadinessPoll(readinessProbeURL string, interval, timeout time.Duration) (bool, error) {
+	readinessProbeClient := http.DefaultClient
+	err := wait.Poll(interval, timeout, func() (bool, error) {
+		resp, err := readinessProbeClient.Get(readinessProbeURL)
+		if err != nil {
+			return false, fmt.Errorf("failed to verify proxy readiness: %v", err)
+		}
+		return (resp.StatusCode == http.StatusOK), nil
+	})
+	return false, err
 }
