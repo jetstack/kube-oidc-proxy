@@ -27,7 +27,7 @@ func New(port string) (*HealthCheck, error) {
 
 	h.handler.AddReadinessCheck("secure serving", h.Check)
 
-	// Open a listener here to tet that the port is free and we can cleanly exit
+	// Open a listener here to test that the port is free and we can cleanly exit
 	ln, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", port))
 	if err != nil {
 		return nil, fmt.Errorf("readiness probe failed to listen on port %s: %s",

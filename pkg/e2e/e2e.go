@@ -255,6 +255,12 @@ func (e *E2E) runProxy(extraArgs ...string) error {
 		return errors.New("failed to run proxy: issuer not ready")
 	}
 
+	port, err := util.FreePort()
+	if err != nil {
+		return err
+	}
+	e.proxyPort = port
+
 	args := append(
 		[]string{
 			fmt.Sprintf("--oidc-issuer-url=https://127.0.0.1:%s", e.issuer.Port()),
@@ -263,7 +269,7 @@ func (e *E2E) runProxy(extraArgs ...string) error {
 			"--oidc-username-claim=e2e-username-claim",
 			"--oidc-groups-claim=e2e-groups-claim",
 			"--oidc-signing-algs=RS256",
-			"--v=5",
+			"--v=10",
 
 			"--bind-address=127.0.0.1",
 			fmt.Sprintf("--secure-port=%s", e.proxyPort),

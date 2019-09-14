@@ -54,8 +54,6 @@ func Test_WatchSecretFiles(t *testing.T) {
 
 	defer e2eSuite.cleanup()
 
-	time.Sleep(time.Second * 10)
-
 	if err := ioutil.WriteFile(keyCertPair.CertPath, []byte("aa"), 0600); err != nil {
 		t.Error(err)
 		return
