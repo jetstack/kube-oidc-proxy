@@ -4,6 +4,7 @@ package util
 import (
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,17 +21,25 @@ func WatchFiles(refreshTimer time.Duration, files []string) error {
 		return nil
 	}
 
+	var errs []string
+
 	// initialise file modtimes
 	var watched []fileWatched
 	for _, f := range files {
 		info, err := os.Stat(f)
 		if err != nil {
-			return fmt.Errorf(
-				"failed to get file info of %s to watch: %s", f, err)
+			errs = append(errs,
+				fmt.Sprintf("failed to get file info of %s to watch: %s", f, err))
+			continue
 		}
 
 		watched = append(watched,
 			fileWatched{f, info.ModTime()})
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to start file watchers: %s",
+			strings.Join(errs, ","))
 	}
 
 	klog.Infof("watching files %s", files)
