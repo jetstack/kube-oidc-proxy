@@ -1,3 +1,4 @@
+// Copyright Jetstack Ltd. See LICENSE for details.
 package util
 
 import (
@@ -11,11 +12,11 @@ import (
 
 	oidc "github.com/coreos/go-oidc"
 	netutil "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apimachinery/pkg/util/wait"
 	certutil "k8s.io/client-go/util/cert"
+	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
 )
 
 func InitProvider(ctx context.Context, opts *options.OIDCAuthenticationOptions, stopCh <-chan struct{}) error {
@@ -32,10 +33,10 @@ func InitProvider(ctx context.Context, opts *options.OIDCAuthenticationOptions, 
 	if opts.CAFile != "" {
 		roots, err = certutil.NewPool(opts.CAFile)
 		if err != nil {
-			return fmt.Errorf("Failed to read the CA file: %v", err)
+			return fmt.Errorf("failed to read the CA file: %v", err)
 		}
 	} else {
-		klog.Info("OIDC: No x509 certificates provided, will use host's root CA set")
+		klog.Info("oidc: no x509 certificates provided, will use host's root CA set")
 	}
 
 	// Copied from http.DefaultTransport.
