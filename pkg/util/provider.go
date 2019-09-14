@@ -19,7 +19,9 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 )
 
-func InitProvider(ctx context.Context, opts *options.OIDCAuthenticationOptions, stopCh <-chan struct{}) error {
+// InitProviderUntil tries to initialize the OIDC Provider described by the
+// options. It tries until stopCh is closed.
+func InitProviderUntil(ctx context.Context, opts *options.OIDCAuthenticationOptions, stopCh <-chan struct{}) error {
 	url, err := url.Parse(opts.IssuerURL)
 	if err != nil {
 		return err

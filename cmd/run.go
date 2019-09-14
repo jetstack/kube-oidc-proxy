@@ -124,7 +124,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			// try initializing provider
 			ctx := context.Background()
-			err = util.InitProvider(ctx, oidcOptions, stopCh)
+			err = util.InitProviderUntil(ctx, oidcOptions, stopCh)
 			if err != nil {
 				return err
 			}
