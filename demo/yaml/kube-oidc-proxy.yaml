@@ -34,9 +34,10 @@ spec:
         - containerPort: 443
         - containerPort: 8080
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /ready
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
         name: kube-oidc-proxy
         command: ["kube-oidc-proxy"]

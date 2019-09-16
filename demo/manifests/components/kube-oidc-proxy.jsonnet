@@ -104,7 +104,7 @@ local READINESS_PORT = 8080;
               },
 
               readinessProbe: {
-                tcpSocket: { port: READINESS_PORT },
+                httpGet: { path: '/ready', port: READINESS_PORT },
                 initialDelaySeconds: 15,
                 periodSeconds: 10,
               },
