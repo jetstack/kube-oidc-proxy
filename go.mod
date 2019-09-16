@@ -17,7 +17,7 @@ require (
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v0.3.3
-	sigs.k8s.io/kind v0.4.0
+	sigs.k8s.io/kind v0.5.1
 )
 
 replace (
@@ -28,5 +28,5 @@ replace (
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.0.0-20190620085706-2090e6d8f84c
 	k8s.io/client-go => k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
 	k8s.io/component-base => k8s.io/component-base v0.0.0-20190620085130-185d68e6e6ea
-	sigs.k8s.io/kind => sigs.k8s.io/kind v0.4.0
+	sigs.k8s.io/kind => sigs.k8s.io/kind v0.5.1
 )

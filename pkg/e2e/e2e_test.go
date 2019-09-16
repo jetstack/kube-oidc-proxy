@@ -17,7 +17,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 	"sigs.k8s.io/kind/pkg/cluster"
-	"sigs.k8s.io/kind/pkg/cluster/config"
+	"sigs.k8s.io/kind/pkg/cluster/create"
+	config "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
@@ -95,7 +96,7 @@ kind: ClusterConfiguration
 
 	// create kind cluster
 	klog.Infof("creating kind cluster '%s'", clusterContext.Name())
-	if err := clusterContext.Create(conf); err != nil {
+	if err := clusterContext.Create(create.WithV1Alpha3(conf)); err != nil {
 		klog.Fatalf("error creating cluster: %s", err)
 	}
 
