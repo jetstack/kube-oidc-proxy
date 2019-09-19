@@ -36,7 +36,7 @@ flow](https://storage.googleapis.com/kube-oidc-proxy/diagram-d9623e38a6cd3b585b4
 ## Tutorial
 
 Directions on how to deploy OIDC authentication with multi-cluster can be found
-[here.](./demo/README.md)
+[here.](./demo/README.md) or there is a [helm chart](./deploy/charts/kube-oidc-proxy/README.md).
 
 ### Quickstart
 

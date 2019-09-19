@@ -28,9 +28,10 @@ spec:
         - containerPort: 443
         - containerPort: 8080
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /ready
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
         command: ["kube-oidc-proxy"]
         args:
@@ -40,7 +41,33 @@ spec:
           - "--oidc-client-id=$(OIDC_CLIENT_ID)"
           - "--oidc-issuer-url=$(OIDC_ISSUER_URL)"
           - "--oidc-username-claim=$(OIDC_USERNAME_CLAIM)"
+          {{- if .Values.oidc.caPEM }}
           - "--oidc-ca-file=/etc/oidc/oidc-ca.pem"
+          {{ end }}
+          {{- if .Values.oidc.usernamePrefix }}
+          - "--oidc-username-prefix=$(OIDC_USERNAME_PREFIX)"
+          {{ end }}
+          {{- if .Values.oidc.groupsClaim }}
+          - "--oidc-groups-claim=$(OIDC_GROUPS_CLAIM)"
+          {{ end }}
+          {{- if .Values.oidc.groupsPrefix }}
+          - "--oidc-groups-prefix=$(OIDC_GROUPS_PREFIX)"
+          {{ end }}
+          {{- if .Values.oidc.signingAlgs }}
+          - "--oidc-signing-algs=$(OIDC_SIGNING_ALGS)"
+          {{ end }}
+          {{- if .Values.oidc.requiredClaims }}
+          - "--oidc-signing-algs=$(OIDC_REQUIRED_CLAIMS)"
+          {{ end }}
+          {{- if .Values.oidc.apiAudiences }}
+          - "--api-audiences=$(API_AUDIENCES)"
+          {{ end }}
+          {{- if .Values.tokenPassthrough.enabled }}
+          - "--token-passthrough"
+          {{- if .Values.tokenPassthrough.audiences }}
+          - "--token-passthrough-audiences={{ join "," .Values.tokenPassthrough.audiences }}"
+          {{ end }}
+          {{ end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
         env:
@@ -59,20 +86,66 @@ spec:
             secretKeyRef:
               name: {{ include "kube-oidc-proxy.fullname" . }}-config
               key: oidc.username-claim
+        {{- if .Values.oidc.usernamePrefix }}
+        - name: OIDC_USERNAME_PREFIX
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: oidc.username-prefix
+        {{ end }}
+        {{- if .Values.oidc.groupsClaim }}
+        - name: OIDC_GROUPS_CLAIM
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: oidc.groups-claim
+        {{ end }}
+        {{- if .Values.oidc.groupsPrefix }}
+        - name: OIDC_GROUPS_PREFIX
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: oidc.groups-prefix
+        {{ end }}
+        {{- if .Values.oidc.signingAlgs }}
+        - name: OIDC_SIGNING_ALGS
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: oidc.signing-algs
+        {{ end }}
+        {{- if .Values.oidc.requiredClaims }}
+        - name: OIDC_REQUIRED_CLAIMS
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: oidc.required-claims
+        {{ end }}
+        {{- if .Values.oidc.apiAudiences }}
+        - name: API_AUDIENCES
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: api-audiences
+        {{ end }}
         volumeMounts:
+          {{ if .Values.oidc.caPEM }}
           - name: kube-oidc-proxy-config
             mountPath: /etc/oidc
             readOnly: true
+          {{ end }}
           - name: kube-oidc-proxy-tls
             mountPath: /etc/oidc/tls
             readOnly: true
       volumes:
+        {{ if .Values.oidc.caPEM }}
         - name: kube-oidc-proxy-config
           secret:
             secretName: {{ include "kube-oidc-proxy.fullname" . }}-config
             items:
             - key: oidc.ca-pem
               path: oidc-ca.pem
+        {{ end }}
         - name: kube-oidc-proxy-tls
           secret:
             secretName: {{ $tlsSecretName }}
