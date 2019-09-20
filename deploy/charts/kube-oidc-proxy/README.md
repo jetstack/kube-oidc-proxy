@@ -46,7 +46,7 @@ oidc:
 ```
 
 This minimal configuration gives a cluster internal IP address that can be used
-to use from `kubectl` to authenticate requests to Kubernetes API server.
+with `kubectl` to authenticate requests to Kubernetes API server.
 
 The service can be exposed via ingress controller and give access to external
 clients. Example of exposing via ingress controller.
@@ -63,9 +63,9 @@ ingress:
         - /oidc-proxy
 ```
 
-By default the helm chart will create self-signed service for `kube-oidc-proxy`
+By default the helm chart will create self-signed TLS certificate for `kube-oidc-proxy`
 service. It is possible to provide secret name that contains TLS artifacts for
-service.
+service. The secret must be of `kubernetes.io/tls` type.
 
 ```yaml
 tls:
