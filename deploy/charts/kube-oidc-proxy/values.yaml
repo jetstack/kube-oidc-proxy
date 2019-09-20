@@ -45,7 +45,7 @@ oidc:
   apiAudiences: []
 
 # To enable token passthrough feature
-# https://github.com/jetstack/kube-oidc-proxy/blob/feb9915fc5683bd1c3ff2bd0f393cb1f14aee822/docs/tasks/token-passthrough.md
+# https://github.com/jetstack/kube-oidc-proxy/blob/master/docs/tasks/token-passthrough.md
 tokenPassthrough:
   enabled: false
   audiences: []
