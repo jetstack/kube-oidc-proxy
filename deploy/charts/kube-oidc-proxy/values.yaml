@@ -31,7 +31,7 @@ oidc:
   issuerUrl: ""
   usernameClaim: ""
 
-  # Base64 encoded value of CA cert that will verify TLS connection to
+  # PEM encoded value of CA cert that will verify TLS connection to
   # OIDC issuer URL. If not provided default hosts root CA's will be used.
   caPEM:
 
