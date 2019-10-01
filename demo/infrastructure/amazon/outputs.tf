@@ -11,7 +11,7 @@ output "config" {
 }
 
 output "kubeconfig_command" {
-  value = "cp infrastructure/amazon/kubeconfig_cluster-${random_id.suffix.hex} $$KUBECONFIG"
+  value = "cp infrastructure/${var.cloud}/kubeconfig_cluster-${random_id.suffix.hex} $KUBECONFIG"
 }
 
 output "kubeconfig" {

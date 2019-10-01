@@ -37,6 +37,7 @@ terraform_apply: ## Applies terraform infrastructure
 	echo 'google_project = "$(GOOGLE_PROJECT)"' > infrastructure/$(CLOUD)/terraform.tfvars
 	echo 'ca_crt_file = "$(CA_CRT_FILE)"' >> infrastructure/$(CLOUD)/terraform.tfvars
 	echo 'ca_key_file = "$(CA_KEY_FILE)"' >> infrastructure/$(CLOUD)/terraform.tfvars
+	echo 'cloud = "$(CLOUD)"' >> infrastructure/$(CLOUD)/terraform.tfvars
 	cd infrastructure/$(CLOUD) && terraform init && terraform apply
 	cd infrastructure/$(CLOUD) && terraform output config > ../../manifests/$(CLOUD)-config.json
 	$(shell cd infrastructure/$(CLOUD) && terraform output kubeconfig_command)
@@ -53,7 +54,7 @@ manifests_apply: depend manifests/$(CLOUD)-config.json ## Use kubecfg to apply m
 	# apply all CRDs
 	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet --format json | sed 's#^---$$##' | jq 'select(.kind == "CustomResourceDefinition")' | kubectl apply -f -
 	# apply everything
-	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet | kubectl apply -f -
+	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet | kubectl apply -f - --validate=false
 
 .PHONY: manifests_validate
 manifests_validate: depend manifests/$(CLOUD)-config.json ## Use kubecfg to validate manifests

@@ -114,7 +114,7 @@ local HTTP_PORT = 80;
           width: 56,
           height: 56,
           alt: cloud,
-          src: cloud + '.svg',
+          src: std.split(cloud, '_')[0] + '.svg',
         },
       ],
     ],

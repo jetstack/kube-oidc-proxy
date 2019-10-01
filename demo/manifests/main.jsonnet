@@ -136,19 +136,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
     letsencryptStaging+: {
       spec+: {
         acme+: {
-          http01: null,
-          dns01: {
-            providers: [{
-              name: 'clouddns',
-              clouddns: {
-                project: $.config.cert_manager.project,
-                serviceAccountSecretRef: {
-                  name: $.cert_manager.google_secret.metadata.name,
-                  key: 'credentials.json',
-                },
-              },
-            }],
-          },
+          solvers: $.cert_manager.solvers,
         },
       },
     },
@@ -251,6 +239,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
         $.namespace,
         this.name,
         $.cert_manager.letsencryptProd,
+        $.cert_manager.solver,
         [this.domain]
       ),
       ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 5556),
@@ -267,7 +256,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
                'https://gangway' + v.domain_part + $.base_domain + '/callback',
              ],
            }),
-        $.clouds
+        std.prune($.clouds)
       ),
     }
   else
@@ -328,6 +317,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
       $.namespace,
       this.name,
       $.cert_manager.letsencryptProd,
+      $.cert_manager.solver,
       [this.domain]
     ),
     ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 8080),
@@ -371,6 +361,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
       $.namespace,
       this.name,
       if $.ca_crt != '' && $.ca_key != '' then $.cert_manager.ca_issuer.issuer else $.cert_manager.letsencryptProd,
+      $.cert_manager.solver,
       [this.domain]
     ),
     ingressRoute: IngressRouteTLSPassthrough($.namespace, this.name, this.domain, this.name, 443),
@@ -399,6 +390,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
       $.namespace,
       this.name,
       $.cert_manager.letsencryptProd,
+      $.cert_manager.solver,
       [this.domain]
     ),
 
@@ -408,7 +400,7 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
          'https://gangway' + $.clouds[c].domain_part + $.base_domain,
          'Gangway ' + c,
        )),
-      std.objectFields($.clouds)
+      std.objectFields(std.prune($.clouds))
     )),
   },
 }

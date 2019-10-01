@@ -2,8 +2,12 @@ variable "aws_region" {
   default = "eu-west-1"
 }
 
+variable "cloud" {
+  default = "amazon"
+}
+
 variable "cluster_version" {
-  default = "1.12"
+  default = "1.14"
 }
 
 provider "aws" {
