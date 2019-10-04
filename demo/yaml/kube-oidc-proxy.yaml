@@ -43,6 +43,7 @@ spec:
         command: ["kube-oidc-proxy"]
         args:
           - "--secure-port=443"
+          - "--in-cluster-config"
           - "--tls-cert-file=/etc/oidc/tls/crt.pem"
           - "--tls-private-key-file=/etc/oidc/tls/key.pem"
           - "--oidc-client-id=$(OIDC_CLIENT_ID)"
