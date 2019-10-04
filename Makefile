@@ -15,15 +15,15 @@ ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
 	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/linux/amd64/kubectl
 	KUBECTL_HASH := ecec7fe4ffa03018ff00f14e228442af5c2284e57771e4916b977c20ba4e5b39
-	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-linux-amd64.tar.gz
-	GOLANGCILINT_HASH := f37f4a15eb309578b0546703da5ea96bc5bd472f45f204338051aaca6fbbfc5b
+	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.18.0/golangci-lint-1.18.0-linux-amd64.tar.gz
+	GOLANGCILINT_HASH := 0ef2c502035d5f12d6d3a30a7c4469cfcae4dd3828d15fbbfb799c8331cd51c4
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
 	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/darwin/amd64/kubectl
 	KUBECTL_HASH := 63f1ace419edffa1f5ebb64a6c63597afd48f8d94a61d4fb44e820139adbbe54
-	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.15.0/golangci-lint-1.15.0-darwin-amd64.tar.gz
-	GOLANGCILINT_HASH := 083941efa692bfe3c29ba709964e9fe5896889316d51813e523157c96c3153e0
+	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.18.0/golangci-lint-1.18.0-darwin-amd64.tar.gz
+	GOLANGCILINT_HASH := 37402c4606de3bc0116c9fc4d1ce18f2e90f55069ece1fa20f1b1622e0b54da3
 endif
 
 $(BINDIR)/mockgen:
