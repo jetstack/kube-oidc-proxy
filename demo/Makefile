@@ -34,6 +34,7 @@ help:  ## Display this help
 .PHONY: terraform_apply
 terraform_apply: ## Applies terraform infrastructure
 	echo '' > infrastructure/$(CLOUD)/terraform.tfvars
+	touch manifests/google-config.json && [ -s manifests/google-config.json ] || echo {} > manifests/google-config.json
 	echo 'google_project = "$(GOOGLE_PROJECT)"' > infrastructure/$(CLOUD)/terraform.tfvars
 	echo 'ca_crt_file = "$(CA_CRT_FILE)"' >> infrastructure/$(CLOUD)/terraform.tfvars
 	echo 'ca_key_file = "$(CA_KEY_FILE)"' >> infrastructure/$(CLOUD)/terraform.tfvars
