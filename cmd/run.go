@@ -83,7 +83,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 			} else {
 
-				// CLI flags if in cluster fails
+				// CLI flags not using in-cluster config
 				restConfig, err = clientConfigOptions.ToRESTConfig()
 				if err != nil {
 					return err
