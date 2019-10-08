@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
@@ -31,27 +32,38 @@ var (
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
+type Options struct {
+	DisableImpersonation bool
+	TokenReview          bool
+}
+
 type Proxy struct {
 	oidcAuther        *bearertoken.Authenticator
-	tokenAuther       *tokenreview.TokenReview
+	tokenReviewer     *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
 	noAuthClientTransport http.RoundTripper
+
+	options *Options
 }
 
 func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
-	tokenAuther *tokenreview.TokenReview, ssinfo *server.SecureServingInfo) *Proxy {
+	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo, options *Options) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
 		oidcAuther:        oidcAuther,
-		tokenAuther:       tokenAuther,
+		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
+		options:           options,
 	}
 }
 
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
+	klog.Infof("waiting for oidc provider to become ready...")
+
+	// standard round tripper for proxy to API Server
 	clientRT, err := p.roundTripperForRestConfig(p.restConfig)
 	if err != nil {
 		return nil, err
@@ -59,7 +71,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	p.clientTransport = clientRT
 
 	// No auth round tripper for no impersonation
-	if p.tokenAuther != nil {
+	if p.options.DisableImpersonation || p.options.TokenReview {
 		noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
 			APIPath: p.restConfig.APIPath,
 			Host:    p.restConfig.Host,
@@ -112,42 +124,38 @@ func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{
 }
 
 func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
-	// auth request and handle unauthed
-	info, ok, err := p.oidcAuther.AuthenticateRequest(req)
+	// Clone the request here since successfully authenticating the request
+	// deletes those auth headers
+	reqCpy := utilnet.CloneRequest(req)
 
+	// auth request and handle unauthed
+	info, ok, err := p.oidcAuther.AuthenticateRequest(reqCpy)
 	if err != nil {
 
 		// attempt to passthrough request if valid token
-		if p.tokenAuther != nil {
-			klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
-				req.RemoteAddr)
-
-			ok, tkErr := p.tokenAuther.Review(req)
-			// no error so passthrough the request
-			if tkErr == nil && ok {
-				klog.V(4).Infof("passing request with valid token through (%s)",
-					req.RemoteAddr)
-				// Don't set impersonation headers and pass through without proxy auth
-				// and headers still set
-				return p.noAuthClientTransport.RoundTrip(req)
-			}
-
-			if tkErr != nil {
-				err = fmt.Errorf("%s, %s", err, tkErr)
-			}
+		if p.options.TokenReview {
+			return p.tokenReview(reqCpy)
 		}
 
-		klog.Errorf("unable to authenticate the request due to an error (%s): %s",
-			req.RemoteAddr, err)
 		return nil, errUnauthorized
 	}
 
+	// failed authorization
 	if !ok {
 		return nil, errUnauthorized
 	}
 
+	klog.V(4).Infof("authenticated request: %s", reqCpy.RemoteAddr)
+
+	// if we have disabled impersonation we can forward the request right away
+	if p.options.DisableImpersonation {
+		klog.V(2).Infof("passing on request with no impersonation: %s", reqCpy.RemoteAddr)
+		// Send original copy here with auth header intact
+		return p.noAuthClientTransport.RoundTrip(req)
+	}
+
 	// check for incoming impersonation headers and reject if any exists
-	if p.hasImpersonation(req.Header) {
+	if p.hasImpersonation(reqCpy.Header) {
 		return nil, errImpersonateHeader
 	}
 
@@ -182,7 +190,29 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	rt := transport.NewImpersonatingRoundTripper(conf, p.clientTransport)
 
 	// push request through round trippers to the API server
-	return rt.RoundTrip(req)
+	return rt.RoundTrip(reqCpy)
+}
+
+func (p *Proxy) tokenReview(req *http.Request) (*http.Response, error) {
+	klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
+		req.RemoteAddr)
+
+	ok, err := p.tokenReviewer.Review(req)
+	// no error so passthrough the request
+	if err == nil && ok {
+		klog.V(4).Infof("passing request with valid token through (%s)",
+			req.RemoteAddr)
+		// Don't set impersonation headers and pass through without proxy auth
+		// and headers still set
+		return p.noAuthClientTransport.RoundTrip(req)
+	}
+
+	if err != nil {
+		klog.Errorf("unable to authenticate the request via TokenReview due to an error (%s): %s",
+			req.RemoteAddr, err)
+	}
+
+	return nil, errUnauthorized
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {

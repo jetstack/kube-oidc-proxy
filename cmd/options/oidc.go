@@ -9,25 +9,6 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 )
 
-type TokenPassthroughOptions struct {
-	Audiences []string
-	Enabled   bool
-}
-
-func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&t.Audiences, "token-passthrough-audiences", t.Audiences, ""+
-		"List of the identifiers that the resource server presented with the token "+
-		"identifies as. The resoure server will verify that non OIDC tokens are intended "+
-		"for at least one of the audiences in this list. If no audiences are "+
-		"provided, the audience will default to the audience of the Kubernetes "+
-		"apiserver.")
-
-	fs.BoolVar(&t.Enabled, "token-passthrough", t.Enabled, ""+
-		"Requests with Bearer tokens that fail OIDC validation are tried against "+
-		"the API server using the Token Review endpoint. If successful, the request "+
-		"is sent on as is, with no impersonation.")
-}
-
 type OIDCAuthenticationOptions struct {
 	APIAudiences   []string
 	CAFile         string
