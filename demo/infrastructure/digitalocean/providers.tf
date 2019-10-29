@@ -5,7 +5,7 @@ variable "digitalocean_region" {
 }
 
 variable "cluster_version" {
-  default = "1.12.8-do.1"
+  default = "1.15.5-do.0"
 }
 
 module "cluster" {
@@ -15,3 +15,6 @@ module "cluster" {
   cluster_version = "${var.cluster_version}"
   region          = "${var.digitalocean_region}"
 }
+
+variable "ca_crt_file" {}
+variable "ca_key_file" {}

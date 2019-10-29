@@ -66,6 +66,16 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
   else
     {};
 
+local apply_google_secret(cert_manager) =
+  if std.objectHas(cert_manager, 'service_account_credentials') then
+    kube.Secret(cert_manager.p + 'clouddns-google-credentials') + cert_manager.metadata {
+      data_+: {
+        'credentials.json': cert_manager.service_account_credentials,
+      },
+    }
+  else
+    {};
+
 {
 
   cloud:: 'google',
@@ -107,15 +117,11 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
   ns: kube.Namespace($.namespace),
 
 
-  ca_crt:: $.config.cert_manager.ca_crt,
-  ca_key:: $.config.cert_manager.ca_key,
+  ca_crt:: $.config.ca.crt,
+  ca_key:: $.config.ca.key,
 
   cert_manager: cert_manager {
-    google_secret: kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
-      data_+: {
-        'credentials.json': $.config.cert_manager.service_account_credentials,
-      },
-    },
+    google_secret: apply_google_secret($.config.cert_manager),
 
     metadata:: {
       metadata+: {
@@ -142,49 +148,52 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
     },
   },
 
-  externaldns: externaldns {
-    metadata:: {
-      metadata+: {
-        namespace: 'kube-system',
+  externaldns: if $.master && $.cloud == 'google' then
+    externaldns {
+      metadata:: {
+        metadata+: {
+          namespace: 'kube-system',
+        },
       },
-    },
 
-    gcreds: kube.Secret($.externaldns.p + 'externaldns-google-credentials') + $.externaldns.metadata {
-      data_+: {
-        'credentials.json': $.config.externaldns.service_account_credentials,
+      gcreds: kube.Secret($.externaldns.p + 'externaldns-google-credentials') + $.externaldns.metadata {
+        data_+: {
+          'credentials.json': $.config.externaldns.service_account_credentials,
+        },
       },
-    },
 
-    deploy+: {
-      domainFilter: removeLeadingDot($.base_domain),
-      ownerId: $.cluster_domain,
-      spec+: {
-        template+: {
-          spec+: {
-            volumes_+: {
-              gcreds: kube.SecretVolume($.externaldns.gcreds),
-            },
-            containers_+: {
-              edns+: {
-                image: 'bitnami/external-dns:0.5.14',
-                args_+: {
-                  provider: 'google',
-                  'google-project': $.config.externaldns.project,
-                  'txt-prefix': '_external-dns.',
-                },
-                env_+: {
-                  GOOGLE_APPLICATION_CREDENTIALS: '/google/credentials.json',
-                },
-                volumeMounts_+: {
-                  gcreds: { mountPath: '/google', readOnly: true },
+      deploy+: {
+        domainFilter: removeLeadingDot($.base_domain),
+        ownerId: $.cluster_domain,
+        spec+: {
+          template+: {
+            spec+: {
+              volumes_+: {
+                gcreds: kube.SecretVolume($.externaldns.gcreds),
+              },
+              containers_+: {
+                edns+: {
+                  image: 'bitnami/external-dns:0.5.14',
+                  args_+: {
+                    provider: 'google',
+                    'google-project': $.config.externaldns.project,
+                    'txt-prefix': '_external-dns.',
+                  },
+                  env_+: {
+                    GOOGLE_APPLICATION_CREDENTIALS: '/google/credentials.json',
+                  },
+                  volumeMounts_+: {
+                    gcreds: { mountPath: '/google', readOnly: true },
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  },
+    }
+  else
+    {},
 
   sslPassthroughDomains:: std.prune([$.gangway.domain, $.kube_oidc_proxy.domain, if $.master then $.dex_domain]),
 
