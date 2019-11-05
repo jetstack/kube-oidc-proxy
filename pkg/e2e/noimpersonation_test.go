@@ -4,9 +4,6 @@ package e2e
 import (
 	"fmt"
 	"testing"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -14,21 +11,8 @@ const (
 )
 
 func TestNoImpersonation(t *testing.T) {
-	if e2eSuite == nil {
-		t.Skip("e2eSuite not defined")
-		return
-	}
-
-	coreclient := e2eSuite.kubeclient.CoreV1()
-
-	_, err := coreclient.Namespaces().Create(&corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespaceNoImpersonation,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustSkipMissingSuite(t)
+	mustNamespace(t, namespaceNoImpersonation)
 
 	e2eSuite.cleanup()
 	defer e2eSuite.cleanup()

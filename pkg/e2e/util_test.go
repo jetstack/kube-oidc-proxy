@@ -13,7 +13,7 @@ import (
 
 func mustSkipMissingSuite(t *testing.T) {
 	if e2eSuite == nil {
-		t.Skip("e2e suit is nil")
+		t.Skip("e2e suite is nil")
 		t.SkipNow()
 	}
 

@@ -12,10 +12,7 @@ import (
 )
 
 func Test_WatchSecretFiles(t *testing.T) {
-	if e2eSuite == nil {
-		t.Skip("e2eSuite not defined")
-		return
-	}
+	mustSkipMissingSuite(t)
 
 	readinessPort, err := util.FreePort()
 	if err != nil {
@@ -46,13 +43,12 @@ func Test_WatchSecretFiles(t *testing.T) {
 		"--tls-cert-file="+keyCertPair.CertPath,
 		"--tls-private-key-file="+keyCertPair.KeyPath,
 	)
+	defer e2eSuite.cleanup()
 
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
 	}
-
-	defer e2eSuite.cleanup()
 
 	if err := ioutil.WriteFile(keyCertPair.CertPath, []byte("aa"), 0600); err != nil {
 		t.Error(err)
