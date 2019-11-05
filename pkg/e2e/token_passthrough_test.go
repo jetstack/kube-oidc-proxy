@@ -20,6 +20,8 @@ func Test_TokenPassthrough(t *testing.T) {
 	mustCreatePodRbac(t, "test-username", namespaceTokenPassthroughTest, "User")
 	mustCreatePodRbac(t, "test-service-account", namespaceTokenPassthroughTest, "ServiceAccount")
 
+	defer e2eSuite.cleanup()
+
 	testServiceAccountName := "test-service-account"
 	coreClient := e2eSuite.kubeclient.CoreV1()
 
@@ -113,8 +115,6 @@ func Test_TokenPassthrough(t *testing.T) {
 			expCode: 200,
 		},
 	}
-
-	defer e2eSuite.cleanup()
 
 	for _, tt := range []map[string]passthroughT{
 		noPassthroughTests, passthroughTests,
