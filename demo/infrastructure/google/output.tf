@@ -3,6 +3,11 @@ locals {
     cert_manager = "${module.dns.config}"
     externaldns  = "${module.dns.config}"
     gangway      = "${module.gangway.config}"
+
+    ca = {
+      key = "${module.ca.key}"
+      crt = "${module.ca.crt}"
+    }
   }
 }
 

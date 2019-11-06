@@ -20,3 +20,6 @@ module "cluster" {
 
   cluster_version = "${var.cluster_version}"
 }
+
+variable "ca_crt_file" {}
+variable "ca_key_file" {}
