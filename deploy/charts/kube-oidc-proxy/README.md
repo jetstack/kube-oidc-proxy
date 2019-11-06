@@ -5,7 +5,7 @@ This helm chart cannot be installed out of the box without providing own
 configuration.
 
 This helm chart is based on example configuration provided in `kube-oidc-proxy`
-[repository](https://github.com/jetstack/kube-oidc-proxy/blob/182fa79a7854bd33f3827d89e222e10c57c4aed5/demo/yaml/kube-oidc-proxy.yaml).
+[repository](https://github.com/jetstack/kube-oidc-proxy/blob/master/deploy/yaml/kube-oidc-proxy.yaml).
 
 Minimal required configuration is `oidc` section of `value.yaml` file.
 
