@@ -46,7 +46,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	kopOptions := new(options.KubeOIDCProxyOptions)
 
-	clientConfigOptions := options.NewClientExtraFlags()
+	clientConfigOptions := options.NewClientFlags()
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
 
@@ -65,26 +65,22 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			if err := clientConfigOptions.Validate(cmd); err != nil {
-				return err
-			}
-
 			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
 			var restConfig *rest.Config
-			if clientConfigOptions.InClusterConfig {
-				// In cluster config
-				restConfig, err = rest.InClusterConfig()
+
+			if clientConfigOptions.ClientFlagsChanged(cmd) {
+				// one or more client flags have been set to use client flag built
+				// config
+				restConfig, err = clientConfigOptions.ToRESTConfig()
 				if err != nil {
 					return err
 				}
-
 			} else {
-
-				// CLI flags not using in-cluster config
-				restConfig, err = clientConfigOptions.ToRESTConfig()
+				// no client flags have been set so default to in-cluster config
+				restConfig, err = rest.InClusterConfig()
 				if err != nil {
 					return err
 				}
@@ -156,15 +152,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
 
-	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
+	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("Secure Serving"))
 
 	clientConfigOptions.CacheDir = nil
 	clientConfigOptions.Impersonate = nil
 	clientConfigOptions.ImpersonateGroup = nil
-	clientConfigOptions.AddFlags(namedFlagSets.FlagSet("client"))
+	clientConfigOptions.AddFlags(namedFlagSets.FlagSet("Client"))
 
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
-	namedFlagSets.FlagSet("misc").Bool("version",
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("Misc"), cmd.Name())
+	namedFlagSets.FlagSet("Misc").Bool("version",
 		false, "Print version information and quit")
 
 	for _, f := range namedFlagSets.FlagSets {
