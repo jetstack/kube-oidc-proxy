@@ -2,11 +2,8 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net"
-	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
@@ -27,7 +24,7 @@ import (
 )
 
 const (
-	readinessProbePort = 8080
+	appName = "kube-oidc-proxy"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -39,7 +36,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		BindPort:    6443,
 		Required:    true,
 		ServerCert: apiserveroptions.GeneratableKeyCert{
-			PairName:      "kube-oidc-proxy",
+			PairName:      appName,
 			CertDirectory: "/var/run/kubernetes",
 		},
 	}
@@ -49,11 +46,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	clientConfigFlags := genericclioptions.NewConfigFlags(true)
 
-	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
-
 	// proxy command
 	cmd := &cobra.Command{
-		Use:  "kube-oidc-proxy",
+		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flag("version").Value.String() == "true" {
@@ -64,8 +59,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
-				return errors.New("unable to securely serve on port 8080, used by readiness prob")
+			if ssoptionsWithLB.SecureServingOptions.BindPort == kopOptions.ProbePort {
+				return fmt.Errorf("unable to securely serve on port %d, used by readiness probe", kopOptions.ProbePort)
 			}
 
 			// client rest config
@@ -92,6 +87,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				UsernameClaim:        oidcOptions.UsernameClaim,
 				UsernamePrefix:       oidcOptions.UsernamePrefix,
 			})
+			if err != nil {
+				return err
+			}
+
+			err = probe.Run(string(kopOptions.ProbePort), oidcAuther, oidcOptions)
 			if err != nil {
 				return err
 			}
@@ -125,9 +125,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			time.Sleep(time.Second * 3)
-			healthCheck.SetReady()
 
 			<-waitCh
 

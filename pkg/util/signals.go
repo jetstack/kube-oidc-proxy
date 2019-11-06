@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog"
 )
 
-func SignalHandler() chan struct{} {
+func SignalHandler() <-chan struct{} {
 	stopCh := make(chan struct{})
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)

@@ -2,56 +2,126 @@
 package probe
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+
+	"github.com/jetstack/kube-oidc-proxy/cmd/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
-func Test_Check(t *testing.T) {
-	port, err := util.FreePort()
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
+var _ authenticator.Token = &fakeAuthenticator{}
+
+type fakeAuthenticator struct {
+	readyBy time.Time
+}
+
+func (f *fakeAuthenticator) AuthenticateToken(context.Context, string) (*authenticator.Response, bool, error) {
+	if time.Now().After(f.readyBy) {
+		return nil, true, nil
 	}
 
-	p := New(port)
-	time.Sleep(time.Second)
+	return nil, false, errors.New("auther not ready")
+}
 
-	url := fmt.Sprintf("http://0.0.0.0:%s", port)
-
-	resp, err := http.Get(url + "/ready")
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
+func TestRun(t *testing.T) {
+	tests := map[string]struct {
+		becomeReady  bool
+		path, method string
+	}{
+		"if becomes ready but bad path then always error": {
+			becomeReady: true,
+			path:        "/bad/path",
+			method:      "GET",
+		},
+		"if becomes ready but bad method then always error": {
+			becomeReady: true,
+			path:        "/health",
+			method:      "POST",
+		},
+		"if the authenticator never becomes ready then endpoint should never ready": {
+			becomeReady: false,
+			path:        "/health",
+			method:      "GET",
+		},
+		"if the authenticator becomes ready then endpoint should become ready": {
+			becomeReady: true,
+			path:        "/health",
+			method:      "GET",
+		},
 	}
 
-	if resp.StatusCode != 503 {
-		t.Errorf("expected ready probe to be responding and not ready, exp=%d got=%d",
-			503, resp.StatusCode)
-	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			port, err := util.FreePort()
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
 
-	p.SetReady()
+			readyBy := time.Now()
+			if !test.becomeReady {
+				readyBy = time.Now().Add(time.Hour)
+			}
 
-	resp, err = http.Get(url + "/ready")
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
+			f := &fakeAuthenticator{readyBy}
 
-	if resp.StatusCode != 200 {
-		t.Errorf("expected ready probe to be responding and ready, exp=%d got=%d",
-			200, resp.StatusCode)
-	}
+			err = Run(port, f, new(options.OIDCAuthenticationOptions))
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
 
-	p.SetNotReady()
+			time.Sleep(time.Millisecond * 600)
 
-	resp, err = http.Get(url + "/ready")
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
+			r, err := http.NewRequest(test.method,
+				fmt.Sprintf("http://127.0.0.1:%s%s", port, test.path), nil)
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
 
-	if resp.StatusCode != 503 {
-		t.Errorf("expected ready probe to be responding and not ready, exp=%d got=%d",
-			503, resp.StatusCode)
+			resp, err := http.DefaultClient.Do(r)
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
+
+			// if wrong method then error
+			if test.method != "GET" {
+				if resp.StatusCode != http.StatusMethodNotAllowed {
+					t.Errorf("got unexpected status code, exp=%d got=%d",
+						http.StatusMethodNotAllowed, resp.StatusCode)
+				}
+				return
+			}
+
+			// if wrong path then error
+			if test.path != "/health" {
+				if resp.StatusCode != http.StatusNotFound {
+					t.Errorf("got unexpected status code, exp=%d got=%d",
+						http.StatusOK, resp.StatusCode)
+				}
+				return
+			}
+
+			// return status OK only if expected to be ready
+			if test.becomeReady {
+				if resp.StatusCode != http.StatusOK {
+					t.Errorf("got unexpected status code, exp=%d got=%d",
+						http.StatusOK, resp.StatusCode)
+				}
+			} else {
+				if resp.StatusCode != http.StatusServiceUnavailable {
+					t.Errorf("got unexpected status code, exp=%d got=%d",
+						http.StatusServiceUnavailable, resp.StatusCode)
+				}
+			}
+		})
 	}
 }
