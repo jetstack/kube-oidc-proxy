@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/term"
-	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -79,23 +77,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// oidc config
-			oidcAuther, err := oidc.New(oidc.Options{
-				APIAudiences:         oidcOptions.APIAudiences,
-				CAFile:               oidcOptions.CAFile,
-				ClientID:             oidcOptions.ClientID,
-				GroupsClaim:          oidcOptions.GroupsClaim,
-				GroupsPrefix:         oidcOptions.GroupsPrefix,
-				IssuerURL:            oidcOptions.IssuerURL,
-				RequiredClaims:       oidcOptions.RequiredClaims,
-				SupportedSigningAlgs: oidcOptions.SigningAlgs,
-				UsernameClaim:        oidcOptions.UsernameClaim,
-				UsernamePrefix:       oidcOptions.UsernamePrefix,
-			})
-			if err != nil {
-				return err
-			}
-
 			// Init token reviewer if enabled
 			var tokenReviewer *tokenreview.TokenReview
 			if kopOptions.TokenPassthrough.Enabled {
@@ -106,7 +87,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			}
 
 			// oidc auther from config
-			reqAuther := bearertoken.New(oidcAuther)
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
 				return err
@@ -117,7 +97,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				DisableImpersonation: kopOptions.DisableImpersonation,
 			}
 
-			p := proxy.New(restConfig, reqAuther,
+			p := proxy.New(restConfig, oidcOptions,
 				tokenReviewer, secureServingInfo, proxyOptions)
 
 			// run proxy
