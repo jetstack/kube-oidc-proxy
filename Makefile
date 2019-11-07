@@ -73,7 +73,6 @@ go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 clean: ## clean up created files
 	rm -rf \
 		$(BINDIR) \
-		kube-oidc-proxy \
 		pkg/mocks/authenticator.go
 
 verify: depend verify_boilerplate go_fmt go_vet go_lint ## verify code and mod
@@ -102,7 +101,7 @@ e2e-1.11: build ## run end to end tests for kubernetes version 1.11
 	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.10 go test ./pkg/e2e/. -v --count=1
 
 build: generate ## build kube-oidc-proxy
-	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'
+	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy ./cmd/.
 
 docker_build: generate test build ## build docker image
 	docker build -t kube-oidc-proxy .
