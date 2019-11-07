@@ -65,7 +65,7 @@ go_fmt:
 	fi
 
 go_vet:
-	go vet
+	go vet ./cmd
 
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 	$(BINDIR)/golangci-lint run

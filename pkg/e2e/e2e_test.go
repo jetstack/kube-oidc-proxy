@@ -16,9 +16,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
+	config "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/create"
-	config "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
