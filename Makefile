@@ -109,3 +109,9 @@ docker_build: generate test build ## build docker image
 all: test build ## runs tests, build
 
 image: all docker_build ## runs tests, build and docker build
+
+dev_cluster_create: ## create dev cluster for development testing
+	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev create
+
+dev_cluster_destroy: ## destroy dev cluster
+	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev destroy

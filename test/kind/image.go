@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	log "github.com/mgutz/logxi/v1"
+	log "github.com/sirupsen/logrus"
 )
 
 func (k *Kind) LoadKubeOIDCProxy() error {
@@ -29,7 +29,11 @@ func (k *Kind) LoadIssuer() error {
 }
 
 func (k *Kind) loadImage(binPath, mainPath, image string) error {
-	log.Info("kind: building %s", mainPath)
+	log.Infof("kind: building %q", mainPath)
+
+	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		return err
+	}
 
 	err := k.runCmd("go", "build", "-v", "-o", binPath, mainPath)
 	if err != nil {
@@ -48,7 +52,7 @@ func (k *Kind) loadImage(binPath, mainPath, image string) error {
 	defer os.RemoveAll(tmpDir)
 
 	imageArchive := filepath.Join(tmpDir, fmt.Sprintf("%s-e2e.tar", image))
-	log.Info("kind: saving image to archive %q", imageArchive)
+	log.Infof("kind: saving image to archive %q", imageArchive)
 
 	err = k.runCmd("docker", "save", "--output="+imageArchive, image)
 	if err != nil {
@@ -66,7 +70,7 @@ func (k *Kind) loadImage(binPath, mainPath, image string) error {
 	}
 
 	for _, node := range nodes {
-		log.Info("kind: loading image %q to node %q", image, node.Name())
+		log.Infof("kind: loading image %q to node %q", image, node.Name())
 		r := bytes.NewBuffer(b)
 		if err := node.LoadImageArchive(r); err != nil {
 			return err
@@ -83,7 +87,7 @@ func (k *Kind) loadImage(binPath, mainPath, image string) error {
 }
 
 func (k *Kind) runCmd(command string, args ...string) error {
-	log.Info("kind: running command '%s %s'", command, strings.Join(args, " "))
+	log.Infof("kind: running command '%s %s'", command, strings.Join(args, " "))
 	cmd := exec.Command(command, args...)
 
 	cmd.Stderr = os.Stderr
