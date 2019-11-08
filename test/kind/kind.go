@@ -20,16 +20,19 @@ import (
 )
 
 type Kind struct {
+	rootPath string
+
 	ctx        *cluster.Context
 	restConfig *rest.Config
 	client     *kubernetes.Clientset
 }
 
-func New(nodeImage string, masterNodes, workerNodes int) (*Kind, error) {
+func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error) {
 	log.Infof("kind: using k8s node image %q", nodeImage)
 
 	k := &Kind{
-		ctx: cluster.NewContext("kube-oidc-proxy-e2e"),
+		rootPath: rootPath,
+		ctx:      cluster.NewContext("kube-oidc-proxy-e2e"),
 	}
 
 	conf := new(configv1alpha3.Cluster)

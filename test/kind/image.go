@@ -1,0 +1,104 @@
+package kind
+
+import (
+	"bytes"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	log "github.com/mgutz/logxi/v1"
+)
+
+func (k *Kind) LoadKubeOIDCProxy() error {
+	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy")
+	mainPath := filepath.Join(k.rootPath, "./cmd/.")
+	image := "kube-oidc-proxy-e2e"
+
+	return k.loadImage(binPath, mainPath, image)
+}
+
+func (k *Kind) LoadIssuer() error {
+	binPath := filepath.Join(k.rootPath, "./bin/oidc-issuer")
+	mainPath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer/cmd/.")
+	image := "oidc-issuer-e2e"
+
+	return k.loadImage(binPath, mainPath, image)
+}
+
+func (k *Kind) loadImage(binPath, mainPath, image string) error {
+	log.Info("kind: building %s", mainPath)
+
+	err := k.runCmd("go", "build", "-v", "-o", binPath, mainPath)
+	if err != nil {
+		return err
+	}
+
+	err = k.runCmd("docker", "build", "-t", image, k.rootPath)
+	if err != nil {
+		return err
+	}
+
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "kube-oidc-proxy-e2e")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	imageArchive := filepath.Join(tmpDir, fmt.Sprintf("%s-e2e.tar", image))
+	log.Info("kind: saving image to archive %q", imageArchive)
+
+	err = k.runCmd("docker", "save", "--output="+imageArchive, image)
+	if err != nil {
+		return err
+	}
+
+	nodes, err := k.ctx.ListNodes()
+	if err != nil {
+		return err
+	}
+
+	b, err := ioutil.ReadFile(imageArchive)
+	if err != nil {
+		return err
+	}
+
+	for _, node := range nodes {
+		log.Info("kind: loading image %q to node %q", image, node.Name())
+		r := bytes.NewBuffer(b)
+		if err := node.LoadImageArchive(r); err != nil {
+			return err
+		}
+
+		err := node.Command("mkdir", "-p", "/tmp/cert-manager-csi").Run()
+		if err != nil {
+			return fmt.Errorf("failed to create directory %q: %s",
+				"/tmp/cert-manager-csi", err)
+		}
+	}
+
+	return nil
+}
+
+func (k *Kind) runCmd(command string, args ...string) error {
+	log.Info("kind: running command '%s %s'", command, strings.Join(args, " "))
+	cmd := exec.Command(command, args...)
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	cmd.Env = append(cmd.Env,
+		"GO111MODULE=on", "CGO_ENABLED=0", "HOME="+os.Getenv("HOME"),
+		"PATH="+os.Getenv("PATH"))
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -4,6 +4,7 @@ package environment
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/kind/pkg/cluster/nodes"
@@ -13,6 +14,7 @@ import (
 
 const (
 	defaultNodeImage = "1.16.1"
+	defaultRootPath  = "../../."
 )
 
 type Environment struct {
@@ -26,9 +28,28 @@ func Create(masterNodes, workerNodes int) (*Environment, error) {
 	}
 	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
 
-	k, err := kind.New(nodeImage, masterNodes, workerNodes)
+	rootPath := os.Getenv("KUBE_OIDC_PROXY_ROOT_PATH")
+	if rootPath == "" {
+		rootPath = defaultRootPath
+	}
+
+	rPath, err := filepath.Abs(rootPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path %q: %s",
+			rootPath, err)
+	}
+
+	k, err := kind.New(rPath, nodeImage, masterNodes, workerNodes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kind cluster: %s", err)
+	}
+
+	if err := k.LoadKubeOIDCProxy(); err != nil {
+		return nil, err
+	}
+
+	if err := k.LoadIssuer(); err != nil {
+		return nil, err
 	}
 
 	return &Environment{
