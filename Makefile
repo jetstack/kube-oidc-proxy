@@ -73,7 +73,8 @@ go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 clean: ## clean up created files
 	rm -rf \
 		$(BINDIR) \
-		pkg/mocks/authenticator.go
+		pkg/mocks/authenticator.go \
+		test/e2e/framework/issuer/bin
 
 verify: depend verify_boilerplate go_fmt go_vet go_lint ## verify code and mod
 

@@ -22,11 +22,14 @@ const (
 
 func (h *Helper) DeployProxy(ns string, oidcKeyBundle *util.KeyBundle) (*util.KeyBundle, error) {
 	cnt := corev1.Container{
-		Image: "kube-oidc-proxy-e2e",
+		Name:            ProxyName,
+		Image:           ProxyName,
+		ImagePullPolicy: corev1.PullNever,
 		Args: []string{
+			"kube-oidc-proxy",
 			"--secure-port=6443",
-			"--tls-cert-file=/tls/crt.pem",
-			"--tls-private-key-file=/key.pem",
+			"--tls-cert-file=/tls/cert.pem",
+			"--tls-private-key-file=/tls/key.pem",
 			fmt.Sprintf("--oidc-client-id=%s", ProxyClientID),
 			fmt.Sprintf("--oidc-issuer-url=https://oidc-issuer-e2e.%s.cluster.local", ns),
 			"--oidc-username-claim=email",
@@ -75,13 +78,16 @@ func (h *Helper) DeployProxy(ns string, oidcKeyBundle *util.KeyBundle) (*util.Ke
 		return nil, err
 	}
 
-	return h.deployApp(ns, IssuerName, cnt, volume)
+	return h.deployApp(ns, ProxyName, cnt, volume)
 }
 
 func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, error) {
 	cnt := corev1.Container{
-		Image: "oidc-issuer-e2e",
+		Name:            IssuerName,
+		Image:           IssuerName,
+		ImagePullPolicy: corev1.PullNever,
 		Args: []string{
+			"oidc-issuer",
 			"--secure-port=6443",
 			fmt.Sprintf("--issuer-url=https://oidc-issuer-e2e.%s.cluster.local", ns),
 			"--tls-cert-file=/tls/cert.pem",
@@ -136,8 +142,8 @@ func (h *Helper) deployApp(ns, name string, container corev1.Container, volumes 
 			Namespace: ns,
 		},
 		Data: map[string][]byte{
-			corev1.TLSCertKey:       keyBundle.CertBytes,
-			corev1.TLSPrivateKeyKey: keyBundle.KeyBytes,
+			"cert.pem": keyBundle.CertBytes,
+			"key.pem":  keyBundle.KeyBytes,
 		},
 	}
 

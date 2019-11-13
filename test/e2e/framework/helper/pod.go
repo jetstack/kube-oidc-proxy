@@ -13,7 +13,7 @@ import (
 func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) error {
 	log.Infof("Waiting for Pod to become ready %s/%s", namespace, name)
 
-	err := wait.PollImmediate(time.Second/2, timeout, func() (bool, error) {
+	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
 		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -46,7 +46,7 @@ func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) 
 
 func (h *Helper) WaitForPodDeletion(namespace, name string, timeout time.Duration) error {
 	log.Infof("Waiting for Pod to be deleted %s/%s", namespace, name)
-	err := wait.PollImmediate(time.Second/2, timeout, func() (bool, error) {
+	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
 		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
 		if k8sErrors.IsNotFound(err) {
 			return true, nil

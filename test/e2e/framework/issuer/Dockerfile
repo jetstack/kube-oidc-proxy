@@ -5,6 +5,6 @@ LABEL description="A basic OIDC issuer that prsents a well-known and certs endpo
 
 RUN apk --no-cache --update add ca-certificates
 
-COPY ./bin/oidc-issuer /oidc-issuer
+COPY ./bin/oidc-issuer /usr/bin/oidc-issuer
 
-ENTRYPOINT ["/oidc-issuer"]
+CMD ["/usr/bin/oidc-issuer"]

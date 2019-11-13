@@ -17,18 +17,19 @@ func (k *Kind) LoadKubeOIDCProxy() error {
 	mainPath := filepath.Join(k.rootPath, "./cmd/.")
 	image := "kube-oidc-proxy-e2e"
 
-	return k.loadImage(binPath, mainPath, image)
+	return k.loadImage(binPath, mainPath, image, k.rootPath)
 }
 
 func (k *Kind) LoadIssuer() error {
 	binPath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer/bin/oidc-issuer")
-	mainPath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer/cmd/.")
+	dockerfilePath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer")
+	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "oidc-issuer-e2e"
 
-	return k.loadImage(binPath, mainPath, image)
+	return k.loadImage(binPath, mainPath, image, dockerfilePath)
 }
 
-func (k *Kind) loadImage(binPath, mainPath, image string) error {
+func (k *Kind) loadImage(binPath, mainPath, image, dockerfilePath string) error {
 	log.Infof("kind: building %q", mainPath)
 
 	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
@@ -40,7 +41,7 @@ func (k *Kind) loadImage(binPath, mainPath, image string) error {
 		return err
 	}
 
-	err = k.runCmd("docker", "build", "-t", image, k.rootPath)
+	err = k.runCmd("docker", "build", "-t", image, dockerfilePath)
 	if err != nil {
 		return err
 	}

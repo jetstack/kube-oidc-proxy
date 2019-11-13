@@ -29,6 +29,10 @@ type Framework struct {
 	issuerKeyBundle, proxyKeyBundle *util.KeyBundle
 }
 
+func NewDefaultFramework(baseName string) *Framework {
+	return NewFramework(baseName, DefaultConfig)
+}
+
 func NewFramework(baseName string, config *config.Config) *Framework {
 	f := &Framework{
 		BaseName: baseName,
@@ -52,10 +56,6 @@ func (f *Framework) BeforeEach() {
 	Expect(err).NotTo(HaveOccurred())
 
 	f.KubeClientSet, err = kubernetes.NewForConfig(config)
-	Expect(err).NotTo(HaveOccurred())
-
-	By("Building a namespace api object")
-	f.Namespace, err = f.CreateKubeNamespace(f.BaseName)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Building a namespace api object")
@@ -90,4 +90,8 @@ func (f *Framework) AfterEach() {
 
 func (f *Framework) Helper() *helper.Helper {
 	return f.helper
+}
+
+func CasesDescribe(text string, body func()) bool {
+	return Describe("[TEST] "+text, body)
 }
