@@ -19,6 +19,8 @@ const (
 
 type Environment struct {
 	kind *kind.Kind
+
+	rPath string
 }
 
 func Create(masterNodes, workerNodes int) (*Environment, error) {
@@ -53,7 +55,8 @@ func Create(masterNodes, workerNodes int) (*Environment, error) {
 	}
 
 	return &Environment{
-		kind: k,
+		kind:  k,
+		rPath: rPath,
 	}, nil
 }
 
@@ -73,6 +76,10 @@ func (e *Environment) KubeClient() *kubernetes.Clientset {
 
 func (e *Environment) KubeConfigPath() string {
 	return e.kind.KubeConfigPath()
+}
+
+func (e *Environment) RootPath() string {
+	return e.rPath
 }
 
 func (e *Environment) Node(name string) (*nodes.Node, error) {

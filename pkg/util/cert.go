@@ -12,14 +12,15 @@ import (
 	"k8s.io/client-go/util/cert"
 )
 
-type KeyCertPair struct {
-	CertPath string
-	KeyPath  string
-	Cert     []byte
-	Key      *rsa.PrivateKey
+type KeyBundle struct {
+	CertPath  string
+	KeyPath   string
+	CertBytes []byte
+	KeyBytes  []byte
+	Key       *rsa.PrivateKey
 }
 
-func NewTLSSelfSignedCertKey(dir, prefix string) (*KeyCertPair, error) {
+func NewTLSSelfSignedCertKey(dir, prefix string) (*KeyBundle, error) {
 	if prefix == "" {
 		prefix = "kube-oidc-proxy"
 	}
@@ -52,10 +53,11 @@ func NewTLSSelfSignedCertKey(dir, prefix string) (*KeyCertPair, error) {
 		return nil, err
 	}
 
-	return &KeyCertPair{
-		CertPath: certPath,
-		KeyPath:  keyPath,
-		Cert:     certBytes,
-		Key:      sk,
+	return &KeyBundle{
+		CertPath:  certPath,
+		KeyPath:   keyPath,
+		CertBytes: certBytes,
+		KeyBytes:  keyBytes,
+		Key:       sk,
 	}, nil
 }

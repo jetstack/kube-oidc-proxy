@@ -21,7 +21,7 @@ func (k *Kind) LoadKubeOIDCProxy() error {
 }
 
 func (k *Kind) LoadIssuer() error {
-	binPath := filepath.Join(k.rootPath, "./bin/oidc-issuer")
+	binPath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer/bin/oidc-issuer")
 	mainPath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer/cmd/.")
 	image := "oidc-issuer-e2e"
 
@@ -76,10 +76,10 @@ func (k *Kind) loadImage(binPath, mainPath, image string) error {
 			return err
 		}
 
-		err := node.Command("mkdir", "-p", "/tmp/cert-manager-csi").Run()
+		err := node.Command("mkdir", "-p", "/tmp/kube-oidc-proxy").Run()
 		if err != nil {
 			return fmt.Errorf("failed to create directory %q: %s",
-				"/tmp/cert-manager-csi", err)
+				"/tmp/kube-oidc-proxy", err)
 		}
 	}
 

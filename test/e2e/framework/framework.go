@@ -9,9 +9,12 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/config"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/helper"
 )
+
+var DefaultConfig = &config.Config{}
 
 type Framework struct {
 	BaseName string
@@ -22,6 +25,8 @@ type Framework struct {
 
 	config *config.Config
 	helper *helper.Helper
+
+	issuerKeyBundle, proxyKeyBundle *util.KeyBundle
 }
 
 func NewFramework(baseName string, config *config.Config) *Framework {
@@ -53,9 +58,23 @@ func (f *Framework) BeforeEach() {
 	f.Namespace, err = f.CreateKubeNamespace(f.BaseName)
 	Expect(err).NotTo(HaveOccurred())
 
+	By("Building a namespace api object")
+	f.Namespace, err = f.CreateKubeNamespace(f.BaseName)
+	Expect(err).NotTo(HaveOccurred())
+
 	By("Using the namespace " + f.Namespace.Name)
 
 	f.helper.KubeClient = f.KubeClientSet
+
+	By("Deploying mock OIDC Issuer")
+	issuerKeyBundle, err := f.helper.DeployIssuer(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Deploying kube-oidc-proxy")
+	proxyKeyBundle, err := f.helper.DeployProxy(f.Namespace.Name, issuerKeyBundle)
+	Expect(err).NotTo(HaveOccurred())
+
+	f.issuerKeyBundle, f.proxyKeyBundle = issuerKeyBundle, proxyKeyBundle
 }
 
 // AfterEach deletes the namespace, after reading its events.
