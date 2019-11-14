@@ -14,16 +14,16 @@ var (
 )
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	//var err error
-	//env, err = environment.Create(1, 3)
-	//if err != nil {
-	//	log.Fatalf("Error provisioning environment: %v", err)
-	//}
+	var err error
+	env, err = environment.Create(1, 3)
+	if err != nil {
+		log.Fatalf("Error provisioning environment: %v", err)
+	}
 
-	//cfg.KubeConfigPath = env.KubeConfigPath()
-	//cfg.Kubectl = filepath.Join(env.RootPath(), "bin", "kubectl")
-	//cfg.RepoRoot = env.RootPath()
-	//cfg.Environment = env
+	cfg.KubeConfigPath = env.KubeConfigPath()
+	cfg.Kubectl = filepath.Join(env.RootPath(), "bin", "kubectl")
+	cfg.RepoRoot = env.RootPath()
+	cfg.Environment = env
 
 	cfg.KubeConfigPath = "/home/josh/.kube/kind-config-kube-oidc-proxy-e2e"
 	cfg.Kubectl = "/home/josh/go/src/github.com/jetstack/kube-oidc-proxy/bin/kubectl"
@@ -42,10 +42,10 @@ var globalLogs map[string]string
 
 var _ = SynchronizedAfterSuite(func() {},
 	func() {
-		//if env != nil {
-		//	if err := env.Destory(); err != nil {
-		//		log.Fatalf("Failed to destory environment: %s", err)
-		//	}
-		//}
+		if env != nil {
+			if err := env.Destory(); err != nil {
+				log.Fatalf("Failed to destory environment: %s", err)
+			}
+		}
 	},
 )

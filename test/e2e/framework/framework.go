@@ -25,6 +25,7 @@ type Framework struct {
 	BaseName string
 
 	KubeClientSet kubernetes.Interface
+	ProxyClient   kubernetes.Interface
 
 	Namespace *corev1.Namespace
 
@@ -82,6 +83,10 @@ func (f *Framework) BeforeEach() {
 
 	f.issuerURL, f.proxyURL = issuerURL, proxyURL
 	f.issuerKeyBundle, f.proxyKeyBundle = issuerKeyBundle, proxyKeyBundle
+
+	By("Creating Proxy Client")
+	f.ProxyClient, err = f.NewProxyClient()
+	Expect(err).NotTo(HaveOccurred())
 }
 
 // AfterEach deletes the namespace, after reading its events.
@@ -99,9 +104,35 @@ func (f *Framework) Helper() *helper.Helper {
 	return f.helper
 }
 
-func (f *Framework) NewValidRestConfig() (*rest.Config, error) {
+func (f *Framework) IssuerKeyBundle() *util.KeyBundle {
+	return f.issuerKeyBundle
+}
+
+func (f *Framework) IssuerURL() string {
+	return f.issuerURL
+}
+
+func (f *Framework) ClientID() string {
+	return clientID
+}
+
+func (f *Framework) NewProxyRestConfig() (*rest.Config, error) {
 	return f.Helper().NewValidRestConfig(f.issuerKeyBundle, f.proxyKeyBundle,
 		f.issuerURL, f.proxyURL, clientID)
+}
+
+func (f *Framework) NewProxyClient() (kubernetes.Interface, error) {
+	proxyConfig, err := f.NewProxyRestConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	proxyClient, err := kubernetes.NewForConfig(proxyConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return proxyClient, nil
 }
 
 func CasesDescribe(text string, body func()) bool {

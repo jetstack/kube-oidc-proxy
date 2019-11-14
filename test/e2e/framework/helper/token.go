@@ -13,25 +13,15 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/util"
 )
 
-func (h *Helper) NewValidRestConfig(issuerBundle, proxyBundle *util.KeyBundle, issuerURL, proxyURL, clientID string) (*rest.Config, error) {
-	signer, err := jose.NewSigner(jose.SigningKey{
-		Algorithm: jose.SignatureAlgorithm("RS256"),
-		Key:       issuerBundle.Key,
-	}, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialise new jwt signer: %s", err)
-	}
+func (h *Helper) NewValidRestConfig(issuerBundle, proxyBundle *util.KeyBundle,
+	issuerURL, proxyURL, clientID string) (*rest.Config, error) {
 
-	token := h.newValidToken(issuerURL, clientID)
-
-	jwt, err := signer.Sign(token)
+	// valid token with exp in 10 minutes
+	tokenPayload := h.NewTokenPayload(issuerURL, clientID,
+		time.Now().Add(time.Minute*10))
+	signedToken, err := h.SignToken(issuerBundle, tokenPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign jwt: %s", err)
-	}
-
-	signedToken, err := jwt.CompactSerialize()
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to sign token %q: %s", tokenPayload, err)
 	}
 
 	certPool := x509.NewCertPool()
@@ -51,7 +41,29 @@ func (h *Helper) NewValidRestConfig(issuerBundle, proxyBundle *util.KeyBundle, i
 	}, nil
 }
 
-func (h *Helper) newValidToken(issuerURL, clientID string) []byte {
+func (h *Helper) SignToken(issuerBundle *util.KeyBundle, tokenPayload []byte) (string, error) {
+	signer, err := jose.NewSigner(jose.SigningKey{
+		Algorithm: jose.SignatureAlgorithm("RS256"),
+		Key:       issuerBundle.Key,
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to initialise new jwt signer: %s", err)
+	}
+
+	jwt, err := signer.Sign(tokenPayload)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign jwt: %s", err)
+	}
+
+	signedToken, err := jwt.CompactSerialize()
+	if err != nil {
+		return "", err
+	}
+
+	return signedToken, nil
+}
+
+func (h *Helper) NewTokenPayload(issuerURL, clientID string, exp time.Time) []byte {
 	// valid for 10 mins
 	return []byte(fmt.Sprintf(`{
 	"iss":"%s",
@@ -59,5 +71,5 @@ func (h *Helper) newValidToken(issuerURL, clientID string) []byte {
 	"email":"foo@example.com",
 	"groups":["group-1","group-2"],
 	"exp":%d
-	}`, issuerURL, clientID, time.Now().Add(time.Minute*10).Unix()))
+	}`, issuerURL, clientID, exp.Unix()))
 }

@@ -9,7 +9,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework"
 )
@@ -17,36 +16,27 @@ import (
 var _ = framework.CasesDescribe("RBAC", func() {
 	f := framework.NewDefaultFramework("rbac")
 
-	var rClient *kubernetes.Clientset
-	JustBeforeEach(func() {
-		config, err := f.NewValidRestConfig()
-		Expect(err).NotTo(HaveOccurred())
-
-		rClient, err = kubernetes.NewForConfig(config)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
 	It("should return with a forbidden request with a valid token without rbac", func() {
 		By("Attempting to Get Pods")
-		_, err := rClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err := f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Services")
-		_, err = rClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Secrets")
-		_, err = rClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Nodes")
-		_, err = rClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
@@ -87,23 +77,23 @@ var _ = framework.CasesDescribe("RBAC", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Pods")
-		_, err = rClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Services")
-		_, err = rClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Secrets")
-		_, err = rClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Nodes")
-		_, err = rClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
@@ -123,21 +113,21 @@ var _ = framework.CasesDescribe("RBAC", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Pods")
-		_, err = rClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Services")
-		_, err = rClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Secrets")
-		_, err = rClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Nodes")
-		_, err = rClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
@@ -157,19 +147,19 @@ var _ = framework.CasesDescribe("RBAC", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Pods")
-		_, err = rClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Services")
-		_, err = rClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Secrets")
-		_, err = rClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Nodes")
-		_, err = rClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
