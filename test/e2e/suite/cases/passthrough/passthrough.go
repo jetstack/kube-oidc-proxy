@@ -1,15 +1,14 @@
 package impersonation
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -89,22 +88,27 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 		By("Using a ServiceAccount token should error by the proxy")
 
 		// Create requester using the ServiceAccount token
-		proxyConfig := f.NewProxyRestConfig()
-		requester := f.Helper().NewRequester(proxyConfig.Transport, saToken)
+		config := f.NewProxyRestConfig()
+		config.BearerToken = saToken
 
-		// Send request with signed token to proxy
-		target := fmt.Sprintf("%s/api/v1/namespaces/%s/pods",
-			proxyConfig.Host, f.Namespace.Name)
-
-		body, statusCode, err := requester.Get(target)
+		client, err := kubernetes.NewForConfig(config)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Check body and status code the token was rejected
-		if statusCode != http.StatusForbidden ||
-			!bytes.Equal(body, []byte("Unauthorized")) {
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		kErr, ok := err.(*k8sErrors.StatusError)
+		if !ok {
+			Expect(err).NotTo(HaveOccurred())
 		}
-		Expect(fmt.Errorf("expected status code %d with body Unauthorized, got= %d %q",
-			http.StatusForbidden, statusCode, body)).NotTo(HaveOccurred())
+
+		expRespBody := "Unauthorized"
+		resp := kErr.Status().Details.Causes[0].Message
+
+		// Check body and status code the token was rejected
+		if int(kErr.Status().Code) != http.StatusUnauthorized ||
+			resp != expRespBody {
+			Expect(fmt.Errorf("expected status code %d with body %q, got= %d %q",
+				http.StatusUnauthorized, expRespBody, int(kErr.Status().Code), resp)).NotTo(HaveOccurred())
+		}
 	})
 
 	It("should not error on a valid OIDC token nor a valid ServiceAccount token with passthrough enabled", func() {

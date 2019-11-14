@@ -61,12 +61,13 @@ func expectProxyUnauthorized(f *framework.Framework, tokenPayload []byte) {
 		proxyConfig.Host, f.Namespace.Name)
 
 	body, statusCode, err := requester.Get(target)
+	body = bytes.TrimSpace(body)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Check body and status code the token was rejected
-	if statusCode != http.StatusForbidden ||
+	if statusCode != http.StatusUnauthorized ||
 		!bytes.Equal(body, []byte("Unauthorized")) {
+		Expect(fmt.Errorf("expected status code %d with body Unauthorized, got= %d %q",
+			http.StatusUnauthorized, statusCode, body)).NotTo(HaveOccurred())
 	}
-	Expect(fmt.Errorf("expected status code %d with body Unauthorized, got= %d %q",
-		http.StatusForbidden, statusCode, body)).NotTo(HaveOccurred())
 }

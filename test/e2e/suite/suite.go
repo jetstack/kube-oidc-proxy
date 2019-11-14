@@ -27,11 +27,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	cfg.RepoRoot = env.RootPath()
 	cfg.Environment = env
 
-	cfg.KubeConfigPath = "/home/josh/.kube/kind-config-kube-oidc-proxy-e2e"
-	cfg.Kubectl = "/home/josh/go/src/github.com/jetstack/kube-oidc-proxy/bin/kubectl"
-	cfg.RepoRoot = "/home/josh/go/src/github.com/jetstack/kube-oidc-proxy"
-	cfg.Environment = env
-
 	if err := framework.DefaultConfig.Validate(); err != nil {
 		log.Fatalf("Invalid test config: %v", err)
 	}

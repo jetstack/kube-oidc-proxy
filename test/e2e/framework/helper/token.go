@@ -68,7 +68,7 @@ func (h *Helper) NewTokenPayload(issuerURL, clientID string, exp time.Time) []by
 	return []byte(fmt.Sprintf(`{
 	"iss":"%s",
 	"aud":["%s","aud-2"],
-	"email":"foo@example.com",
+	"email":"user@example.com",
 	"groups":["group-1","group-2"],
 	"exp":%d
 	}`, issuerURL, clientID, exp.Unix()))

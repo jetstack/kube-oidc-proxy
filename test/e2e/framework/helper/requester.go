@@ -14,7 +14,8 @@ type Requester struct {
 
 func (h *Helper) NewRequester(transport http.RoundTripper, token string) *Requester {
 	r := &Requester{
-		token: token,
+		token:     token,
+		transport: transport,
 	}
 
 	r.client = http.DefaultClient

@@ -125,8 +125,8 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 			},
 			{
 				APIGroups: []string{"authentication.k8s.io"},
-				Resources: []string{"userextras/scopes"},
-				Verbs:     []string{"impersonate"},
+				Resources: []string{"userextras/scopes", "tokenreviews"},
+				Verbs:     []string{"impersonate", "create"},
 			},
 		},
 	})
@@ -319,21 +319,28 @@ func (h *Helper) DeleteIssuer(ns string) error {
 	return h.deleteApp(ns, IssuerName)
 }
 func (h *Helper) DeleteProxy(ns string) error {
-	return h.deleteApp(ns, ProxyName)
+	return h.deleteApp(ns, ProxyName, "oidc-ca")
 }
 
-func (h *Helper) deleteApp(ns, name string) error {
+func (h *Helper) deleteApp(ns, name string, extraSecrets ...string) error {
 	err := h.KubeClient.CoreV1().Pods(ns).Delete(name, nil)
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
 
-	err = h.KubeClient.CoreV1().Secrets(ns).Delete(name, nil)
+	for _, s := range append(extraSecrets, name) {
+		err = h.KubeClient.CoreV1().Secrets(ns).Delete(s, nil)
+		if err != nil && !k8sErrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	err = h.KubeClient.CoreV1().Services(ns).Delete(name, nil)
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
 
-	err = h.KubeClient.CoreV1().Services(ns).Delete(name, nil)
+	err = h.KubeClient.CoreV1().ServiceAccounts(ns).Delete(name, nil)
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
