@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -19,7 +20,7 @@ const (
 	ProxyName  = "kube-oidc-proxy-e2e"
 )
 
-func (h *Helper) DeployProxy(ns, issuerURL, clientID string, oidcKeyBundle *util.KeyBundle) (*util.KeyBundle, string, error) {
+func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string, oidcKeyBundle *util.KeyBundle) (*util.KeyBundle, string, error) {
 	cnt := corev1.Container{
 		Name:            ProxyName,
 		Image:           ProxyName,
@@ -81,19 +82,79 @@ func (h *Helper) DeployProxy(ns, issuerURL, clientID string, oidcKeyBundle *util
 	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "oidc-ca",
-			Namespace: ns,
+			Namespace: ns.Name,
 		},
 		Data: map[string][]byte{
 			"ca.pem": oidcKeyBundle.CertBytes,
 		},
 	}
 
-	_, err := h.KubeClient.CoreV1().Secrets(ns).Create(sec)
+	_, err := h.KubeClient.CoreV1().Secrets(ns.Name).Create(sec)
 	if err != nil {
 		return nil, "", err
 	}
 
-	bundle, appURL, err := h.deployApp(ns, ProxyName, corev1.ServiceTypeNodePort, cnt, volume)
+	bundle, appURL, err := h.deployApp(ns.Name, ProxyName, corev1.ServiceTypeNodePort, cnt, volume)
+	if err != nil {
+		return nil, "", err
+	}
+
+	pTrue := true
+	pFalse := false
+
+	crole, err := h.KubeClient.RbacV1().ClusterRoles().Create(&rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: ProxyName + "-",
+			OwnerReferences: []metav1.OwnerReference{
+				metav1.OwnerReference{
+					APIVersion:         "core/v1",
+					BlockOwnerDeletion: &pTrue,
+					Controller:         &pFalse,
+					Kind:               "Namespace",
+					Name:               ns.Name,
+					UID:                ns.UID,
+				},
+			},
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"users", "groups", "serviceaccounts"},
+				Verbs:     []string{"impersonate"},
+			},
+			{
+				APIGroups: []string{"authentication.k8s.io"},
+				Resources: []string{"userextras/scopes"},
+				Verbs:     []string{"impersonate"},
+			},
+		},
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	_, err = h.KubeClient.RbacV1().ClusterRoleBindings().Create(
+		&rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: ProxyName + "-",
+				OwnerReferences: []metav1.OwnerReference{
+					metav1.OwnerReference{
+						APIVersion:         "core/v1",
+						BlockOwnerDeletion: &pTrue,
+						Controller:         &pFalse,
+						Kind:               "Namespace",
+						Name:               ns.Name,
+						UID:                ns.UID,
+					},
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				Name: crole.Name, Kind: "ClusterRole",
+			},
+			Subjects: []rbacv1.Subject{
+				{Name: ProxyName, Namespace: ns.Name, Kind: "ServiceAccount"},
+			},
+		})
 	if err != nil {
 		return nil, "", err
 	}
@@ -190,6 +251,13 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 		},
 	}
 
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -199,7 +267,8 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 			},
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{container},
+			ServiceAccountName: name,
+			Containers:         []corev1.Container{container},
 			Volumes: append(volumes,
 				corev1.Volume{
 					Name: "tls",
@@ -224,6 +293,11 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 	}
 
 	_, err = h.KubeClient.CoreV1().Secrets(ns).Create(sec)
+	if err != nil {
+		return nil, "", err
+	}
+
+	_, err = h.KubeClient.CoreV1().ServiceAccounts(ns).Create(sa)
 	if err != nil {
 		return nil, "", err
 	}

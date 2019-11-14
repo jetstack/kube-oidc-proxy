@@ -70,7 +70,6 @@ func (f *Framework) BeforeEach() {
 
 	By("Using the namespace " + f.Namespace.Name)
 
-	f.helper.RestConfig = config
 	f.helper.KubeClient = f.KubeClientSet
 
 	By("Deploying mock OIDC Issuer")
@@ -78,7 +77,7 @@ func (f *Framework) BeforeEach() {
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deploying kube-oidc-proxy")
-	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace.Name, issuerURL, clientID, issuerKeyBundle)
+	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace, issuerURL, clientID, issuerKeyBundle)
 	Expect(err).NotTo(HaveOccurred())
 
 	f.issuerURL, f.proxyURL = issuerURL, proxyURL
@@ -87,13 +86,13 @@ func (f *Framework) BeforeEach() {
 
 // AfterEach deletes the namespace, after reading its events.
 func (f *Framework) AfterEach() {
-	//By("Deleting test namespace")
-	//err := f.DeleteKubeNamespace(f.Namespace.Name)
-	//Expect(err).NotTo(HaveOccurred())
+	By("Deleting test namespace")
+	err := f.DeleteKubeNamespace(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
 
-	//By("Waiting for test namespace to no longer exist")
-	//err = f.WaitForKubeNamespaceNotExist(f.Namespace.Name)
-	//Expect(err).NotTo(HaveOccurred())
+	By("Waiting for test namespace to no longer exist")
+	err = f.WaitForKubeNamespaceNotExist(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func (f *Framework) Helper() *helper.Helper {
