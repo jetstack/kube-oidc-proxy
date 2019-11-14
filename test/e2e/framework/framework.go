@@ -2,6 +2,8 @@
 package framework
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -78,25 +80,43 @@ func (f *Framework) BeforeEach() {
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deploying kube-oidc-proxy")
-	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace, issuerURL, clientID, issuerKeyBundle)
+	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace,
+		issuerURL, clientID, issuerKeyBundle)
 	Expect(err).NotTo(HaveOccurred())
 
 	f.issuerURL, f.proxyURL = issuerURL, proxyURL
 	f.issuerKeyBundle, f.proxyKeyBundle = issuerKeyBundle, proxyKeyBundle
 
 	By("Creating Proxy Client")
-	f.ProxyClient, err = f.NewProxyClient()
-	Expect(err).NotTo(HaveOccurred())
+	f.ProxyClient = f.NewProxyClient()
 }
 
 // AfterEach deletes the namespace, after reading its events.
 func (f *Framework) AfterEach() {
+	By("Deleting kube-oidc-proxy deployment")
+	err := f.Helper().DeleteProxy(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Deleting mock OIDC issuer")
+	err = f.Helper().DeleteIssuer(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
+
 	By("Deleting test namespace")
-	err := f.DeleteKubeNamespace(f.Namespace.Name)
+	err = f.DeleteKubeNamespace(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Waiting for test namespace to no longer exist")
 	err = f.WaitForKubeNamespaceNotExist(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func (f *Framework) DeployProxyWith(extraArgs ...string) {
+	By("Deleting kube-oidc-proxy deployment")
+	err := f.Helper().DeleteProxy(f.Namespace.Name)
+
+	By(fmt.Sprintf("Deploying kube-oidc-proxy with extra args %s", extraArgs))
+	f.proxyKeyBundle, f.proxyURL, err = f.helper.DeployProxy(f.Namespace, f.issuerURL,
+		clientID, f.issuerKeyBundle, extraArgs...)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -116,23 +136,21 @@ func (f *Framework) ClientID() string {
 	return clientID
 }
 
-func (f *Framework) NewProxyRestConfig() (*rest.Config, error) {
-	return f.Helper().NewValidRestConfig(f.issuerKeyBundle, f.proxyKeyBundle,
+func (f *Framework) NewProxyRestConfig() *rest.Config {
+	config, err := f.Helper().NewValidRestConfig(f.issuerKeyBundle, f.proxyKeyBundle,
 		f.issuerURL, f.proxyURL, clientID)
+	Expect(err).NotTo(HaveOccurred())
+
+	return config
 }
 
-func (f *Framework) NewProxyClient() (kubernetes.Interface, error) {
-	proxyConfig, err := f.NewProxyRestConfig()
-	if err != nil {
-		return nil, err
-	}
+func (f *Framework) NewProxyClient() kubernetes.Interface {
+	proxyConfig := f.NewProxyRestConfig()
 
 	proxyClient, err := kubernetes.NewForConfig(proxyConfig)
-	if err != nil {
-		return nil, err
-	}
+	Expect(err).NotTo(HaveOccurred())
 
-	return proxyClient, nil
+	return proxyClient
 }
 
 func CasesDescribe(text string, body func()) bool {

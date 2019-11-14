@@ -1,6 +1,8 @@
 package suite
 
 import (
+	"path/filepath"
+
 	. "github.com/onsi/ginkgo"
 	log "github.com/sirupsen/logrus"
 

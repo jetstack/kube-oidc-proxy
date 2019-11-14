@@ -49,11 +49,10 @@ var _ = framework.CasesDescribe("Token", func() {
 			f.IssuerURL(), f.ClientID(), time.Now()))
 
 		By("Valid token should return Kubernetes forbidden")
-		client, err := f.NewProxyClient()
-		Expect(err).NotTo(HaveOccurred())
+		client := f.NewProxyClient()
 
 		// if does not return with Kubernetes forbidden error then error
-		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err := client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -65,9 +64,7 @@ func expectProxyUnauthorized(f *framework.Framework, tokenPayload []byte) {
 	signedToken, err := f.Helper().SignToken(f.IssuerKeyBundle(), tokenPayload)
 	Expect(err).NotTo(HaveOccurred())
 
-	proxyConfig, err := f.NewProxyRestConfig()
-	Expect(err).NotTo(HaveOccurred())
-
+	proxyConfig := f.NewProxyRestConfig()
 	client := http.DefaultClient
 	client.Transport = &wraperRT{
 		transport: proxyConfig.Transport,
@@ -89,5 +86,5 @@ func expectProxyUnauthorized(f *framework.Framework, tokenPayload []byte) {
 		!bytes.Equal(body, []byte("Unauthorized")) {
 	}
 	Expect(fmt.Errorf("expected status code %d with body Unauthorized, got= %d %q",
-		resp.StatusCode, body)).NotTo(HaveOccurred())
+		http.StatusForbidden, resp.StatusCode, body)).NotTo(HaveOccurred())
 }

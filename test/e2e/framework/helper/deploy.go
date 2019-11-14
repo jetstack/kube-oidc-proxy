@@ -20,12 +20,13 @@ const (
 	ProxyName  = "kube-oidc-proxy-e2e"
 )
 
-func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string, oidcKeyBundle *util.KeyBundle) (*util.KeyBundle, string, error) {
+func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
+	oidcKeyBundle *util.KeyBundle, extraArgs ...string) (*util.KeyBundle, string, error) {
 	cnt := corev1.Container{
 		Name:            ProxyName,
 		Image:           ProxyName,
 		ImagePullPolicy: corev1.PullNever,
-		Args: []string{
+		Args: append([]string{
 			"kube-oidc-proxy",
 			"--secure-port=6443",
 			"--tls-cert-file=/tls/cert.pem",
@@ -37,7 +38,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string, o
 			"--oidc-ca-file=/oidc/ca.pem",
 			"--oidc-ca-file=/oidc/ca.pem",
 			"--v=10",
-		},
+		}, extraArgs...),
 		VolumeMounts: []corev1.VolumeMount{
 			corev1.VolumeMount{
 				MountPath: "/tls",
