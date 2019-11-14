@@ -64,13 +64,14 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 	})
 
 	It("should not error at proxy when impersonation is disabled impersonation is attempted on a request", func() {
+		By("Enabling the disabling of impersonation")
 		f.DeployProxyWith("--disable-impersonation")
 
-		// Should return a normal RBAC forbidden from Kubernetes. If is not a
-		// Kubernetes error then it came from the kube-oidc-proxy so error
-		client := f.NewProxyClient()
-		_, err := client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
-		if !k8sErrors.IsForbidden(err) {
+		// Should return an Unauthorized response from Kubernetes as it does not
+		// trust the OIDC token we have presented however it has been authenticated
+		// by kube-oidc-proxy.
+		_, err := f.NewProxyClient().CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		if !k8sErrors.IsUnauthorized(err) {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})

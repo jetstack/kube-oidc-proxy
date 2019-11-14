@@ -16,7 +16,7 @@ import (
 func (h *Helper) NewValidRestConfig(issuerBundle, proxyBundle *util.KeyBundle,
 	issuerURL, proxyURL, clientID string) (*rest.Config, error) {
 
-	// valid token with exp in 10 minutes
+	// Valid token with exp in 10 minutes
 	tokenPayload := h.NewTokenPayload(issuerURL, clientID,
 		time.Now().Add(time.Minute*10))
 	signedToken, err := h.SignToken(issuerBundle, tokenPayload)
@@ -64,7 +64,7 @@ func (h *Helper) SignToken(issuerBundle *util.KeyBundle, tokenPayload []byte) (s
 }
 
 func (h *Helper) NewTokenPayload(issuerURL, clientID string, exp time.Time) []byte {
-	// valid for 10 mins
+	// Valid for 10 mins
 	return []byte(fmt.Sprintf(`{
 	"iss":"%s",
 	"aud":["%s","aud-2"],
