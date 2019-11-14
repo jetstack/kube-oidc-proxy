@@ -19,6 +19,10 @@ func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) 
 			return false, err
 		}
 
+		if len(pod.Status.Conditions) == 0 {
+			return false, nil
+		}
+
 		var ready bool
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == corev1.PodReady &&

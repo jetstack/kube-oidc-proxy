@@ -16,7 +16,7 @@ import (
 func (f *Framework) CreateKubeNamespace(baseName string) (*corev1.Namespace, error) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: fmt.Sprintf("e2e-tests-%v-", baseName),
+			GenerateName: fmt.Sprintf("kube-oidc-proxy-e2e-%v-", baseName),
 		},
 	}
 

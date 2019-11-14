@@ -3,6 +3,7 @@ package helper
 
 import (
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/config"
 )
@@ -12,6 +13,7 @@ type Helper struct {
 	cfg *config.Config
 
 	KubeClient kubernetes.Interface
+	RestConfig *rest.Config
 }
 
 func NewHelper(cfg *config.Config) *Helper {

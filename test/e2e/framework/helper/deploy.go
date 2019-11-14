@@ -2,7 +2,8 @@ package helper
 
 import (
 	"fmt"
-	"os"
+	"net"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -10,17 +11,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/util"
+	"github.com/jetstack/kube-oidc-proxy/test/e2e/util"
 )
 
 const (
 	IssuerName = "oidc-issuer-e2e"
 	ProxyName  = "kube-oidc-proxy-e2e"
-
-	ProxyClientID = "kube-oidc-proxy-e2e-client_id"
 )
 
-func (h *Helper) DeployProxy(ns string, oidcKeyBundle *util.KeyBundle) (*util.KeyBundle, error) {
+func (h *Helper) DeployProxy(ns, issuerURL, clientID string, oidcKeyBundle *util.KeyBundle) (*util.KeyBundle, string, error) {
 	cnt := corev1.Container{
 		Name:            ProxyName,
 		Image:           ProxyName,
@@ -30,10 +29,13 @@ func (h *Helper) DeployProxy(ns string, oidcKeyBundle *util.KeyBundle) (*util.Ke
 			"--secure-port=6443",
 			"--tls-cert-file=/tls/cert.pem",
 			"--tls-private-key-file=/tls/key.pem",
-			fmt.Sprintf("--oidc-client-id=%s", ProxyClientID),
-			fmt.Sprintf("--oidc-issuer-url=https://oidc-issuer-e2e.%s.cluster.local", ns),
+			fmt.Sprintf("--oidc-client-id=%s", clientID),
+			fmt.Sprintf("--oidc-issuer-url=%s", issuerURL),
 			"--oidc-username-claim=email",
+			"--oidc-groups-claim=groups",
 			"--oidc-ca-file=/oidc/ca.pem",
+			"--oidc-ca-file=/oidc/ca.pem",
+			"--v=10",
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			corev1.VolumeMount{
@@ -51,6 +53,19 @@ func (h *Helper) DeployProxy(ns string, oidcKeyBundle *util.KeyBundle) (*util.Ke
 			corev1.ContainerPort{
 				ContainerPort: 6443,
 			},
+			corev1.ContainerPort{
+				ContainerPort: 8080,
+			},
+		},
+		ReadinessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/ready",
+					Port: intstr.FromInt(8080),
+				},
+			},
+			InitialDelaySeconds: 9,
+			PeriodSeconds:       3,
 		},
 	}
 
@@ -75,13 +90,18 @@ func (h *Helper) DeployProxy(ns string, oidcKeyBundle *util.KeyBundle) (*util.Ke
 
 	_, err := h.KubeClient.CoreV1().Secrets(ns).Create(sec)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return h.deployApp(ns, ProxyName, cnt, volume)
+	bundle, appURL, err := h.deployApp(ns, ProxyName, corev1.ServiceTypeNodePort, cnt, volume)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return bundle, appURL, nil
 }
 
-func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, error) {
+func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, string, error) {
 	cnt := corev1.Container{
 		Name:            IssuerName,
 		Image:           IssuerName,
@@ -89,7 +109,7 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, error) {
 		Args: []string{
 			"oidc-issuer",
 			"--secure-port=6443",
-			fmt.Sprintf("--issuer-url=https://oidc-issuer-e2e.%s.cluster.local", ns),
+			fmt.Sprintf("--issuer-url=https://oidc-issuer-e2e.%s.svc.cluster.local:6443", ns),
 			"--tls-cert-file=/tls/cert.pem",
 			"--tls-private-key-file=/tls/key.pem",
 		},
@@ -107,13 +127,36 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, error) {
 		},
 	}
 
-	return h.deployApp(ns, IssuerName, cnt)
+	bundle, appURL, err := h.deployApp(ns, IssuerName, corev1.ServiceTypeClusterIP, cnt)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return bundle, appURL, nil
 }
 
-func (h *Helper) deployApp(ns, name string, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, error) {
-	keyBundle, err := util.NewTLSSelfSignedCertKey(os.TempDir(), "oidc-issuer-e2e")
+func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, string, error) {
+	host, appURL := h.appURL(ns, name, "6443")
+
+	var netIPs []net.IP
+	if serviceType == corev1.ServiceTypeNodePort {
+		nodes, err := h.KubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		if err != nil {
+			return nil, "", err
+		}
+
+		for _, n := range nodes.Items {
+			for _, addr := range n.Status.Addresses {
+				if addr.Type == corev1.NodeInternalIP {
+					netIPs = append(netIPs, net.ParseIP(addr.Address))
+				}
+			}
+		}
+	}
+
+	keyBundle, err := util.NewTLSSelfSignedCertKey(host, netIPs, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	svc := &corev1.Service{
@@ -129,7 +172,7 @@ func (h *Helper) deployApp(ns, name string, container corev1.Container, volumes 
 					TargetPort: intstr.FromInt(6443),
 				},
 			},
-			Type: "ClusterIP",
+			Type: serviceType,
 			Selector: map[string]string{
 				"app": name,
 			},
@@ -170,26 +213,31 @@ func (h *Helper) deployApp(ns, name string, container corev1.Container, volumes 
 		},
 	}
 
-	_, err = h.KubeClient.CoreV1().Services(ns).Create(svc)
+	svc, err = h.KubeClient.CoreV1().Services(ns).Create(svc)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+
+	if len(netIPs) > 0 {
+		appURL = fmt.Sprintf("https://%s:%s", netIPs[0],
+			strconv.FormatUint(uint64(svc.Spec.Ports[0].NodePort), 10))
 	}
 
 	_, err = h.KubeClient.CoreV1().Secrets(ns).Create(sec)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	_, err = h.KubeClient.CoreV1().Pods(ns).Create(pod)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if err := h.WaitForPodReady(ns, name, time.Second*20); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return keyBundle, nil
+	return keyBundle, appURL, nil
 }
 
 func (h *Helper) DeleteIssuer(ns string) error {
@@ -220,4 +268,9 @@ func (h *Helper) deleteApp(ns, name string) error {
 	}
 
 	return nil
+}
+
+func (h *Helper) appURL(ns, serviceName, port string) (string, string) {
+	host := fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, ns)
+	return host, fmt.Sprintf("https://%s:%s", host, port)
 }

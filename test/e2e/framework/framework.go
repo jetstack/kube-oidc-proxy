@@ -8,13 +8,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
-	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/config"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/helper"
+	"github.com/jetstack/kube-oidc-proxy/test/e2e/util"
 )
 
 var DefaultConfig = &config.Config{}
+
+const (
+	clientID = "kube-oidc-proxy-e1e-client_id"
+)
 
 type Framework struct {
 	BaseName string
@@ -27,6 +32,7 @@ type Framework struct {
 	helper *helper.Helper
 
 	issuerKeyBundle, proxyKeyBundle *util.KeyBundle
+	issuerURL, proxyURL             string
 }
 
 func NewDefaultFramework(baseName string) *Framework {
@@ -64,32 +70,39 @@ func (f *Framework) BeforeEach() {
 
 	By("Using the namespace " + f.Namespace.Name)
 
+	f.helper.RestConfig = config
 	f.helper.KubeClient = f.KubeClientSet
 
 	By("Deploying mock OIDC Issuer")
-	issuerKeyBundle, err := f.helper.DeployIssuer(f.Namespace.Name)
+	issuerKeyBundle, issuerURL, err := f.helper.DeployIssuer(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deploying kube-oidc-proxy")
-	proxyKeyBundle, err := f.helper.DeployProxy(f.Namespace.Name, issuerKeyBundle)
+	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace.Name, issuerURL, clientID, issuerKeyBundle)
 	Expect(err).NotTo(HaveOccurred())
 
+	f.issuerURL, f.proxyURL = issuerURL, proxyURL
 	f.issuerKeyBundle, f.proxyKeyBundle = issuerKeyBundle, proxyKeyBundle
 }
 
 // AfterEach deletes the namespace, after reading its events.
 func (f *Framework) AfterEach() {
-	By("Deleting test namespace")
-	err := f.DeleteKubeNamespace(f.Namespace.Name)
-	Expect(err).NotTo(HaveOccurred())
+	//By("Deleting test namespace")
+	//err := f.DeleteKubeNamespace(f.Namespace.Name)
+	//Expect(err).NotTo(HaveOccurred())
 
-	By("Waiting for test namespace to no longer exist")
-	err = f.WaitForKubeNamespaceNotExist(f.Namespace.Name)
-	Expect(err).NotTo(HaveOccurred())
+	//By("Waiting for test namespace to no longer exist")
+	//err = f.WaitForKubeNamespaceNotExist(f.Namespace.Name)
+	//Expect(err).NotTo(HaveOccurred())
 }
 
 func (f *Framework) Helper() *helper.Helper {
 	return f.helper
+}
+
+func (f *Framework) NewValidRestConfig() (*rest.Config, error) {
+	return f.Helper().NewValidRestConfig(f.issuerKeyBundle, f.proxyKeyBundle,
+		f.issuerURL, f.proxyURL, clientID)
 }
 
 func CasesDescribe(text string, body func()) bool {

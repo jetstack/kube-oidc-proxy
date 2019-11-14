@@ -11,7 +11,7 @@ import (
 	"net"
 	"net/http"
 
-	"k8s.io/klog"
+	log "github.com/sirupsen/logrus"
 )
 
 type Issuer struct {
@@ -70,17 +70,17 @@ func (i *Issuer) Run(bindAddress, listenPort string) (<-chan struct{}, error) {
 
 		err := http.ServeTLS(l, i, i.certFile, i.keyFile)
 		if err != nil {
-			klog.Errorf("stoped serving TLS (%s): %s", serveAddr, err)
+			log.Errorf("stoped serving TLS (%s): %s", serveAddr, err)
 		}
 	}()
 
-	klog.Infof("mock issuer listening and serving on %s", serveAddr)
+	log.Infof("mock issuer listening and serving on %s", serveAddr)
 
 	return compCh, nil
 }
 
 func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	klog.Infof("mock issuer received url %s", r.URL)
+	log.Infof("mock issuer received url %s", r.URL)
 
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 
@@ -89,7 +89,7 @@ func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusOK)
 
 		if _, err := rw.Write(i.wellKnownResponse()); err != nil {
-			klog.Errorf("failed to write openid-configuration response: %s", err)
+			log.Errorf("failed to write openid-configuration response: %s", err)
 		}
 
 	case "/certs":
@@ -97,11 +97,11 @@ func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 		certsDiscovery := i.certsDiscovery()
 		if _, err := rw.Write(certsDiscovery); err != nil {
-			klog.Errorf("failed to write certificate discovery response: %s", err)
+			log.Errorf("failed to write certificate discovery response: %s", err)
 		}
 
 	default:
-		klog.Errorf("unexpected URL request: %s", r.URL)
+		log.Errorf("unexpected URL request: %s", r.URL)
 		rw.WriteHeader(http.StatusNotFound)
 		rw.Write([]byte("{}\n"))
 	}
