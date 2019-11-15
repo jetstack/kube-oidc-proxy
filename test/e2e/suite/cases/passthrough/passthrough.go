@@ -1,4 +1,4 @@
-package impersonation
+package passthrough
 
 import (
 	"fmt"

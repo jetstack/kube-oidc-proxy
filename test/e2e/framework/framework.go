@@ -128,8 +128,16 @@ func (f *Framework) IssuerKeyBundle() *util.KeyBundle {
 	return f.issuerKeyBundle
 }
 
+func (f *Framework) ProxyKeyBundle() *util.KeyBundle {
+	return f.proxyKeyBundle
+}
+
 func (f *Framework) IssuerURL() string {
 	return f.issuerURL
+}
+
+func (f *Framework) ProxyURL() string {
+	return f.proxyURL
 }
 
 func (f *Framework) ClientID() string {
