@@ -22,6 +22,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
+	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
@@ -50,17 +51,19 @@ type Proxy struct {
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
 	noAuthClientTransport http.RoundTripper
+	healthCheck           *probe.HealthCheck
 
 	options *Options
 }
 
 func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
-	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo, options *Options) *Proxy {
+	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo, healthCheck *probe.HealthCheck, options *Options) *Proxy {
 	return &Proxy{
 		restConfig:        restConfig,
 		oidcOptions:       oidcOptions,
 		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
+		healthCheck:       healthCheck,
 		options:           options,
 	}
 }
@@ -143,6 +146,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 				continue
 			}
 
+			p.healthCheck.SetReady()
 			klog.Info("OIDC provider initialized, proxy ready")
 			klog.V(4).Infof("OIDC provider initialized, readiness check returned error: %+v", err)
 			return
