@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/server"
@@ -98,16 +97,13 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			}
 
 			p := proxy.New(restConfig, oidcOptions,
-				tokenReviewer, secureServingInfo, proxyOptions)
+				tokenReviewer, secureServingInfo, healthCheck, proxyOptions)
 
 			// run proxy
 			waitCh, err := p.Run(stopCh)
 			if err != nil {
 				return err
 			}
-
-			time.Sleep(time.Second * 3)
-			healthCheck.SetReady()
 
 			<-waitCh
 
