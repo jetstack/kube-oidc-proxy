@@ -21,17 +21,23 @@ func (o *Options) AddFlags(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&o.ListenPort, "secure-port",
 		"6443", "Port to serve HTTPS.")
-	cmd.MarkPersistentFlagRequired("secure-port")
+	o.must(cmd.MarkPersistentFlagRequired("secure-port"))
 
 	cmd.PersistentFlags().StringVar(&o.IssuerURL, "issuer-url",
 		"", "URL of the issuer that appears in well-known responses.")
-	cmd.MarkPersistentFlagRequired("issuer-url")
+	o.must(cmd.MarkPersistentFlagRequired("issuer-url"))
 
 	cmd.PersistentFlags().StringVar(&o.KeyFile, "tls-private-key-file",
 		"/etc/oidc/key.pem", "File location to key for serving.")
-	cmd.MarkPersistentFlagRequired("tls-private-key-file")
+	o.must(cmd.MarkPersistentFlagRequired("tls-private-key-file"))
 
 	cmd.PersistentFlags().StringVar(&o.CertFile, "tls-cert-file",
 		"/etc/oidc/key.pem", "File location to certificate for serving.")
-	cmd.MarkPersistentFlagRequired("tls-cert-file")
+	o.must(cmd.MarkPersistentFlagRequired("tls-cert-file"))
+}
+
+func (o *Options) must(err error) {
+	if err != nil {
+		panic(err)
+	}
 }

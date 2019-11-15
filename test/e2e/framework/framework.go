@@ -113,6 +113,7 @@ func (f *Framework) AfterEach() {
 func (f *Framework) DeployProxyWith(extraArgs ...string) {
 	By("Deleting kube-oidc-proxy deployment")
 	err := f.Helper().DeleteProxy(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
 
 	By(fmt.Sprintf("Deploying kube-oidc-proxy with extra args %s", extraArgs))
 	f.proxyKeyBundle, f.proxyURL, err = f.helper.DeployProxy(f.Namespace, f.issuerURL,

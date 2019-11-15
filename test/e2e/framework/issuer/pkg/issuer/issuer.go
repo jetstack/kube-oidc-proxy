@@ -103,7 +103,9 @@ func (i *Issuer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	default:
 		log.Errorf("unexpected URL request: %s", r.URL)
 		rw.WriteHeader(http.StatusNotFound)
-		rw.Write([]byte("{}\n"))
+		if _, err := rw.Write([]byte("{}\n")); err != nil {
+			log.Errorf("failed to write data to resposne: %s", err)
+		}
 	}
 }
 

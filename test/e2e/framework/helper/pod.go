@@ -2,6 +2,7 @@
 package helper
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -42,7 +43,11 @@ func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) 
 		return true, nil
 	})
 	if err != nil {
-		h.Kubectl(namespace).DescribeResource("pod", name)
+		kErr := h.Kubectl(namespace).DescribeResource("pod", name)
+		if kErr != nil {
+			err = fmt.Errorf("%s\n%s", err, kErr)
+		}
+
 		return err
 	}
 
@@ -68,7 +73,11 @@ func (h *Helper) WaitForPodDeletion(namespace, name string, timeout time.Duratio
 		return false, nil
 	})
 	if err != nil {
-		h.Kubectl(namespace).DescribeResource("pod", name)
+		kErr := h.Kubectl(namespace).DescribeResource("pod", name)
+		if kErr != nil {
+			err = fmt.Errorf("%s\n%s", err, kErr)
+		}
+
 		return err
 	}
 

@@ -15,7 +15,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.3.1
 	k8s.io/api v0.0.0-20191114100352-16d7abae0d2a
 	k8s.io/apimachinery v0.0.0-20191028221656-72ed19daf4bb
-	k8s.io/apiserver v0.0.0-20190721103406-1e59c150c171
+	k8s.io/apiserver v0.0.0-20191003001037-3c8b233e046c
 	k8s.io/cli-runtime v0.0.0-20191114110141-0a35778df828
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/component-base v0.0.0-20191114102325-35a9586014f7
@@ -26,7 +26,6 @@ require (
 replace (
 	github.com/golang/mock => github.com/golang/mock v1.3.1
 	k8s.io/api => k8s.io/api v0.0.0-20191114100352-16d7abae0d2a
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20191028221656-72ed19daf4bb
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.0.0-20191114110141-0a35778df828
 	k8s.io/client-go => k8s.io/client-go v0.0.0-20191114101535-6c5935290e33
@@ -37,3 +36,5 @@ replace (
 )
 
 replace k8s.io/kubectl => k8s.io/kubectl v0.0.0-20190918164019-21692a0861df
+
+replace k8s.io/apiserver => k8s.io/apiserver v0.0.0-20191003001037-3c8b233e046c

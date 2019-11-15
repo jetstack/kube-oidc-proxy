@@ -36,8 +36,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 }, func([]byte) {
 })
 
-var globalLogs map[string]string
-
 var _ = SynchronizedAfterSuite(func() {},
 	func() {
 		if env != nil {
