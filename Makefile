@@ -11,19 +11,20 @@ help:  ## display this help
 .PHONY: help build docker_build test depend verify all clean generate
 
 UNAME_S := $(shell uname -s)
+GOLANGCILINT_VERSION := 1.21.0
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
 	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/linux/amd64/kubectl
 	KUBECTL_HASH := ecec7fe4ffa03018ff00f14e228442af5c2284e57771e4916b977c20ba4e5b39
-	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.18.0/golangci-lint-1.18.0-linux-amd64.tar.gz
-	GOLANGCILINT_HASH := 0ef2c502035d5f12d6d3a30a7c4469cfcae4dd3828d15fbbfb799c8331cd51c4
+	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v$(GOLANGCILINT_VERSION)/golangci-lint-$(GOLANGCILINT_VERSION)-linux-amd64.tar.gz
+	GOLANGCILINT_HASH := 2c861f8dc56b560474aa27cab0c075991628cc01af3451e27ac82f5d10d5106b
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
 	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/darwin/amd64/kubectl
 	KUBECTL_HASH := 63f1ace419edffa1f5ebb64a6c63597afd48f8d94a61d4fb44e820139adbbe54
-	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v1.18.0/golangci-lint-1.18.0-darwin-amd64.tar.gz
-	GOLANGCILINT_HASH := 37402c4606de3bc0116c9fc4d1ce18f2e90f55069ece1fa20f1b1622e0b54da3
+	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v$(GOLANGCILINT_VERSION)/golangci-lint-$(GOLANGCILINT_VERSION)-darwin-amd64.tar.gz
+	GOLANGCILINT_HASH := 2b2713ec5007e67883aa501eebb81f22abfab0cf0909134ba90f60a066db3760
 endif
 
 $(BINDIR)/mockgen:
@@ -37,12 +38,16 @@ $(BINDIR)/kubectl:
 	chmod +x $(BINDIR)/.kubectl
 	mv $(BINDIR)/.kubectl $(BINDIR)/kubectl
 
-$(BINDIR)/golangci-lint:
+.PHONY: $(BINDIR)/golangci-lint
+$(BINDIR)/golangci-lint: $(BINDIR)/golangci-lint-$(GOLANGCILINT_VERSION)
+	@ln -fs golangci-lint-$(GOLANGCILINT_VERSION) $(BINDIR)/golangci-lint
+
+$(BINDIR)/golangci-lint-$(GOLANGCILINT_VERSION):
 	mkdir -p $(BINDIR) $(BINDIR)/.golangci-lint
 	curl --fail -sL -o $(BINDIR)/.golangci-lint.tar.gz $(GOLANGCILINT_URL)
 	echo "$(GOLANGCILINT_HASH)  $(BINDIR)/.golangci-lint.tar.gz" | $(SHASUM)
 	tar xvf $(BINDIR)/.golangci-lint.tar.gz -C $(BINDIR)/.golangci-lint
-	mv $(BINDIR)/.golangci-lint/*/golangci-lint $(BINDIR)/golangci-lint
+	mv $(BINDIR)/.golangci-lint/*/golangci-lint $(BINDIR)/golangci-lint-$(GOLANGCILINT_VERSION)
 	rm -rf $(BINDIR)/.golangci-lint $(BINDIR)/.golangci-lint.tar.gz
 
 depend: $(BINDIR)/mockgen $(BINDIR)/kubectl $(BINDIR)/golangci-lint
