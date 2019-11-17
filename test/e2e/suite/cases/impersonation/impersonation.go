@@ -22,7 +22,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 	It("should error at proxy when impersonation enabled and impersonation is attempted on a request", func() {
 		By("Impersonating as a user")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
-			UserName: "user@example.com",
+			UserName: "foo@example.com",
 		})
 
 		By("Impersonating as a group")
@@ -90,13 +90,13 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	expRespBody := "Impersonation requests are disabled when using kube-oidc-proxy (get pods)"
+	expRespBody := "Impersonation requests are disabled when using kube-oidc-proxy"
 	resp := kErr.Status().Details.Causes[0].Message
 
 	// check body and status code the token was rejected
 	if int(kErr.Status().Code) != http.StatusForbidden ||
 		resp != expRespBody {
-		Expect(fmt.Errorf("expected status code %d with body %q, got= %+v",
+		Expect(fmt.Errorf("expected status code %d with body %q, got=%s",
 			http.StatusForbidden, expRespBody, kErr)).NotTo(HaveOccurred())
 	}
 }
