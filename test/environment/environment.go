@@ -24,7 +24,7 @@ type Environment struct {
 }
 
 func Create(masterNodes, workerNodes int) (*Environment, error) {
-	nodeImage := os.Getenv("KUBE-OIDC-PROXY_K8S_VERSION")
+	nodeImage := os.Getenv("KUBE_OIDC_PROXY_K8S_VERSION")
 	if nodeImage == "" {
 		nodeImage = defaultNodeImage
 	}
