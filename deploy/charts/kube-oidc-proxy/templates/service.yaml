@@ -4,6 +4,10 @@ metadata:
   name: {{ include "kube-oidc-proxy.fullname" . }}
   labels:
 {{ include "kube-oidc-proxy.labels" . | indent 4 }}
+  annotations:
+    {{- range $key, $val := .Values.service.annotations }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
 spec:
   type: {{ .Values.service.type }}
   ports:
