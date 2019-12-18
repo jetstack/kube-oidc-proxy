@@ -14,7 +14,6 @@ import (
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
@@ -47,7 +46,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	kopOptions := new(options.KubeOIDCProxyOptions)
 
-	clientConfigFlags := genericclioptions.NewConfigFlags(true)
+	clientConfigOptions := options.NewClientFlags()
 
 	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
 
@@ -56,6 +55,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Use:  "kube-oidc-proxy",
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+
 			if cmd.Flag("version").Value.String() == "true" {
 				version.PrintVersionAndExit()
 			}
@@ -68,12 +69,18 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
-			// client rest config
-			restConfig, err := rest.InClusterConfig()
-			if err != nil {
+			var restConfig *rest.Config
 
-				// fall back to cli flags if in cluster fails
-				restConfig, err = clientConfigFlags.ToRESTConfig()
+			if clientConfigOptions.ClientFlagsChanged(cmd) {
+				// one or more client flags have been set to use client flag built
+				// config
+				restConfig, err = clientConfigOptions.ToRESTConfig()
+				if err != nil {
+					return err
+				}
+			} else {
+				// no client flags have been set so default to in-cluster config
+				restConfig, err = rest.InClusterConfig()
 				if err != nil {
 					return err
 				}
@@ -145,15 +152,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	oidcfs := namedFlagSets.FlagSet("OIDC")
 	oidcOptions.AddFlags(oidcfs)
 
-	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("secure serving"))
+	ssoptionsWithLB.AddFlags(namedFlagSets.FlagSet("Secure Serving"))
 
-	clientConfigFlags.CacheDir = nil
-	clientConfigFlags.Impersonate = nil
-	clientConfigFlags.ImpersonateGroup = nil
-	clientConfigFlags.AddFlags(namedFlagSets.FlagSet("client"))
+	clientConfigOptions.CacheDir = nil
+	clientConfigOptions.Impersonate = nil
+	clientConfigOptions.ImpersonateGroup = nil
+	clientConfigOptions.AddFlags(namedFlagSets.FlagSet("Client"))
 
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("misc"), cmd.Name())
-	namedFlagSets.FlagSet("misc").Bool("version",
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("Misc"), cmd.Name())
+	namedFlagSets.FlagSet("Misc").Bool("version",
 		false, "Print version information and quit")
 
 	for _, f := range namedFlagSets.FlagSets {
