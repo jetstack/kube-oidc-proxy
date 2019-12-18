@@ -39,19 +39,31 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 	configv1alpha3.SetDefaults_Cluster(conf)
 	conf.Nodes = nil
 
-	for i := 0; i < masterNodes; i++ {
-		conf.Nodes = append(conf.Nodes,
-			configv1alpha3.Node{
-				Image: nodeImage,
-				Role:  configv1alpha3.ControlPlaneRole,
-			})
-	}
-	for i := 0; i < workerNodes; i++ {
-		conf.Nodes = append(conf.Nodes,
-			configv1alpha3.Node{
-				Image: nodeImage,
-				Role:  configv1alpha3.WorkerRole,
-			})
+	// This behviour will be changing soon in later versions of kind.
+	if len(workingNodes) == 0 {
+		for i := 0; i < masterNodes; i++ {
+			conf.Nodes = append(conf.Nodes,
+				configv1alpha3.Node{
+					Image: nodeImage,
+				})
+		}
+
+	} else {
+		for i := 0; i < masterNodes; i++ {
+			conf.Nodes = append(conf.Nodes,
+				configv1alpha3.Node{
+					Image: nodeImage,
+					Role:  configv1alpha3.ControlPlaneRole,
+				})
+		}
+
+		for i := 0; i < workerNodes; i++ {
+			conf.Nodes = append(conf.Nodes,
+				configv1alpha3.Node{
+					Image: nodeImage,
+					Role:  configv1alpha3.WorkerRole,
+				})
+		}
 	}
 
 	conf.Networking.ServiceSubnet = "10.0.0.0/16"
