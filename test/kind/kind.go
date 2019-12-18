@@ -40,7 +40,7 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 	conf.Nodes = nil
 
 	// This behviour will be changing soon in later versions of kind.
-	if len(workingNodes) == 0 {
+	if workerNodes == 0 {
 		for i := 0; i < masterNodes; i++ {
 			conf.Nodes = append(conf.Nodes,
 				configv1alpha3.Node{
