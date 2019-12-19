@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/golang/mock v1.2.0
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
+	github.com/jstemmer/go-junit-report v0.9.1 // indirect
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/sirupsen/logrus v1.4.2

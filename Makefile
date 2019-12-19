@@ -83,9 +83,12 @@ generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)
 
 test: generate verify ## run all go tests
-	go test $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e)
+	mkdir -p artifacts
+	go test -v -bench $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e) | tee artifacts/go-test.stdout
+	cat artifacts/go-test.stdout | go run github.com/jstemmer/go-junit-report > artifacts/junit-go-test.xml
 
 e2e: ## run end to end tests
+	mkdir -p artifacts
 	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go test -timeout 30m -v --count=1 ./test/e2e/suite/.
 
 build: generate ## build kube-oidc-proxy
