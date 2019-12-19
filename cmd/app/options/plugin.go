@@ -1,5 +1,5 @@
 // Copyright Jetstack Ltd. See LICENSE for details.
-package cmd
+package options
 
 import (
 	// This package is required to be imported to register all client

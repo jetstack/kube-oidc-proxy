@@ -7,27 +7,36 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"net"
+	"os"
 	"path/filepath"
 
 	"k8s.io/client-go/util/cert"
 )
 
-type KeyCertPair struct {
-	CertPath string
-	KeyPath  string
-	Cert     []byte
-	Key      *rsa.PrivateKey
+type KeyBundle struct {
+	CertPath  string
+	KeyPath   string
+	CertBytes []byte
+	KeyBytes  []byte
+	Key       *rsa.PrivateKey
 }
 
-func NewTLSSelfSignedCertKey(dir, prefix string) (*KeyCertPair, error) {
-	if prefix == "" {
-		prefix = "kube-oidc-proxy"
-	}
+const (
+	prefix = "kube-oidc-proxy"
+)
 
-	certBytes, keyBytes, err := cert.GenerateSelfSignedCertKey("127.0.0.1", nil, []string{""})
+func NewTLSSelfSignedCertKey(host string, netIPs []net.IP, dnsNames []string) (*KeyBundle, error) {
+	certBytes, keyBytes, err := cert.GenerateSelfSignedCertKey(host, netIPs, dnsNames)
 	if err != nil {
 		return nil, err
 	}
+
+	dir, err := ioutil.TempDir(os.TempDir(), prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
 
 	certPath := filepath.Join(dir, fmt.Sprintf("%s-ca.pem", prefix))
 	keyPath := filepath.Join(dir, fmt.Sprintf("%s-key.pem", prefix))
@@ -52,10 +61,11 @@ func NewTLSSelfSignedCertKey(dir, prefix string) (*KeyCertPair, error) {
 		return nil, err
 	}
 
-	return &KeyCertPair{
-		CertPath: certPath,
-		KeyPath:  keyPath,
-		Cert:     certBytes,
-		Key:      sk,
+	return &KeyBundle{
+		CertPath:  certPath,
+		KeyPath:   keyPath,
+		CertBytes: certBytes,
+		KeyBytes:  keyBytes,
+		Key:       sk,
 	}, nil
 }

@@ -65,7 +65,7 @@ go_fmt:
 	fi
 
 go_vet:
-	go vet
+	go vet ./cmd
 
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 	$(BINDIR)/golangci-lint run
@@ -73,8 +73,9 @@ go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
 clean: ## clean up created files
 	rm -rf \
 		$(BINDIR) \
-		kube-oidc-proxy \
-		pkg/mocks/authenticator.go
+		pkg/mocks/authenticator.go \
+		demo/bin \
+		test/e2e/framework/issuer/bin
 
 verify: depend verify_boilerplate go_fmt go_vet go_lint ## verify code and mod
 
@@ -84,25 +85,11 @@ generate: depend ## generates mocks and assets files
 test: generate verify ## run all go tests
 	go test $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e)
 
-e2e: e2e-1.15 ## run end to end tests
-
-e2e-1.15: build ## run end to end tests for kubernetes version 1.15
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.15.0 go test ./pkg/e2e/. -v --count=1
-
-e2e-1.14: build ## run end to end tests for kubernetes version 1.14
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.14.3 go test ./pkg/e2e/. -v --count=1
-
-e2e-1.13: build ## run end to end tests for kubernetes version 1.13
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.13.7 go test ./pkg/e2e/. -v --count=1
-
-e2e-1.12: build ## run end to end tests for kubernetes version 1.12
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.12.8 go test ./pkg/e2e/. -v --count=1
-
-e2e-1.11: build ## run end to end tests for kubernetes version 1.11
-	KUBE_OIDC_PROXY_NODE_IMAGE=1.11.10 go test ./pkg/e2e/. -v --count=1
+e2e: ## run end to end tests
+	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go test -timeout 30m -v --count=1 ./test/e2e/suite/.
 
 build: generate ## build kube-oidc-proxy
-	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)'
+	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy ./cmd/.
 
 docker_build: generate test build ## build docker image
 	docker build -t kube-oidc-proxy .
@@ -110,3 +97,9 @@ docker_build: generate test build ## build docker image
 all: test build ## runs tests, build
 
 image: all docker_build ## runs tests, build and docker build
+
+dev_cluster_create: ## create dev cluster for development testing
+	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev create
+
+dev_cluster_destroy: ## destroy dev cluster
+	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev destroy

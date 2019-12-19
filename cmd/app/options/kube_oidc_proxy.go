@@ -18,10 +18,10 @@ type KubeOIDCProxyOptions struct {
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&t.Audiences, "token-passthrough-audiences", t.Audiences, ""+
 		"(Alpha) List of the identifiers that the resource server presented with the token "+
-		"identifies as. The resoure server will verify that non OIDC tokens are intended "+
+		"identifies as. The resource server will verify that non OIDC tokens are intended "+
 		"for at least one of the audiences in this list. If no audiences are "+
 		"provided, the audience will default to the audience of the Kubernetes "+
-		"apiserver.")
+		"apiserver. Only used when --token-passthrough is also enabled.")
 
 	fs.BoolVar(&t.Enabled, "token-passthrough", t.Enabled, ""+
 		"(Alpha) Requests with Bearer tokens that fail OIDC validation are tried against "+

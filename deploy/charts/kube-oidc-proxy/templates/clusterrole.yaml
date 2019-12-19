@@ -17,5 +17,7 @@ rules:
   - "authentication.k8s.io"
   resources:
   - "userextras/scopes"
+  - "tokenreviews"
   verbs:
+  - "create"
   - "impersonate"
