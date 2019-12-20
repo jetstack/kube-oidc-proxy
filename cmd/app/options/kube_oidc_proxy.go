@@ -15,6 +15,8 @@ type KubeOIDCProxyOptions struct {
 	TokenPassthrough     TokenPassthroughOptions
 
 	ReadinessProbePort int
+	WatchFiles         []string
+	WatchRefreshPeriod string
 }
 
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
@@ -38,6 +40,12 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
 
 	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
 		"Port to expose readiness probe.")
+
+	fs.StringSliceVar(&k.WatchFiles, "reload-watch-files", nil,
+		"Comma-separated list of files to watch for changes. If a change is "+
+			"detected then send self a SIGHUP signal and exit gracefully.")
+	fs.StringVar(&k.WatchRefreshPeriod, "reload-watch-refresh-period", "60s",
+		"Duration period to test for changes in watched files")
 
 	k.TokenPassthrough.AddFlags(fs)
 }

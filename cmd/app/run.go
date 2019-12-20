@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/server"
@@ -20,6 +21,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util/watch"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
@@ -51,8 +53,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-
 			if cmd.Flag("version").Value.String() == "true" {
 				version.PrintVersionAndExit()
 			}
@@ -61,10 +61,15 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
+			if err := ssoptionsWithLB.Validate(); len(err) > 0 {
+				return fmt.Errorf("%s", err)
+			}
+
 			if ssoptionsWithLB.SecureServingOptions.BindPort == kopOptions.ReadinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
+			var err error
 			var restConfig *rest.Config
 			if clientConfigOptions.ClientFlagsChanged(cmd) {
 				// one or more client flags have been set to use client flag built
@@ -94,6 +99,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			// Initialise Secure Serving Config
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
+				return err
+			}
+
+			if err := watchFiles(kopOptions.WatchFiles,
+				kopOptions.WatchRefreshPeriod); err != nil {
 				return err
 			}
 
@@ -172,4 +182,18 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 	})
 
 	return cmd
+}
+
+func watchFiles(files []string, durationStr string) error {
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		return err
+	}
+
+	if duration < time.Second {
+		return fmt.Errorf("expected reload duration to a second or higher, got=%s",
+			durationStr)
+	}
+
+	return watch.Files(duration, files)
 }
