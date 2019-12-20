@@ -126,8 +126,9 @@ users:
 ```
 
 ## Configuration
- - [Token Passthrough](./docs/tasks/token-passthrough.md)
- - [No Impersonation](./docs/tasks/no-impersonation.md)
+ - [Token Passthrough](./docs/token_passthrough.md)
+ - [No Impersonation](./docs/no_impersonation.md)
+ - [Reload on File Changes](./docs/watch_file_reload.md)
 
 ## Development
 *NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.
