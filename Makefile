@@ -85,7 +85,7 @@ generate: depend ## generates mocks and assets files
 test: generate verify ## run all go tests
 	go test $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e)
 
-e2e: ## run end to end tests
+e2e: depend ## run end to end tests
 	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go test -timeout 30m -v --count=1 ./test/e2e/suite/.
 
 build: generate ## build kube-oidc-proxy
