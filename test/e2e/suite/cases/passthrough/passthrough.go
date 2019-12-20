@@ -114,7 +114,7 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 
 	It("should not error on a valid OIDC token nor a valid ServiceAccount token with passthrough enabled", func() {
 		By("Enabling passthrough with Audience of the API Server")
-		f.DeployProxyWith("--token-passthrough")
+		f.DeployProxyWith([]string{"--token-passthrough"})
 
 		By("A valid OIDC token should respond without error")
 		proxyClient := f.NewProxyClient()

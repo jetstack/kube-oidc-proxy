@@ -54,6 +54,48 @@ func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) 
 	return nil
 }
 
+func (h *Helper) WaitForPodNotReady(namespace, name string, timeout time.Duration) error {
+	log.Infof("Waiting for Pod to become not ready %s/%s", namespace, name)
+
+	err := wait.PollImmediate(time.Second/2, timeout, func() (bool, error) {
+		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		if len(pod.Status.Conditions) == 0 {
+			return true, nil
+		}
+
+		var ready bool
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.PodReady &&
+				cond.Status == corev1.ConditionFalse {
+				ready = true
+				break
+			}
+		}
+
+		if !ready {
+			log.Infof("helper: pod ready %s/%s: %v",
+				pod.Namespace, pod.Name, pod.Status.Conditions)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		kErr := h.Kubectl(namespace).DescribeResource("pod", name)
+		if kErr != nil {
+			err = fmt.Errorf("%s\n%s", err, kErr)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 func (h *Helper) WaitForPodDeletion(namespace, name string, timeout time.Duration) error {
 	log.Infof("Waiting for Pod to be deleted %s/%s", namespace, name)
 

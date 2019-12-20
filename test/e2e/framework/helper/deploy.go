@@ -21,9 +21,8 @@ const (
 	ProxyName  = "kube-oidc-proxy-e2e"
 )
 
-func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
-	oidcKeyBundle *util.KeyBundle, extraArgs ...string) (*util.KeyBundle, string, error) {
-	cnt := corev1.Container{
+func (h *Helper) proxyContainer(issuerURL, clientID string, extraArgs ...string) *corev1.Container {
+	return &corev1.Container{
 		Name:            ProxyName,
 		Image:           ProxyName,
 		ImagePullPolicy: corev1.PullNever,
@@ -71,15 +70,19 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 			PeriodSeconds:       3,
 		},
 	}
+}
 
-	volume := corev1.Volume{
+func (h *Helper) deployProxy(ns *corev1.Namespace, issuerURL, clientID string,
+	oidcKeyBundle *util.KeyBundle, cnt *corev1.Container,
+	volumes []corev1.Volume) (*util.KeyBundle, string, error) {
+	volumes = append(volumes, corev1.Volume{
 		Name: "oidc",
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: "oidc-ca",
 			},
 		},
-	}
+	})
 
 	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -96,7 +99,8 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 		return nil, "", err
 	}
 
-	bundle, appURL, err := h.deployApp(ns.Name, ProxyName, corev1.ServiceTypeNodePort, cnt, volume)
+	bundle, appURL, err := h.deployApp(ns.Name, ProxyName, corev1.ServiceTypeNodePort,
+		cnt, volumes...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -165,7 +169,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 }
 
 func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, string, error) {
-	cnt := corev1.Container{
+	cnt := &corev1.Container{
 		Name:            IssuerName,
 		Image:           IssuerName,
 		ImagePullPolicy: corev1.PullNever,
@@ -198,7 +202,8 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, string, error) {
 	return bundle, appURL, nil
 }
 
-func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, string, error) {
+func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType,
+	container *corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, string, error) {
 	host, appURL := h.appURL(ns, name, "6443")
 
 	var netIPs []net.IP
@@ -270,7 +275,7 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: name,
-			Containers:         []corev1.Container{container},
+			Containers:         []corev1.Container{*container},
 			Volumes: append(volumes,
 				corev1.Volume{
 					Name: "tls",

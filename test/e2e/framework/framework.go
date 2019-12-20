@@ -80,8 +80,8 @@ func (f *Framework) BeforeEach() {
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deploying kube-oidc-proxy")
-	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace,
-		issuerURL, clientID, issuerKeyBundle)
+	proxyKeyBundle, proxyURL, err := f.helper.ReDeployProxy(f.Namespace,
+		issuerURL, clientID, issuerKeyBundle, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	f.issuerURL, f.proxyURL = issuerURL, proxyURL
@@ -110,14 +110,14 @@ func (f *Framework) AfterEach() {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func (f *Framework) DeployProxyWith(extraArgs ...string) {
+func (f *Framework) DeployProxyWith(extraArgs []string, mods ...helper.KubeOIDCProxyModifier) {
 	By("Deleting kube-oidc-proxy deployment")
 	err := f.Helper().DeleteProxy(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
 
-	By(fmt.Sprintf("Deploying kube-oidc-proxy with extra args %s", extraArgs))
-	f.proxyKeyBundle, f.proxyURL, err = f.helper.DeployProxy(f.Namespace, f.issuerURL,
-		clientID, f.issuerKeyBundle, extraArgs...)
+	By(fmt.Sprintf("ReDeploying kube-oidc-proxy with extra args %s", extraArgs))
+	f.proxyKeyBundle, f.proxyURL, err = f.helper.ReDeployProxy(f.Namespace, f.issuerURL,
+		clientID, f.issuerKeyBundle, extraArgs, mods...)
 	Expect(err).NotTo(HaveOccurred())
 }
 
