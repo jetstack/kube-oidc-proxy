@@ -2,7 +2,6 @@
 package helper
 
 import (
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -39,7 +38,5 @@ func (k *Kubectl) Run(args ...string) error {
 	}
 	args = append(baseArgs, args...)
 	cmd := exec.Command(k.kubectl, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
