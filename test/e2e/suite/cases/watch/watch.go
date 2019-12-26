@@ -2,6 +2,7 @@
 package passthrough
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -61,19 +62,28 @@ var _ = framework.CasesDescribe("Watch", func() {
 			}),
 		)
 
+		By("Getting UID of pod")
+		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		podUID := pod.ObjectMeta.UID
+
 		By("Update ConfigMap Data")
 		cm.Data["key-1"] = "this is different data"
 		cm.Data["key-2"] = "this is more different data"
 		_, err = f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Update(cm)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Wait for Proxy to Stop")
-		err = f.Helper().WaitForPodNotReady(f.Namespace.Name, helper.ProxyName, time.Second*20)
+		By("Waiting for proxy to pick up change")
+		time.Sleep(time.Second * 15)
+
+		By("Checking Pod has restarted")
+		pod, err = f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Wait for Proxy to Become Ready Again")
-		err = f.Helper().WaitForPodReady(f.Namespace.Name, helper.ProxyName, time.Second*20)
-		Expect(err).NotTo(HaveOccurred())
+		if podUID == pod.UID {
+			Expect(fmt.Errorf("expected restart of with a new UID: %s", podUID))
+		}
 	})
 
 	It("pod should restart if a mounted Secret that is watched updates its contents", func() {
@@ -119,18 +129,27 @@ var _ = framework.CasesDescribe("Watch", func() {
 			}),
 		)
 
+		By("Getting UID of pod")
+		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		podUID := pod.ObjectMeta.UID
+
 		By("Update Secret Data")
 		sec.Data["key-1"] = []byte("this is different data")
 		sec.Data["key-2"] = []byte("this is more different data")
 		_, err = f.Helper().KubeClient.CoreV1().Secrets(f.Namespace.Name).Update(sec)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Wait for Proxy to Stop")
-		err = f.Helper().WaitForPodNotReady(f.Namespace.Name, helper.ProxyName, time.Second*20)
+		By("Waiting for proxy to pick up change")
+		time.Sleep(time.Second * 15)
+
+		By("Checking Pod has restarted")
+		pod, err = f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Wait for Proxy to Become Ready Again")
-		err = f.Helper().WaitForPodReady(f.Namespace.Name, helper.ProxyName, time.Second*20)
-		Expect(err).NotTo(HaveOccurred())
+		if podUID == pod.UID {
+			Expect(fmt.Errorf("expected restart of with a new UID: %s", podUID))
+		}
 	})
 })
