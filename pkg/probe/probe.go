@@ -11,7 +11,6 @@ import (
 
 	"github.com/heptiolabs/healthcheck"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	//"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/klog"
 )
 
