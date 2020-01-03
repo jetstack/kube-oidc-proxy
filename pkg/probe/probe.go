@@ -2,6 +2,7 @@
 package probe
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -9,30 +10,25 @@ import (
 	"time"
 
 	"github.com/heptiolabs/healthcheck"
-	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+	//"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/klog"
 )
 
 type HealthCheck struct {
 	handler healthcheck.Handler
 
-	oidcAuther *bearertoken.Authenticator
-	req        *http.Request
+	oidcAuther authenticator.Token
+	fakeJWT    string
 
 	ready bool
 }
 
-func Run(port, fakeJWT string, oidcAuther *bearertoken.Authenticator) error {
-	req, err := http.NewRequest("GET", "http://fake", nil)
-	if err != nil {
-		return fmt.Errorf("failed to build fake probe request: %s", err)
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", fakeJWT))
-
+func Run(port, fakeJWT string, oidcAuther authenticator.Token) error {
 	h := &HealthCheck{
 		handler:    healthcheck.NewHandler(),
 		oidcAuther: oidcAuther,
-		req:        req,
+		fakeJWT:    fakeJWT,
 	}
 
 	h.handler.AddReadinessCheck("secure serving", h.Check)
@@ -55,7 +51,7 @@ func (h *HealthCheck) Check() error {
 		return nil
 	}
 
-	_, _, err := h.oidcAuther.AuthenticateRequest(h.req)
+	_, _, err := h.oidcAuther.AuthenticateToken(context.Background(), h.fakeJWT)
 	if err != nil && strings.HasSuffix(err.Error(), "authenticator not initialized") {
 		err = fmt.Errorf("OIDC provider not yet initialized: %s", err)
 		klog.V(4).Infof(err.Error())

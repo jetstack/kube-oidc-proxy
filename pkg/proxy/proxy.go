@@ -11,6 +11,7 @@ import (
 	"time"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
@@ -40,7 +41,8 @@ type Options struct {
 }
 
 type Proxy struct {
-	oidcAuther        *bearertoken.Authenticator
+	oidcRequestAuther *bearertoken.Authenticator
+	tokenAuther       authenticator.Token
 	tokenReviewer     *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
@@ -72,14 +74,13 @@ func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions
 		return nil, err
 	}
 
-	oidcAuther := bearertoken.New(tokenAuther)
-
 	return &Proxy{
 		restConfig:        restConfig,
 		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
 		options:           options,
-		oidcAuther:        oidcAuther,
+		oidcRequestAuther: bearertoken.New(tokenAuther),
+		tokenAuther:       tokenAuther,
 	}, nil
 }
 
@@ -144,7 +145,7 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	reqCpy := utilnet.CloneRequest(req)
 
 	// auth request and handle unauthed
-	info, ok, err := p.oidcAuther.AuthenticateRequest(reqCpy)
+	info, ok, err := p.oidcRequestAuther.AuthenticateRequest(reqCpy)
 	if err != nil {
 
 		// attempt to passthrough request if valid token
@@ -306,6 +307,6 @@ func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTrippe
 }
 
 // Return the proxy OIDC token authenticator
-func (p *Proxy) OIDCAuthenticator() *bearertoken.Authenticator {
-	return p.oidcAuther
+func (p *Proxy) OIDCTokenAuthenticator() authenticator.Token {
+	return p.tokenAuther
 }

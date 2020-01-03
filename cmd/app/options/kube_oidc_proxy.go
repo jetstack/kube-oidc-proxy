@@ -13,6 +13,8 @@ type TokenPassthroughOptions struct {
 type KubeOIDCProxyOptions struct {
 	DisableImpersonation bool
 	TokenPassthrough     TokenPassthroughOptions
+
+	ReadinessProbePort int
 }
 
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
@@ -33,6 +35,9 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&k.DisableImpersonation, "disable-impersonation", k.DisableImpersonation,
 		"(Alpha) Disable the impersonation of authenticated requests. All "+
 			"authenticated requests will be forwarded as is.")
+
+	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
+		"Port to expose readiness probe.")
 
 	k.TokenPassthrough.AddFlags(fs)
 }

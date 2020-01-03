@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	readinessProbePort = 8080
+	appName = "kube-oidc-proxy"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -36,7 +36,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		BindPort:    6443,
 		Required:    true,
 		ServerCert: apiserveroptions.GeneratableKeyCert{
-			PairName:      "kube-oidc-proxy",
+			PairName:      appName,
 			CertDirectory: "/var/run/kubernetes",
 		},
 	}
@@ -48,7 +48,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	// proxy command
 	cmd := &cobra.Command{
-		Use:  "kube-oidc-proxy",
+		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
@@ -61,7 +61,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
+			if ssoptionsWithLB.SecureServingOptions.BindPort == kopOptions.ReadinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
@@ -116,8 +116,8 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			}
 
 			// Start readiness probe
-			if err := probe.Run(strconv.Itoa(readinessProbePort),
-				fakeJWT, p.OIDCAuthenticator()); err != nil {
+			if err := probe.Run(strconv.Itoa(kopOptions.ReadinessProbePort),
+				fakeJWT, p.OIDCTokenAuthenticator()); err != nil {
 				return err
 			}
 

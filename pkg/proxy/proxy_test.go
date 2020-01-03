@@ -257,9 +257,9 @@ func newTestProxy(t *testing.T) *fakeProxy {
 		fakeToken: fakeToken,
 		fakeRT:    fakeRT,
 		Proxy: &Proxy{
-			oidcAuther:      bearertoken.New(fakeToken),
-			clientTransport: fakeRT,
-			options:         new(Options),
+			oidcRequestAuther: bearertoken.New(fakeToken),
+			clientTransport:   fakeRT,
+			options:           new(Options),
 		},
 	}
 }
