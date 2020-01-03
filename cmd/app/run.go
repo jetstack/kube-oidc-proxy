@@ -11,8 +11,6 @@ import (
 	"k8s.io/apiserver/pkg/server"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/term"
-	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
@@ -21,6 +19,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
@@ -47,8 +46,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	clientConfigOptions := options.NewClientFlags()
 
-	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
-
 	// proxy command
 	cmd := &cobra.Command{
 		Use:  "kube-oidc-proxy",
@@ -69,7 +66,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			}
 
 			var restConfig *rest.Config
-
 			if clientConfigOptions.ClientFlagsChanged(cmd) {
 				// one or more client flags have been set to use client flag built
 				// config
@@ -77,6 +73,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				if err != nil {
 					return err
 				}
+
 			} else {
 				// no client flags have been set so default to in-cluster config
 				restConfig, err = rest.InClusterConfig()
@@ -85,7 +82,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// Init token reviewer if enabled
+			// Initialise token reviewer if enabled
 			var tokenReviewer *tokenreview.TokenReview
 			if kopOptions.TokenPassthrough.Enabled {
 				tokenReviewer, err = tokenreview.New(restConfig, kopOptions.TokenPassthrough.Audiences)
@@ -94,7 +91,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// oidc auther from config
+			// Initialise Secure Serving Config
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
 				return err
@@ -105,10 +102,26 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				DisableImpersonation: kopOptions.DisableImpersonation,
 			}
 
-			p := proxy.New(restConfig, oidcOptions,
-				tokenReviewer, secureServingInfo, healthCheck, proxyOptions)
+			// Initialise proxy with OIDC token authenticator
+			p, err := proxy.New(restConfig, oidcOptions,
+				tokenReviewer, secureServingInfo, proxyOptions)
+			if err != nil {
+				return err
+			}
 
-			// run proxy
+			// Create a fake JWT to set up readiness probe
+			fakeJWT, err := util.FakeJWT(oidcOptions.IssuerURL, oidcOptions.APIAudiences)
+			if err != nil {
+				return err
+			}
+
+			// Start readiness probe
+			if err := probe.Run(strconv.Itoa(readinessProbePort),
+				fakeJWT, p.OIDCAuthenticator()); err != nil {
+				return err
+			}
+
+			// Run proxy
 			waitCh, err := p.Run(stopCh)
 			if err != nil {
 				return err

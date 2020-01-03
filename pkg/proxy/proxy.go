@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/square/go-jose.v2"
-	"gopkg.in/square/go-jose.v2/jwt"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
@@ -22,7 +20,6 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
-	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
@@ -44,49 +41,49 @@ type Options struct {
 
 type Proxy struct {
 	oidcAuther        *bearertoken.Authenticator
-	oidcOptions       *options.OIDCAuthenticationOptions
 	tokenReviewer     *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
 	noAuthClientTransport http.RoundTripper
-	healthCheck           *probe.HealthCheck
 
 	options *Options
 }
 
 func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
-	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo, healthCheck *probe.HealthCheck, options *Options) *Proxy {
-	return &Proxy{
-		restConfig:        restConfig,
-		oidcOptions:       oidcOptions,
-		tokenReviewer:     tokenReviewer,
-		secureServingInfo: ssinfo,
-		healthCheck:       healthCheck,
-		options:           options,
-	}
-}
+	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo,
+	options *Options) (*Proxy, error) {
 
-func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
-	// generate oidcAuther from oidc config
-	oidcAuther, err := oidc.New(oidc.Options{
-		APIAudiences:         p.oidcOptions.APIAudiences,
-		CAFile:               p.oidcOptions.CAFile,
-		ClientID:             p.oidcOptions.ClientID,
-		GroupsClaim:          p.oidcOptions.GroupsClaim,
-		GroupsPrefix:         p.oidcOptions.GroupsPrefix,
-		IssuerURL:            p.oidcOptions.IssuerURL,
-		RequiredClaims:       p.oidcOptions.RequiredClaims,
-		SupportedSigningAlgs: p.oidcOptions.SigningAlgs,
-		UsernameClaim:        p.oidcOptions.UsernameClaim,
-		UsernamePrefix:       p.oidcOptions.UsernamePrefix,
+	// generate tokenAuther from oidc config
+	tokenAuther, err := oidc.New(oidc.Options{
+		APIAudiences:         oidcOptions.APIAudiences,
+		CAFile:               oidcOptions.CAFile,
+		ClientID:             oidcOptions.ClientID,
+		GroupsClaim:          oidcOptions.GroupsClaim,
+		GroupsPrefix:         oidcOptions.GroupsPrefix,
+		IssuerURL:            oidcOptions.IssuerURL,
+		RequiredClaims:       oidcOptions.RequiredClaims,
+		SupportedSigningAlgs: oidcOptions.SigningAlgs,
+		UsernameClaim:        oidcOptions.UsernameClaim,
+		UsernamePrefix:       oidcOptions.UsernamePrefix,
 	})
 	if err != nil {
 		return nil, err
 	}
-	p.oidcAuther = bearertoken.New(oidcAuther)
 
+	oidcAuther := bearertoken.New(tokenAuther)
+
+	return &Proxy{
+		restConfig:        restConfig,
+		tokenReviewer:     tokenReviewer,
+		secureServingInfo: ssinfo,
+		options:           options,
+		oidcAuther:        oidcAuther,
+	}, nil
+}
+
+func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	// standard round tripper for proxy to API Server
 	clientRT, err := p.roundTripperForRestConfig(p.restConfig)
 	if err != nil {
@@ -122,37 +119,6 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler := httputil.NewSingleHostReverseProxy(url)
 	proxyHandler.Transport = p
 	proxyHandler.ErrorHandler = p.Error
-
-	// probe for readiness
-	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
-		for {
-			<-ticker.C
-			fr, err := http.NewRequest("GET", "http://fake", nil)
-			if err != nil {
-				klog.Infof("error during readiness check: %v", err)
-				continue
-			}
-			jwt, err := p.fakeJWT()
-			if err != nil {
-				klog.Infof("error during readiness check: %v", err)
-				continue
-			}
-			fr.Header.Set("Authorization", fmt.Sprintf("Bearer %s", jwt))
-
-			_, _, err = p.oidcAuther.AuthenticateRequest(fr)
-			if strings.HasSuffix(err.Error(), "authenticator not initialized") {
-				klog.V(4).Infof("OIDC provider not yet initialized")
-				continue
-			}
-
-			p.healthCheck.SetReady()
-			klog.Info("OIDC provider initialized, proxy ready")
-			klog.V(4).Infof("OIDC provider initialized, readiness check returned error: %+v", err)
-			return
-		}
-
-	}()
 
 	waitCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {
@@ -240,24 +206,6 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// push request through round trippers to the API server
 	return rt.RoundTrip(reqCpy)
-}
-
-// fakeJWT generates a JWT that passes the first offline validity checks. It is
-// used to test if the OIDC provider is initialised
-func (p *Proxy) fakeJWT() (string, error) {
-	key := []byte("secret")
-	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT"))
-	if err != nil {
-		return "", err
-	}
-
-	cl := jwt.Claims{
-		Subject:   "readiness",
-		Issuer:    p.oidcOptions.IssuerURL,
-		NotBefore: jwt.NewNumericDate(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)),
-		Audience:  jwt.Audience(p.oidcOptions.APIAudiences),
-	}
-	return jwt.Signed(sig).Claims(cl).CompactSerialize()
 }
 
 func (p *Proxy) tokenReview(req *http.Request) (*http.Response, error) {
@@ -355,4 +303,9 @@ func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTrippe
 	}
 
 	return clientRT, nil
+}
+
+// Return the proxy OIDC token authenticator
+func (p *Proxy) OIDCAuthenticator() *bearertoken.Authenticator {
+	return p.oidcAuther
 }
