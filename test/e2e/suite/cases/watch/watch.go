@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/helper"
@@ -66,8 +67,6 @@ var _ = framework.CasesDescribe("Watch", func() {
 		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		podUID := pod.ObjectMeta.UID
-
 		By("Update ConfigMap Data")
 		cm.Data["key-1"] = "this is different data"
 		cm.Data["key-2"] = "this is more different data"
@@ -75,15 +74,8 @@ var _ = framework.CasesDescribe("Watch", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for proxy to pick up change")
-		time.Sleep(time.Second * 15)
 
-		By("Checking Pod has restarted")
-		pod, err = f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		if podUID == pod.UID {
-			Expect(fmt.Errorf("expected restart of with a new UID: %s", podUID))
-		}
+		checkPodRestarts(f, pod.UID)
 	})
 
 	It("pod should restart if a mounted Secret that is watched updates its contents", func() {
@@ -133,8 +125,6 @@ var _ = framework.CasesDescribe("Watch", func() {
 		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		podUID := pod.ObjectMeta.UID
-
 		By("Update Secret Data")
 		sec.Data["key-1"] = []byte("this is different data")
 		sec.Data["key-2"] = []byte("this is more different data")
@@ -142,14 +132,31 @@ var _ = framework.CasesDescribe("Watch", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for proxy to pick up change")
-		time.Sleep(time.Second * 15)
 
-		By("Checking Pod has restarted")
-		pod, err = f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		if podUID == pod.UID {
-			Expect(fmt.Errorf("expected restart of with a new UID: %s", podUID))
-		}
+		checkPodRestarts(f, pod.UID)
 	})
 })
+
+func checkPodRestarts(f *framework.Framework, podUID types.UID) {
+	// Continue to check the pod UID until we get a new one since it has restarted
+	var i int
+	for {
+		By("Checking Pod has restarted")
+
+		if i == 15 {
+			Expect(fmt.Errorf("expected restart of pod with a new UID: %s", podUID))
+		}
+
+		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
+		if err != nil {
+			i++
+			continue
+		}
+
+		if podUID == pod.UID {
+			i++
+			time.Sleep(time.Second)
+			continue
+		}
+	}
+}
