@@ -144,7 +144,7 @@ func checkPodRestarts(f *framework.Framework, podUID types.UID) {
 		By("Checking Pod has restarted")
 
 		if i == 15 {
-			Expect(fmt.Errorf("expected restart of pod with a new UID: %s", podUID))
+			Expect(fmt.Errorf("expected restart of pod with a new UID: %s", podUID)).NotTo(HaveOccurred())
 		}
 
 		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
@@ -153,10 +153,12 @@ func checkPodRestarts(f *framework.Framework, podUID types.UID) {
 			continue
 		}
 
-		if podUID == pod.UID {
-			i++
-			time.Sleep(time.Second)
-			continue
+		if podUID != pod.UID {
+			By("Pod has restarted")
+			return
 		}
+
+		i++
+		time.Sleep(time.Second)
 	}
 }

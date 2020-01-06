@@ -7,6 +7,10 @@ Once received, no new connections can be established and a graceful shutdown of
 current connections will take place. This behaviour is based on periodic polling
 of target file mod times.
 
+Once all connections have been shutdown, kube-oidc-proxy with terminate. Note
+that if multiple instances of kube-oidc-proxy are watching the same files then
+they will all terminate at similar times.
+
 To enable files for watching, append a comma separated list of file paths to the
 following flag:
 
