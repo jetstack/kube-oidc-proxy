@@ -67,7 +67,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 					Port: intstr.FromInt(8080),
 				},
 			},
-			InitialDelaySeconds: 9,
+			InitialDelaySeconds: 1,
 			PeriodSeconds:       3,
 		},
 	}

@@ -11,13 +11,16 @@ import (
 	"time"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
 
+	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
@@ -38,7 +41,8 @@ type Options struct {
 }
 
 type Proxy struct {
-	oidcAuther        *bearertoken.Authenticator
+	oidcRequestAuther *bearertoken.Authenticator
+	tokenAuther       authenticator.Token
 	tokenReviewer     *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
 
@@ -49,20 +53,38 @@ type Proxy struct {
 	options *Options
 }
 
-func New(restConfig *rest.Config, oidcAuther *bearertoken.Authenticator,
-	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo, options *Options) *Proxy {
+func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
+	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo,
+	options *Options) (*Proxy, error) {
+
+	// generate tokenAuther from oidc config
+	tokenAuther, err := oidc.New(oidc.Options{
+		APIAudiences:         oidcOptions.APIAudiences,
+		CAFile:               oidcOptions.CAFile,
+		ClientID:             oidcOptions.ClientID,
+		GroupsClaim:          oidcOptions.GroupsClaim,
+		GroupsPrefix:         oidcOptions.GroupsPrefix,
+		IssuerURL:            oidcOptions.IssuerURL,
+		RequiredClaims:       oidcOptions.RequiredClaims,
+		SupportedSigningAlgs: oidcOptions.SigningAlgs,
+		UsernameClaim:        oidcOptions.UsernameClaim,
+		UsernamePrefix:       oidcOptions.UsernamePrefix,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &Proxy{
 		restConfig:        restConfig,
-		oidcAuther:        oidcAuther,
 		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
 		options:           options,
-	}
+		oidcRequestAuther: bearertoken.New(tokenAuther),
+		tokenAuther:       tokenAuther,
+	}, nil
 }
 
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
-	klog.Infof("waiting for oidc provider to become ready...")
-
 	// standard round tripper for proxy to API Server
 	clientRT, err := p.roundTripperForRestConfig(p.restConfig)
 	if err != nil {
@@ -99,16 +121,10 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler.Transport = p
 	proxyHandler.ErrorHandler = p.Error
 
-	// wait for oidc auther to become ready
-	klog.Infof("waiting for oidc provider to become ready...")
-	time.Sleep(10 * time.Second)
-
 	waitCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {
 		return nil, err
 	}
-
-	klog.Infof("proxy ready")
 
 	return waitCh, nil
 }
@@ -129,7 +145,7 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	reqCpy := utilnet.CloneRequest(req)
 
 	// auth request and handle unauthed
-	info, ok, err := p.oidcAuther.AuthenticateRequest(reqCpy)
+	info, ok, err := p.oidcRequestAuther.AuthenticateRequest(reqCpy)
 	if err != nil {
 
 		// attempt to passthrough request if valid token
@@ -288,4 +304,9 @@ func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTrippe
 	}
 
 	return clientRT, nil
+}
+
+// Return the proxy OIDC token authenticator
+func (p *Proxy) OIDCTokenAuthenticator() authenticator.Token {
+	return p.tokenAuther
 }

@@ -2,28 +2,69 @@
 package probe
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
+
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
-func Test_Check(t *testing.T) {
-	port, err := util.FreePort()
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
+type fakeTokenAuthenticator struct {
+	returnErr bool
+}
+
+var _ authenticator.Token = &fakeTokenAuthenticator{}
+
+func (f *fakeTokenAuthenticator) AuthenticateToken(context.Context, string) (*authenticator.Response, bool, error) {
+	if f.returnErr {
+		return nil, false, errors.New("foo bar authenticator not initialized")
 	}
 
-	p := New(port)
-	time.Sleep(time.Second)
+	return nil, false, errors.New("some other error")
+}
+
+func TestRun(t *testing.T) {
+	f := &fakeTokenAuthenticator{
+		returnErr: true,
+	}
+
+	port, err := util.FreePort()
+	if err != nil {
+		t.Error(err.Error())
+		t.FailNow()
+	}
+
+	fakeJWT, err := util.FakeJWT("issuer", nil)
+	if err != nil {
+		t.Error(err.Error())
+		t.FailNow()
+	}
+
+	if err := Run(port, fakeJWT, f); err != nil {
+		t.Error(err.Error())
+		t.FailNow()
+	}
 
 	url := fmt.Sprintf("http://0.0.0.0:%s", port)
 
-	resp, err := http.Get(url + "/ready")
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
+	var resp *http.Response
+	var i int
+
+	for {
+		resp, err = http.Get(url + "/ready")
+		if err == nil {
+			break
+		}
+
+		if i >= 5 {
+			t.Errorf("unexpected error: %s", err)
+			t.FailNow()
+		}
+		i++
 	}
 
 	if resp.StatusCode != 503 {
@@ -31,7 +72,7 @@ func Test_Check(t *testing.T) {
 			503, resp.StatusCode)
 	}
 
-	p.SetReady()
+	f.returnErr = false
 
 	resp, err = http.Get(url + "/ready")
 	if err != nil {
@@ -43,15 +84,18 @@ func Test_Check(t *testing.T) {
 			200, resp.StatusCode)
 	}
 
-	p.SetNotReady()
+	// Once the authenticator has returned with an non-initialised error, then
+	// should always return ready
+
+	f.returnErr = true
 
 	resp, err = http.Get(url + "/ready")
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
-	if resp.StatusCode != 503 {
-		t.Errorf("expected ready probe to be responding and not ready, exp=%d got=%d",
-			503, resp.StatusCode)
+	if resp.StatusCode != 200 {
+		t.Errorf("expected ready probe to be responding and ready, exp=%d got=%d",
+			200, resp.StatusCode)
 	}
 }

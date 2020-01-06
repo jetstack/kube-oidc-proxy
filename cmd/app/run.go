@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/server"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/util/term"
-	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
@@ -22,11 +19,12 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
+	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 	"github.com/jetstack/kube-oidc-proxy/pkg/version"
 )
 
 const (
-	readinessProbePort = 8080
+	appName = "kube-oidc-proxy"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -38,7 +36,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		BindPort:    6443,
 		Required:    true,
 		ServerCert: apiserveroptions.GeneratableKeyCert{
-			PairName:      "kube-oidc-proxy",
+			PairName:      appName,
 			CertDirectory: "/var/run/kubernetes",
 		},
 	}
@@ -48,11 +46,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 
 	clientConfigOptions := options.NewClientFlags()
 
-	healthCheck := probe.New(strconv.Itoa(readinessProbePort))
-
 	// proxy command
 	cmd := &cobra.Command{
-		Use:  "kube-oidc-proxy",
+		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
@@ -65,12 +61,11 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return err
 			}
 
-			if ssoptionsWithLB.SecureServingOptions.BindPort == readinessProbePort {
+			if ssoptionsWithLB.SecureServingOptions.BindPort == kopOptions.ReadinessProbePort {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
 			var restConfig *rest.Config
-
 			if clientConfigOptions.ClientFlagsChanged(cmd) {
 				// one or more client flags have been set to use client flag built
 				// config
@@ -78,6 +73,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				if err != nil {
 					return err
 				}
+
 			} else {
 				// no client flags have been set so default to in-cluster config
 				restConfig, err = rest.InClusterConfig()
@@ -86,24 +82,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// oidc config
-			oidcAuther, err := oidc.New(oidc.Options{
-				APIAudiences:         oidcOptions.APIAudiences,
-				CAFile:               oidcOptions.CAFile,
-				ClientID:             oidcOptions.ClientID,
-				GroupsClaim:          oidcOptions.GroupsClaim,
-				GroupsPrefix:         oidcOptions.GroupsPrefix,
-				IssuerURL:            oidcOptions.IssuerURL,
-				RequiredClaims:       oidcOptions.RequiredClaims,
-				SupportedSigningAlgs: oidcOptions.SigningAlgs,
-				UsernameClaim:        oidcOptions.UsernameClaim,
-				UsernamePrefix:       oidcOptions.UsernamePrefix,
-			})
-			if err != nil {
-				return err
-			}
-
-			// Init token reviewer if enabled
+			// Initialise token reviewer if enabled
 			var tokenReviewer *tokenreview.TokenReview
 			if kopOptions.TokenPassthrough.Enabled {
 				tokenReviewer, err = tokenreview.New(restConfig, kopOptions.TokenPassthrough.Audiences)
@@ -112,8 +91,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				}
 			}
 
-			// oidc auther from config
-			reqAuther := bearertoken.New(oidcAuther)
+			// Initialise Secure Serving Config
 			secureServingInfo := new(server.SecureServingInfo)
 			if err := ssoptionsWithLB.ApplyTo(&secureServingInfo, nil); err != nil {
 				return err
@@ -124,17 +102,30 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				DisableImpersonation: kopOptions.DisableImpersonation,
 			}
 
-			p := proxy.New(restConfig, reqAuther,
+			// Initialise proxy with OIDC token authenticator
+			p, err := proxy.New(restConfig, oidcOptions,
 				tokenReviewer, secureServingInfo, proxyOptions)
-
-			// run proxy
-			waitCh, err := p.Run(stopCh)
 			if err != nil {
 				return err
 			}
 
-			time.Sleep(time.Second * 3)
-			healthCheck.SetReady()
+			// Create a fake JWT to set up readiness probe
+			fakeJWT, err := util.FakeJWT(oidcOptions.IssuerURL, oidcOptions.APIAudiences)
+			if err != nil {
+				return err
+			}
+
+			// Start readiness probe
+			if err := probe.Run(strconv.Itoa(kopOptions.ReadinessProbePort),
+				fakeJWT, p.OIDCTokenAuthenticator()); err != nil {
+				return err
+			}
+
+			// Run proxy
+			waitCh, err := p.Run(stopCh)
+			if err != nil {
+				return err
+			}
 
 			<-waitCh
 

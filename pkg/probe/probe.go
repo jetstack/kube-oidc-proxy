@@ -2,26 +2,32 @@
 package probe
 
 import (
-	"errors"
+	"context"
+	"fmt"
 	"net"
 	"net/http"
-	"sync"
+	"strings"
 	"time"
 
-	"k8s.io/klog"
-
 	"github.com/heptiolabs/healthcheck"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/klog"
 )
 
 type HealthCheck struct {
 	handler healthcheck.Handler
-	mu      sync.Mutex
-	ready   bool
+
+	oidcAuther authenticator.Token
+	fakeJWT    string
+
+	ready bool
 }
 
-func New(port string) *HealthCheck {
+func Run(port, fakeJWT string, oidcAuther authenticator.Token) error {
 	h := &HealthCheck{
-		handler: healthcheck.NewHandler(),
+		handler:    healthcheck.NewHandler(),
+		oidcAuther: oidcAuther,
+		fakeJWT:    fakeJWT,
 	}
 
 	h.handler.AddReadinessCheck("secure serving", h.Check)
@@ -36,30 +42,25 @@ func New(port string) *HealthCheck {
 		}
 	}()
 
-	return h
-}
-
-func (h *HealthCheck) Check() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if !h.ready {
-		return errors.New("not ready")
-	}
-
 	return nil
 }
 
-func (h *HealthCheck) SetReady() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (h *HealthCheck) Check() error {
+	if h.ready {
+		return nil
+	}
+
+	_, _, err := h.oidcAuther.AuthenticateToken(context.Background(), h.fakeJWT)
+	if err != nil && strings.HasSuffix(err.Error(), "authenticator not initialized") {
+		err = fmt.Errorf("OIDC provider not yet initialized: %s", err)
+		klog.V(4).Infof(err.Error())
+		return err
+	}
 
 	h.ready = true
-}
 
-func (h *HealthCheck) SetNotReady() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	klog.Info("OIDC provider initialized, proxy ready")
+	klog.V(4).Infof("OIDC provider initialized, readiness check returned error: %s", err)
 
-	h.ready = false
+	return nil
 }
