@@ -1,7 +1,8 @@
 # Copyright Jetstack Ltd. See LICENSE for details.
-BINDIR   ?= $(CURDIR)/bin
-HACK_DIR ?= hack
-PATH     := $(BINDIR):$(PATH)
+BINDIR    ?= $(CURDIR)/bin
+HACK_DIR  ?= hack
+PATH      := $(BINDIR):$(PATH)
+ARTIFACTS ?= artifacts
 
 export GO111MODULE=on
 
@@ -83,12 +84,12 @@ generate: depend ## generates mocks and assets files
 	go generate $$(go list ./pkg/... ./cmd/...)
 
 test: generate verify ## run all go tests
-	mkdir -p artifacts
-	go test -v -bench $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e) | tee artifacts/go-test.stdout
-	cat artifacts/go-test.stdout | go run github.com/jstemmer/go-junit-report > artifacts/junit-go-test.xml
+	mkdir -p $(ARTIFACTS)
+	go test -v -bench $$(go list ./pkg/... ./cmd/... | grep -v pkg/e2e) | tee $(ARTIFACTS)/go-test.stdout
+	cat $(ARTIFACTS)/go-test.stdout | go run github.com/jstemmer/go-junit-report > $(ARTIFACTS)/junit-go-test.xml
 
 e2e: ## run end to end tests
-	mkdir -p artifacts
+	mkdir -p $(ARTIFACTS)
 	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go test -timeout 30m -v --count=1 ./test/e2e/suite/.
 
 build: generate ## build kube-oidc-proxy

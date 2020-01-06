@@ -2,6 +2,8 @@
 package suite
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -28,6 +30,14 @@ func init() {
 func TestE2E(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 
-	junitReporter := reporters.NewJUnitReporter("../../../artifacts/junit-go-e2e.xml")
+	junitPath := "../../../artifacts"
+	if path := os.Getenv("ARTIFACTS"); path != "" {
+		junitPath = path
+	}
+
+	junitReporter := reporters.NewJUnitReporter(filepath.Join(
+		junitPath,
+		"junit-go-e2e.xml",
+	))
 	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "kube-oidc-proxy e2e suite", []ginkgo.Reporter{junitReporter})
 }
