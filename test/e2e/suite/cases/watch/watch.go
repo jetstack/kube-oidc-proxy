@@ -34,7 +34,7 @@ var _ = framework.CasesDescribe("Watch", func() {
 
 		By("ReDeploying Proxy with watched ConfigMap")
 
-		f.DeployProxyWith([]string{
+		err = f.DeployProxyWith([]string{
 			"--reload-watch-refresh-period=5s",
 			"--reload-watch-files=/configmap/key-1,/configmap/key-2",
 		},
@@ -62,6 +62,7 @@ var _ = framework.CasesDescribe("Watch", func() {
 				},
 			}),
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Getting UID of pod")
 		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})
@@ -94,7 +95,7 @@ var _ = framework.CasesDescribe("Watch", func() {
 
 		By("ReDeploying Proxy with watched Secret")
 
-		f.DeployProxyWith([]string{
+		err = f.DeployProxyWith([]string{
 			"--reload-watch-refresh-period=5s",
 			"--reload-watch-files=/configmap/key-1,/configmap/key-2",
 		},
@@ -120,6 +121,7 @@ var _ = framework.CasesDescribe("Watch", func() {
 				},
 			}),
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Getting UID of pod")
 		pod, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Get(helper.ProxyName, metav1.GetOptions{})

@@ -65,12 +65,13 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 
 	It("should not error at proxy when impersonation is disabled and impersonation is attempted on a request", func() {
 		By("Enabling the disabling of impersonation")
-		f.DeployProxyWith([]string{"--disable-impersonation"})
+		err := f.DeployProxyWith([]string{"--disable-impersonation"})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Should return an Unauthorized response from Kubernetes as it does not
 		// trust the OIDC token we have presented however it has been authenticated
 		// by kube-oidc-proxy.
-		_, err := f.NewProxyClient().CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.NewProxyClient().CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsUnauthorized(err) {
 			Expect(err).NotTo(HaveOccurred())
 		}
