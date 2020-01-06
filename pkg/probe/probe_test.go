@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
@@ -50,14 +49,22 @@ func TestRun(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Wait for probe to become ready
-	time.Sleep(time.Second)
-
 	url := fmt.Sprintf("http://0.0.0.0:%s", port)
 
-	resp, err := http.Get(url + "/ready")
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
+	var resp *http.Response
+	var i int
+
+	for {
+		resp, err = http.Get(url + "/ready")
+		if err == nil {
+			break
+		}
+
+		if i >= 5 {
+			t.Errorf("unexpected error: %s", err)
+			t.FailNow()
+		}
+		i++
 	}
 
 	if resp.StatusCode != 503 {
