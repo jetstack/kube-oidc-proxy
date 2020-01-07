@@ -15,14 +15,16 @@ ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
 	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.14.0/kubecfg-linux-amd64
 	KUBECFG_HASH := bb1455ec70f93d6f0fd344becec2f1617837a879e8363272d3216bf44c04cb2c
+	JSONNET_URL := https://github.com/google/jsonnet/releases/download/v0.14.0/jsonnet-bin-v0.14.0-linux.tar.gz
+	JSONNET_HASH := 30ba7b243ddb24231882ae3aa1930e76b6050bb76b5ccd0d97410b21fb784039
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
 	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.14.0/kubecfg-darwin-amd64
 	KUBECFG_HASH := d448ae2888a28692a20d5ddb29ddae0574f74327611bd5b933092312f8c18fcf
+	JSONNET_URL := https://github.com/google/jsonnet/releases/download/v0.14.0/jsonnet-bin-v0.14.0-osx.tar.gz
+	JSONNET_HASH := e056c7305e8f86c0e2441085d5cdfd29b219ef09d8daae54e9f6d2647dd18d3e
 endif
-JSONNET_URL := https://github.com/google/jsonnet/archive/v0.14.0.tar.gz
-JSONNET_HASH := 7f41cdc4cb366cfc1de3aada926a2f7e640ef025887eb05cdaf8342d6e4e088b
 
 export KUBECONFIG
 
@@ -63,7 +65,7 @@ manifests_validate: depend manifests/$(CLOUD)-config.json ## Use kubecfg to vali
 
 .PHONY: manifests_validate
 jsonnet_fmt: depend ## validate formatting of jsonnet files
-	$(BINDIR)/jsonnet fmt --test $(shell find manifests/components/. manifests/main.jsonnet -name "*.jsonnet")
+	$(BINDIR)/jsonnetfmt --test $(shell find manifests/components/. manifests/main.jsonnet -name "*.jsonnet")
 
 .PHONY: manifests_destroy
 manifests_destroy: depend manifests/$(CLOUD)-config.json ## Use kubecfg to delete manifests
@@ -83,7 +85,7 @@ manifests_restore_certificates: ## restore tls secrets
 verify: jsonnet_fmt ## verify code and vendor
 
 .PHONY: depend
-depend: $(BINDIR)/kubecfg $(BINDIR)/jsonnet
+depend: $(BINDIR)/kubecfg $(BINDIR)/jsonnet $(BINDIR)/jsonnetfmt
 
 .PHONY: clean
 clean: ## clean up created files
@@ -99,7 +101,4 @@ $(BINDIR)/jsonnet:
 	mkdir -p $(BINDIR)
 	curl -sL -o $@.tar.gz $(JSONNET_URL)
 	echo "$(JSONNET_HASH)  $@.tar.gz" | $(SHASUM)
-	cd $(BINDIR) && tar xf jsonnet.tar.gz && rm jsonnet.tar.gz
-	make -C $(BINDIR)/jsonnet-0.14.0
-	mv $(BINDIR)/jsonnet-0.14.0/jsonnet $(BINDIR)/jsonnet
-	rm -rf $(BINDIR)/jsonnet-0.14.0
+	cd $(BINDIR) && tar xvf jsonnet.tar.gz && rm jsonnet.tar.gz
