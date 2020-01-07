@@ -5,7 +5,7 @@ variable "digitalocean_region" {
 }
 
 variable "cluster_version" {
-  default = "1.15.5-do.0"
+  default = "1.16.2-do.1"
 }
 
 module "cluster" {
