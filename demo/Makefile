@@ -71,8 +71,7 @@ manifests_destroy: depend manifests/$(CLOUD)-config.json ## Use kubecfg to delet
 
 .PHONY: manifests_backup_certificates
 manifests_backup_certificates: ## backup tls secrets
-	export SECRETS="$(shell kubectl get secrets -n auth -o 'jsonpath={.items[*].metadata.name}' | tr " " "\n" | grep tls)"
-	kubectl get -n auth secrets -o yaml $(SECRETS) > .backup-certificates-$(CLOUD).yaml.tmp
+	kubectl get -n auth -o yaml $(shell kubectl get secrets -n auth -oname) > .backup-certificates-$(CLOUD).yaml.tmp
 	mv .backup-certificates-$(CLOUD).yaml.tmp .backup-certificates-$(CLOUD).yaml
 
 .PHONY: manifests_restore_certificates
