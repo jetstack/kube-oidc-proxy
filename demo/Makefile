@@ -13,16 +13,16 @@ EXT_VARS := --tla-str cloud=$(CLOUD)
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
-	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.9.1/kubecfg-linux-amd64
-	KUBECFG_HASH := c972b52893794ccd49adfc9d7b69e2d388c0c91c4837e194de7cdf0d67b2baf8
+	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.14.0/kubecfg-linux-amd64
+	KUBECFG_HASH := bb1455ec70f93d6f0fd344becec2f1617837a879e8363272d3216bf44c04cb2c
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
-	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.9.1/kubecfg-darwin-amd64
-	KUBECFG_HASH := 9b6772abc3e2da5add51aa57a2944f77f4c05be49df56087056837aa640fb9c9
+	KUBECFG_URL := https://github.com/ksonnet/kubecfg/releases/download/v0.14.0/kubecfg-darwin-amd64
+	KUBECFG_HASH := d448ae2888a28692a20d5ddb29ddae0574f74327611bd5b933092312f8c18fcf
 endif
-JSONNET_URL := https://github.com/google/jsonnet/archive/v0.12.1.tar.gz
-JSONNET_HASH := 257c6de988f746cc90486d9d0fbd49826832b7a2f0dbdb60a515cc8a2596c950
+JSONNET_URL := https://github.com/google/jsonnet/archive/v0.14.0.tar.gz
+JSONNET_HASH := 7f41cdc4cb366cfc1de3aada926a2f7e640ef025887eb05cdaf8342d6e4e088b
 
 export KUBECONFIG
 
@@ -70,12 +70,13 @@ manifests_destroy: depend manifests/$(CLOUD)-config.json ## Use kubecfg to delet
 	$(BINDIR)/kubecfg $(EXT_VARS) show config.jsonnet | kubectl delete -f - --ignore-not-found
 
 .PHONY: manifests_backup_certificates
-manifests_backup_certificates:
-	kubectl get secrets --all-namespaces -l certmanager.k8s.io/certificate-name -o yaml > .backup-certificates-$(CLOUD).yaml.tmp
+manifests_backup_certificates: ## backup tls secrets
+	export SECRETS="$(shell kubectl get secrets -n auth -o 'jsonpath={.items[*].metadata.name}' | tr " " "\n" | grep tls)"
+	kubectl get -n auth secrets -o yaml $(SECRETS) > .backup-certificates-$(CLOUD).yaml.tmp
 	mv .backup-certificates-$(CLOUD).yaml.tmp .backup-certificates-$(CLOUD).yaml
 
 .PHONY: manifests_restore_certificates
-manifests_restore_certificates:
+manifests_restore_certificates: ## restore tls secrets
 	kubectl create ns auth --dry-run -o yaml | kubectl apply -f -
 	kubectl apply -f .backup-certificates-$(CLOUD).yaml
 
@@ -100,6 +101,6 @@ $(BINDIR)/jsonnet:
 	curl -sL -o $@.tar.gz $(JSONNET_URL)
 	echo "$(JSONNET_HASH)  $@.tar.gz" | $(SHASUM)
 	cd $(BINDIR) && tar xf jsonnet.tar.gz && rm jsonnet.tar.gz
-	make -C $(BINDIR)/jsonnet-0.12.1
-	mv $(BINDIR)/jsonnet-0.12.1/jsonnet $(BINDIR)/jsonnet
-	rm -rf $(BINDIR)/jsonnet-0.12.1
+	make -C $(BINDIR)/jsonnet-0.14.0
+	mv $(BINDIR)/jsonnet-0.14.0/jsonnet $(BINDIR)/jsonnet
+	rm -rf $(BINDIR)/jsonnet-0.14.0
