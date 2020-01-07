@@ -2,15 +2,14 @@
 package suite
 
 import (
-	//"fmt"
-	//"path"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/onsi/ginkgo"
 	ginkgoconfig "github.com/onsi/ginkgo/config"
-
-	//"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/reporters"
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -31,13 +30,14 @@ func init() {
 func TestE2E(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 
-	var r []ginkgo.Reporter
-	//if framework.DefaultConfig.Ginkgo.ReportDirectory != "" {
-	//	r = append(r, reporters.NewJUnitReporter(path.Join(framework.DefaultConfig.Ginkgo.ReportDirectory,
-	//		fmt.Sprintf("junit_%s_%02d.xml",
-	//			framework.DefaultConfig.Ginkgo.ReportPrefix,
-	//			ginkgoconfig.GinkgoConfig.ParallelNode))))
-	//}
+	junitPath := "../../../artifacts"
+	if path := os.Getenv("ARTIFACTS"); path != "" {
+		junitPath = path
+	}
 
-	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "kube-oidc-proxy e2e suite", r)
+	junitReporter := reporters.NewJUnitReporter(filepath.Join(
+		junitPath,
+		"junit-go-e2e.xml",
+	))
+	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "kube-oidc-proxy e2e suite", []ginkgo.Reporter{junitReporter})
 }

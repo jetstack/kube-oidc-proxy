@@ -1,3 +1,4 @@
 /kube-oidc-proxy
 /bin
 /demo/config.jsonnet
+/artifacts/
