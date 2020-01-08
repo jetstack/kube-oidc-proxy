@@ -40,7 +40,7 @@ Directions on how to deploy OIDC authentication with multi-cluster can be found
 
 ### Quickstart
 
-Deployment yamls can be found in `./demo/yaml` and will require configuration to
+Deployment yamls can be found in `./deploy/yaml` and will require configuration to
 an exiting OIDC issuer.
 
 This quickstart demo will assume you have a Kubernetes cluster without OIDC
@@ -54,7 +54,7 @@ This will create it's Deployment, Service Account and required permissions into
 the newly created `kube-oidc-proxy` Namespace.
 
 ```
-$ kubectl apply -f ./demo/yaml/kube-oidc-proxy.yaml
+$ kubectl apply -f ./deploy/yaml/kube-oidc-proxy.yaml
 $ kubectl get all --namespace kube-oidc-proxy
 ```
 
@@ -73,7 +73,7 @@ certificates can be generated through `cert-manager`, more information about
 this project found [here](https://github.com/jetstack/cert-manager).
 
 Next, populate the OIDC authenticator Secret using the secrets given to you
-by your OIDC provider in `./demo/yaml/secrets.yaml`. The OIDC provider CA will be
+by your OIDC provider in `./deploy/yaml/secrets.yaml`. The OIDC provider CA will be
 different depending on which provider you are using. The easiest way to obtain
 the correct certificate bundle is often by opening the providers URL into a
 browser and fetching them there (typically output by clicking the lock icon on
@@ -85,7 +85,7 @@ your address bar). Google's OIDC provider for example requires CAs from both
 Apply the secret manifests.
 
 ```
-kubectl apply -f ./demo/yaml/secrets.yaml
+kubectl apply -f ./deploy/yaml/secrets.yaml
 ```
 
 You can restart the `kube-oidc-proxy` pod to use these new secrets
