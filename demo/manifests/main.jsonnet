@@ -66,16 +66,6 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
   else
     {};
 
-local apply_google_secret(cert_manager) =
-  if std.objectHas(cert_manager, 'service_account_credentials') &&
-     std.objectHas(cert_manager, 'metadata') then
-    kube.Secret(cert_manager.p + 'clouddns-google-credentials') + cert_manager.metadata {
-      data_+: {
-        'credentials.json': cert_manager.service_account_credentials,
-      },
-    }
-  else
-    {};
 
 {
 
@@ -121,12 +111,21 @@ local apply_google_secret(cert_manager) =
   ca_crt:: $.config.ca.crt,
   ca_key:: $.config.ca.key,
 
+  local apply_google_secret(config) =
+    if std.objectHas(config, 'service_account_credentials') then
+      kube.Secret($.cert_manager.p + 'clouddns-google-credentials') + $.cert_manager.metadata {
+        data_+: {
+          'credentials.json': config.service_account_credentials,
+        },
+      }
+    else
+      {},
   cert_manager: cert_manager {
     google_secret: apply_google_secret($.config.cert_manager),
 
     metadata:: {
       metadata+: {
-        namespace: 'kube-system',
+        namespace: 'cert-manager',
       },
     },
     letsencrypt_environment:: 'prod',
