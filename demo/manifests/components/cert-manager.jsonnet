@@ -1,5 +1,6 @@
 local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local cert_manager_manifests = import './cert-manager/cert-manager.json';
+local apiGroup = 'cert-manager.io/v1alpha2';
 
 {
   ca_secret_name:: 'ca-key-pair',
@@ -13,7 +14,7 @@ local cert_manager_manifests = import './cert-manager/cert-manager.json';
   letsencrypt_contact_email:: error 'Letsencrypt contact e-mail is undefined',
 
   // create simple to use certificate resource
-  Certificate(namespace, name, issuer, solver, domains):: kube._Object($.certCRD.spec.group + '/' + $.certCRD.spec.version, $.certCRD.spec.names.kind, name) + {
+  Certificate(namespace, name, issuer, solver, domains):: kube._Object(apiGroup, 'Certificate', name) + {
     metadata+: {
       namespace: namespace,
       name: name,
@@ -36,14 +37,10 @@ local cert_manager_manifests = import './cert-manager/cert-manager.json';
   // Letsencrypt environment (defaults to the production one)
   letsencrypt_environment:: 'prod',
 
-  Issuer(name):: kube._Object('cert-manager.io/v1alpha2', 'Issuer', name) {
+  Issuer(name):: kube._Object(apiGroup, 'Issuer', name) {
   },
 
-  ClusterIssuer(name):: kube._Object('cert-manager.io/v1alpha2', 'ClusterIssuer', name) {
-  },
-
-  certCRD: kube.CustomResourceDefinition('cert-manager.io', 'v1alpha2', 'Certificate') {
-    spec+: { names+: { shortNames+: ['cert', 'certs'] } },
+  ClusterIssuer(name):: kube._Object(apiGroup, 'ClusterIssuer', name) {
   },
 
   deploy: cert_manager_manifests,
