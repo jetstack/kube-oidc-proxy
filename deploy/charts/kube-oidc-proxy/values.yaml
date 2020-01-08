@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: quay.io/jetstack/kube-oidc-proxy
-  tag: v0.1.1
+  tag: v0.2.0
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
