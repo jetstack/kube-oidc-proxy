@@ -67,7 +67,8 @@ local apply_ca_issuer(ca_crt, ca_key, obj) =
     {};
 
 local apply_google_secret(cert_manager) =
-  if std.objectHas(cert_manager, 'service_account_credentials') then
+  if std.objectHas(cert_manager, 'service_account_credentials') &&
+     std.objectHas(cert_manager, 'metadata') then
     kube.Secret(cert_manager.p + 'clouddns-google-credentials') + cert_manager.metadata {
       data_+: {
         'credentials.json': cert_manager.service_account_credentials,

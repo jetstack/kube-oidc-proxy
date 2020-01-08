@@ -58,8 +58,8 @@ local READINESS_PORT = 8080;
       },
       {
         apiGroups: ['authentication.k8s.io'],
-        resources: ['userextras/scopes'],
-        verbs: ['impersonate'],
+        resources: ['userextras/scopes', 'tokenreviews'],
+        verbs: ['impersonate', 'create'],
       },
     ],
   },
@@ -117,6 +117,7 @@ local READINESS_PORT = 8080;
                 '--oidc-groups-claim=' + $.config.oidc.groupsClaim,
                 '--oidc-client-id=$(OIDC_CLIENT_ID)',
                 '--oidc-issuer-url=$(OIDC_ISSUER_URL)',
+                '--token-passthrough',
               ] + if std.objectHas($.config.oidc, 'caFile') then
                 ['--oidc-ca-file=' + $.config.oidc.caFile]
               else

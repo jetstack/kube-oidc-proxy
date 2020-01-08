@@ -1,8 +1,6 @@
 local kube = import '../vendor/kube-prod-runtime/lib/kube.libsonnet';
 local cert_manager_manifests = import './cert-manager/cert-manager.json';
 
-local CERT_MANAGER_IMAGE = '';
-
 {
   ca_secret_name:: 'ca-key-pair',
 
@@ -38,13 +36,13 @@ local CERT_MANAGER_IMAGE = '';
   // Letsencrypt environment (defaults to the production one)
   letsencrypt_environment:: 'prod',
 
-  Issuer(name):: kube._Object('certmanager.k8s.io/v1alpha1', 'Issuer', name) {
+  Issuer(name):: kube._Object('cert-manager.io/v1alpha2', 'Issuer', name) {
   },
 
-  ClusterIssuer(name):: kube._Object('certmanager.k8s.io/v1alpha1', 'ClusterIssuer', name) {
+  ClusterIssuer(name):: kube._Object('cert-manager.io/v1alpha2', 'ClusterIssuer', name) {
   },
 
-  certCRD: kube.CustomResourceDefinition('certmanager.k8s.io', 'v1alpha1', 'Certificate') {
+  certCRD: kube.CustomResourceDefinition('cert-manager.io', 'v1alpha2', 'Certificate') {
     spec+: { names+: { shortNames+: ['cert', 'certs'] } },
   },
 
