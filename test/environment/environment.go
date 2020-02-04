@@ -74,7 +74,7 @@ func (e *Environment) KubeClient() *kubernetes.Clientset {
 	return e.kind.KubeClient()
 }
 
-func (e *Environment) KubeConfigPath() string {
+func (e *Environment) KubeConfigPath() (string, error) {
 	return e.kind.KubeConfigPath()
 }
 
@@ -90,7 +90,7 @@ func (e *Environment) Node(name string) (*nodes.Node, error) {
 
 	var node *nodes.Node
 	for _, n := range ns {
-		if n.Name() == name {
+		if n.String() == name {
 			node = &n
 			break
 		}

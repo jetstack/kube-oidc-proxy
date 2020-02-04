@@ -32,8 +32,14 @@ func create() {
 	env, err := environment.Create(1, 1)
 	errExit(err)
 
-	fmt.Printf("dev environment created.\nexport KUBECONFIG=%s\n",
-		env.KubeConfigPath())
+	fmt.Printf("dev environment created.\n")
+	kubeconfig, err := env.KubeConfigPath()
+	if err != nil {
+		fmt.Printf("failed to determine kubeconfig path: %s", err)
+		return
+	}
+
+	fmt.Printf("export KUBECONFIG=%s", kubeconfig)
 }
 
 func destroy() {

@@ -13,16 +13,19 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	configv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
+	configv1alpha4 "sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 	"sigs.k8s.io/kind/pkg/cluster"
-	"sigs.k8s.io/kind/pkg/cluster/create"
 	"sigs.k8s.io/kind/pkg/cluster/nodes"
+)
+
+const (
+	clusterName = "kube-oidc-proxy-e2e"
 )
 
 type Kind struct {
 	rootPath string
 
-	ctx        *cluster.Context
+	provider   *cluster.Provider
 	restConfig *rest.Config
 	client     *kubernetes.Clientset
 }
@@ -32,18 +35,17 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 
 	k := &Kind{
 		rootPath: rootPath,
-		ctx:      cluster.NewContext("kube-oidc-proxy-e2e"),
 	}
 
-	conf := new(configv1alpha3.Cluster)
-	configv1alpha3.SetDefaults_Cluster(conf)
+	conf := new(configv1alpha4.Cluster)
+	configv1alpha4.SetDefaultsCluster(conf)
 	conf.Nodes = nil
 
 	// This behviour will be changing soon in later versions of kind.
 	if workerNodes == 0 {
 		for i := 0; i < masterNodes; i++ {
 			conf.Nodes = append(conf.Nodes,
-				configv1alpha3.Node{
+				configv1alpha4.Node{
 					Image: nodeImage,
 				})
 		}
@@ -51,17 +53,17 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 	} else {
 		for i := 0; i < masterNodes; i++ {
 			conf.Nodes = append(conf.Nodes,
-				configv1alpha3.Node{
+				configv1alpha4.Node{
 					Image: nodeImage,
-					Role:  configv1alpha3.ControlPlaneRole,
+					Role:  configv1alpha4.ControlPlaneRole,
 				})
 		}
 
 		for i := 0; i < workerNodes; i++ {
 			conf.Nodes = append(conf.Nodes,
-				configv1alpha3.Node{
+				configv1alpha4.Node{
 					Image: nodeImage,
-					Role:  configv1alpha3.WorkerRole,
+					Role:  configv1alpha4.WorkerRole,
 				})
 		}
 	}
@@ -69,13 +71,21 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 	conf.Networking.ServiceSubnet = "10.0.0.0/16"
 
 	// create kind cluster
-	log.Infof("kind: creating kind cluster %q", k.ctx.Name())
-	if err := k.ctx.Create(create.WithV1Alpha3(conf)); err != nil {
-		return nil, fmt.Errorf("failed to create cluster: %s", err)
+	log.Infof("kind: creating kind cluster %q", clusterName)
+	k.provider = cluster.NewProvider()
+	if err := k.provider.Create(
+		clusterName,
+		cluster.CreateWithV1Alpha4Config(conf),
+	); err != nil {
+		return nil, err
 	}
 
 	// generate rest config to kind cluster
-	kubeconfig := k.ctx.KubeConfigPath()
+	kubeconfig, err := k.provider.KubeConfig(clusterName, false)
+	if err != nil {
+		return nil, err
+	}
+
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, k.errDestroy(fmt.Errorf("failed to build kind rest client: %s", err))
@@ -96,31 +106,29 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 		return nil, k.errDestroy(fmt.Errorf("failed to wait for DNS pods to become ready: %s", err))
 	}
 
-	log.Infof("kind: cluster ready %q", k.ctx.Name())
+	log.Infof("kind: cluster ready %q", clusterName)
 
 	return k, nil
 }
 
 func DeleteCluster(name string) error {
-	ok, err := cluster.IsKnown(name)
+	provider := cluster.NewProvider()
+
+	kubeconfig, err := provider.KubeConfig(clusterName, false)
 	if err != nil {
 		return err
 	}
 
-	if !ok {
-		return fmt.Errorf("cluster unknown: %q", name)
-	}
-
-	return cluster.NewContext(name).Delete()
+	return provider.Delete(clusterName, kubeconfig)
 }
 
 func (k *Kind) Destroy() error {
-	log.Infof("kind: destroying cluster %q", k.ctx.Name())
-	if err := k.ctx.Delete(); err != nil {
+	log.Infof("kind: destroying cluster %q", clusterName)
+	if err := DeleteCluster(clusterName); err != nil {
 		return fmt.Errorf("failed to delete kind cluster: %s", err)
 	}
 
-	log.Infof("kind: destroyed cluster %q", k.ctx.Name())
+	log.Infof("kind: destroyed cluster %q", clusterName)
 
 	return nil
 }
@@ -129,12 +137,12 @@ func (k *Kind) KubeClient() *kubernetes.Clientset {
 	return k.client
 }
 
-func (k *Kind) KubeConfigPath() string {
-	return k.ctx.KubeConfigPath()
+func (k *Kind) KubeConfigPath() (string, error) {
+	return k.provider.KubeConfig(clusterName, false)
 }
 
 func (k *Kind) Nodes() ([]nodes.Node, error) {
-	return k.ctx.ListNodes()
+	return k.provider.ListNodes(clusterName)
 }
 
 func (k *Kind) errDestroy(err error) error {

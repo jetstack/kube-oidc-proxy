@@ -23,7 +23,12 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		log.Fatalf("Error provisioning environment: %v", err)
 	}
 
-	cfg.KubeConfigPath = env.KubeConfigPath()
+	kubeconfig, err := env.KubeConfigPath()
+	if err != nil {
+		log.Fatalf("Failed to determine kubeconfig file: %s", err)
+	}
+
+	cfg.KubeConfigPath = kubeconfig
 	cfg.Kubectl = filepath.Join(env.RootPath(), "bin", "kubectl")
 	cfg.RepoRoot = env.RootPath()
 	cfg.Environment = env
