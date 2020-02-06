@@ -2,6 +2,7 @@
 package kind
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
 )
 
 func (k *Kind) LoadKubeOIDCProxy() error {
@@ -60,29 +62,29 @@ func (k *Kind) loadImage(binPath, mainPath, image, dockerfilePath string) error 
 		return err
 	}
 
-	//nodes, err := k.ctx.ListNodes()
-	//if err != nil {
-	//	return err
-	//}
+	nodes, err := k.Nodes()
+	if err != nil {
+		return err
+	}
 
-	//b, err := ioutil.ReadFile(imageArchive)
-	//if err != nil {
-	//	return err
-	//}
+	b, err := ioutil.ReadFile(imageArchive)
+	if err != nil {
+		return err
+	}
 
-	//for _, node := range nodes {
-	//	log.Infof("kind: loading image %q to node %q", image, node.Name())
-	//	r := bytes.NewBuffer(b)
-	//	if err := node.LoadImageArchive(r); err != nil {
-	//		return err
-	//	}
+	for _, node := range nodes {
+		log.Infof("kind: loading image %q to node %q", image, node.String())
+		r := bytes.NewBuffer(b)
+		if err := nodeutils.LoadImageArchive(node, r); err != nil {
+			return err
+		}
 
-	//	err := node.Command("mkdir", "-p", "/tmp/kube-oidc-proxy").Run()
-	//	if err != nil {
-	//		return fmt.Errorf("failed to create directory %q: %s",
-	//			"/tmp/kube-oidc-proxy", err)
-	//	}
-	//}
+		err := node.Command("mkdir", "-p", "/tmp/kube-oidc-proxy").Run()
+		if err != nil {
+			return fmt.Errorf("failed to create directory %q: %s",
+				"/tmp/kube-oidc-proxy", err)
+		}
+	}
 
 	return nil
 }

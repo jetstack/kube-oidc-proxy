@@ -3,6 +3,9 @@ package kind
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -81,12 +84,16 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 	}
 
 	// generate rest config to kind cluster
-	kubeconfig, err := k.provider.KubeConfig(clusterName, false)
+	kubeconfigData, err := k.provider.KubeConfig(clusterName, false)
 	if err != nil {
 		return nil, err
 	}
 
-	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err := ioutil.WriteFile(k.KubeConfigPath(), []byte(kubeconfigData), 0600); err != nil {
+		return nil, err
+	}
+
+	restConfig, err := clientcmd.BuildConfigFromFlags("", k.KubeConfigPath())
 	if err != nil {
 		return nil, k.errDestroy(fmt.Errorf("failed to build kind rest client: %s", err))
 	}
@@ -128,6 +135,10 @@ func (k *Kind) Destroy() error {
 		return fmt.Errorf("failed to delete kind cluster: %s", err)
 	}
 
+	if err := os.Remove(k.KubeConfigPath()); err != nil {
+		return fmt.Errorf("failed to delete kubeconfig file: %s", err)
+	}
+
 	log.Infof("kind: destroyed cluster %q", clusterName)
 
 	return nil
@@ -137,8 +148,8 @@ func (k *Kind) KubeClient() *kubernetes.Clientset {
 	return k.client
 }
 
-func (k *Kind) KubeConfigPath() (string, error) {
-	return k.provider.KubeConfig(clusterName, false)
+func (k *Kind) KubeConfigPath() string {
+	return filepath.Join(os.TempDir(), "kube-oidc-proxy-e2e")
 }
 
 func (k *Kind) Nodes() ([]nodes.Node, error) {

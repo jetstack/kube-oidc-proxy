@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "1.16.1"
+	defaultNodeImage = "1.17.0"
 	defaultRootPath  = "../../."
 )
 
@@ -74,7 +74,7 @@ func (e *Environment) KubeClient() *kubernetes.Clientset {
 	return e.kind.KubeClient()
 }
 
-func (e *Environment) KubeConfigPath() (string, error) {
+func (e *Environment) KubeConfigPath() string {
 	return e.kind.KubeConfigPath()
 }
 
