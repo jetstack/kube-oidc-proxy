@@ -10,7 +10,6 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/tools v0.0.0-20190621195816-6e04913cbbac // indirect
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	k8s.io/api v0.17.0
@@ -21,9 +20,4 @@ require (
 	k8s.io/component-base v0.17.0
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/kind v0.7.0
-)
-
-replace (
-	github.com/golang/mock => github.com/golang/mock v1.3.1
-	k8s.io/client-go => k8s.io/client-go v0.0.0-20200131194155-0cdd283dfd7a
 )
