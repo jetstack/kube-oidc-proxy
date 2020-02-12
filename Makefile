@@ -4,6 +4,8 @@ HACK_DIR  ?= hack
 PATH      := $(BINDIR):$(PATH)
 ARTIFACTS ?= artifacts
 
+SHELL = /bin/bash -o pipefail
+
 export GO111MODULE=on
 
 help:  ## display this help
