@@ -400,3 +400,88 @@ func Test_RoundTrip(t *testing.T) {
 		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
 	}
 }
+
+func TestExtraHeadersOptions(t *testing.T) {
+	remoteAddr := "8.8.8.8"
+
+	tests := map[string]struct {
+		options  *Options
+		expExtra map[string][]string
+	}{
+		"if no extra headers set or client IP enabled then expect no extras": {
+			options: &Options{
+				ExtraUserHeaders:                nil,
+				ExtraUserHeadersClientIPEnabled: false,
+			},
+			expExtra: nil,
+		},
+		"if extra headers set but no client IP enabled then should return added extras": {
+			options: &Options{
+				ExtraUserHeaders: map[string][]string{
+					"foo": []string{"a", "b"},
+					"bar": []string{"c", "d", "e"},
+				},
+				ExtraUserHeadersClientIPEnabled: false,
+			},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Foo": []string{"a", "b"},
+				"Impersonate-Extra-Bar": []string{"c", "d", "e"},
+			},
+		},
+		"if no extra headers set but client IP enabled then should return added client IP": {
+			options: &Options{
+				ExtraUserHeaders:                nil,
+				ExtraUserHeadersClientIPEnabled: true,
+			},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Remote-Client-Ip": []string{"8.8.8.8"},
+			},
+		},
+		"if extra headers set and client IP enabled then should return extra headers and client IP": {
+			options: &Options{
+				ExtraUserHeaders: map[string][]string{
+					"foo": []string{"a", "b"},
+					"bar": []string{"c", "d", "e"},
+				},
+				ExtraUserHeadersClientIPEnabled: true,
+			},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Foo":              []string{"a", "b"},
+				"Impersonate-Extra-Bar":              []string{"c", "d", "e"},
+				"Impersonate-Extra-Remote-Client-Ip": []string{"8.8.8.8"},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			p := newTestProxy(t)
+			p.options = test.options
+
+			req := &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+				RemoteAddr: remoteAddr,
+			}
+
+			authResponse := &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   "a-user",
+					Groups: []string{authuser.AllAuthenticated},
+				},
+			}
+
+			p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
+
+			p.fakeRT.expUser = "a-user"
+			p.fakeRT.expGroup = []string{authuser.AllAuthenticated}
+			p.fakeRT.expExtra = test.expExtra
+
+			_, err := p.RoundTrip(req)
+			if err != nil {
+				t.Errorf("got unexpected error: %s", err)
+			}
+		})
+	}
+}
