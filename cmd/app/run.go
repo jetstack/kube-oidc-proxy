@@ -100,6 +100,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			proxyOptions := &proxy.Options{
 				TokenReview:          kopOptions.TokenPassthrough.Enabled,
 				DisableImpersonation: kopOptions.DisableImpersonation,
+
+				ExtraUserHeaders:                kopOptions.ExtraHeaderOptions.ExtraUserHeaders,
+				ExtraUserHeadersClientIPEnabled: kopOptions.ExtraHeaderOptions.EnableClientIPExtraUserHeader,
 			}
 
 			// Initialise proxy with OIDC token authenticator
