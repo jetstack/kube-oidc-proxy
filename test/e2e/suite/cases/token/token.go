@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -27,8 +28,11 @@ var _ = framework.CasesDescribe("Token", func() {
 		expectProxyUnauthorized(f, []byte("bad token"))
 
 		By("Wrong issuer should error")
+		badURL, err := url.Parse("incorrect-issuer.io")
+		Expect(err).NotTo(HaveOccurred())
+
 		expectProxyUnauthorized(f, f.Helper().NewTokenPayload(
-			"incorrect-issuer", f.ClientID(), time.Now().Add(time.Minute)))
+			badURL, f.ClientID(), time.Now().Add(time.Minute)))
 
 		By("Wrong audience should error")
 		expectProxyUnauthorized(f, f.Helper().NewTokenPayload(
@@ -42,7 +46,7 @@ var _ = framework.CasesDescribe("Token", func() {
 		client := f.NewProxyClient()
 
 		// If does not return with Kubernetes forbidden error then error
-		_, err := client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -61,14 +65,14 @@ func expectProxyUnauthorized(f *framework.Framework, tokenPayload []byte) {
 	target := fmt.Sprintf("%s/api/v1/namespaces/%s/pods",
 		proxyConfig.Host, f.Namespace.Name)
 
-	body, statusCode, err := requester.Get(target)
+	body, resp, err := requester.Get(target)
 	body = bytes.TrimSpace(body)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Check body and status code the token was rejected
-	if statusCode != http.StatusUnauthorized ||
+	if resp.StatusCode != http.StatusUnauthorized ||
 		!bytes.Equal(body, []byte("Unauthorized")) {
 		Expect(fmt.Errorf("expected status code %d with body Unauthorized, got= %d %q",
-			http.StatusUnauthorized, statusCode, body)).NotTo(HaveOccurred())
+			http.StatusUnauthorized, resp.StatusCode, body)).NotTo(HaveOccurred())
 	}
 }

@@ -54,6 +54,10 @@ func Create(masterNodes, workerNodes int) (*Environment, error) {
 		return nil, err
 	}
 
+	if err := k.LoadFakeAPIServer(); err != nil {
+		return nil, err
+	}
+
 	return &Environment{
 		kind:  k,
 		rPath: rPath,

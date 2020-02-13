@@ -70,7 +70,7 @@ func (i *Issuer) Run(bindAddress, listenPort string) (<-chan struct{}, error) {
 
 		err := http.ServeTLS(l, i, i.certFile, i.keyFile)
 		if err != nil {
-			log.Errorf("stoped serving TLS (%s): %s", serveAddr, err)
+			log.Errorf("stopped serving TLS (%s): %s", serveAddr, err)
 		}
 	}()
 

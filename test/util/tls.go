@@ -26,6 +26,8 @@ const (
 	prefix = "kube-oidc-proxy"
 )
 
+//TODO: move me to test/util
+
 func NewTLSSelfSignedCertKey(host string, netIPs []net.IP, dnsNames []string) (*KeyBundle, error) {
 	certBytes, keyBytes, err := cert.GenerateSelfSignedCertKey(host, netIPs, dnsNames)
 	if err != nil {

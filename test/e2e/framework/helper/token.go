@@ -6,16 +6,17 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	jose "gopkg.in/square/go-jose.v2"
 	"k8s.io/client-go/rest"
 
-	"github.com/jetstack/kube-oidc-proxy/test/e2e/util"
+	"github.com/jetstack/kube-oidc-proxy/test/util"
 )
 
 func (h *Helper) NewValidRestConfig(issuerBundle, proxyBundle *util.KeyBundle,
-	issuerURL, proxyURL, clientID string) (*rest.Config, error) {
+	issuerURL, proxyURL *url.URL, clientID string) (*rest.Config, error) {
 
 	// Valid token with exp in 10 minutes
 	tokenPayload := h.NewTokenPayload(issuerURL, clientID,
@@ -31,7 +32,7 @@ func (h *Helper) NewValidRestConfig(issuerBundle, proxyBundle *util.KeyBundle,
 	}
 
 	return &rest.Config{
-		Host:        proxyURL,
+		Host:        proxyURL.String(),
 		Burst:       rest.DefaultBurst,
 		BearerToken: signedToken,
 		Transport: &http.Transport{
@@ -64,7 +65,7 @@ func (h *Helper) SignToken(issuerBundle *util.KeyBundle, tokenPayload []byte) (s
 	return signedToken, nil
 }
 
-func (h *Helper) NewTokenPayload(issuerURL, clientID string, exp time.Time) []byte {
+func (h *Helper) NewTokenPayload(issuerURL *url.URL, clientID string, exp time.Time) []byte {
 	// Valid for 10 mins
 	return []byte(fmt.Sprintf(`{
 	"iss":"%s",

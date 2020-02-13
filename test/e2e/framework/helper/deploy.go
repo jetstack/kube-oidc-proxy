@@ -4,6 +4,7 @@ package helper
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -13,16 +14,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/jetstack/kube-oidc-proxy/test/e2e/util"
+	"github.com/jetstack/kube-oidc-proxy/test/util"
 )
 
 const (
-	IssuerName = "oidc-issuer-e2e"
-	ProxyName  = "kube-oidc-proxy-e2e"
+	ProxyName         = "kube-oidc-proxy-e2e"
+	IssuerName        = "oidc-issuer-e2e"
+	FakeAPIServerName = "fake-apiserver-e2e"
 )
 
-func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
-	oidcKeyBundle *util.KeyBundle, extraArgs ...string) (*util.KeyBundle, string, error) {
+func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID string,
+	oidcKeyBundle *util.KeyBundle, extraVolumes []corev1.Volume, extraArgs ...string) (*util.KeyBundle, *url.URL, error) {
 	cnt := corev1.Container{
 		Name:            ProxyName,
 		Image:           ProxyName,
@@ -72,14 +74,22 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 		},
 	}
 
-	volume := corev1.Volume{
+	for _, v := range extraVolumes {
+		cnt.VolumeMounts = append(cnt.VolumeMounts, corev1.VolumeMount{
+			MountPath: fmt.Sprintf("/%s", v.Name),
+			Name:      v.Name,
+			ReadOnly:  true,
+		})
+	}
+
+	volumes := append(extraVolumes, corev1.Volume{
 		Name: "oidc",
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: "oidc-ca",
 			},
 		},
-	}
+	})
 
 	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -93,12 +103,12 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 
 	_, err := h.KubeClient.CoreV1().Secrets(ns.Name).Create(sec)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
-	bundle, appURL, err := h.deployApp(ns.Name, ProxyName, corev1.ServiceTypeNodePort, cnt, volume)
+	bundle, appURL, err := h.deployApp(ns.Name, ProxyName, corev1.ServiceTypeNodePort, cnt, volumes...)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	pTrue := true
@@ -132,7 +142,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 		},
 	})
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	_, err = h.KubeClient.RbacV1().ClusterRoleBindings().Create(
@@ -158,13 +168,13 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL, clientID string,
 			},
 		})
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	return bundle, appURL, nil
 }
 
-func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, string, error) {
+func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, *url.URL, error) {
 	cnt := corev1.Container{
 		Name:            IssuerName,
 		Image:           IssuerName,
@@ -192,20 +202,53 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, string, error) {
 
 	bundle, appURL, err := h.deployApp(ns, IssuerName, corev1.ServiceTypeClusterIP, cnt)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	return bundle, appURL, nil
 }
 
-func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, string, error) {
+func (h *Helper) DeployFakeAPIServer(ns string) (*util.KeyBundle, *url.URL, error) {
+	cnt := corev1.Container{
+		Name:            FakeAPIServerName,
+		Image:           FakeAPIServerName,
+		ImagePullPolicy: corev1.PullNever,
+		Args: []string{
+			"fake-apiserver",
+			"--secure-port=6443",
+			"--tls-cert-file=/tls/cert.pem",
+			"--tls-private-key-file=/tls/key.pem",
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			corev1.VolumeMount{
+				MountPath: "/tls",
+				Name:      "tls",
+				ReadOnly:  true,
+			},
+		},
+		Ports: []corev1.ContainerPort{
+			corev1.ContainerPort{
+				ContainerPort: 6443,
+			},
+		},
+	}
+
+	bundle, appURL, err := h.deployApp(ns, FakeAPIServerName, corev1.ServiceTypeClusterIP, cnt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return bundle, appURL, nil
+}
+
+func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, *url.URL, error) {
 	host, appURL := h.appURL(ns, name, "6443")
 
 	var netIPs []net.IP
 	if serviceType == corev1.ServiceTypeNodePort {
 		nodes, err := h.KubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 
 		for _, n := range nodes.Items {
@@ -219,7 +262,7 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 
 	keyBundle, err := util.NewTLSSelfSignedCertKey(host, netIPs, nil)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	svc := &corev1.Service{
@@ -286,7 +329,7 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 
 	svc, err = h.KubeClient.CoreV1().Services(ns).Create(svc)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	if len(netIPs) > 0 {
@@ -296,31 +339,40 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 
 	_, err = h.KubeClient.CoreV1().Secrets(ns).Create(sec)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	_, err = h.KubeClient.CoreV1().ServiceAccounts(ns).Create(sa)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	_, err = h.KubeClient.CoreV1().Pods(ns).Create(pod)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	if err := h.WaitForPodReady(ns, name, time.Second*20); err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
-	return keyBundle, appURL, nil
+	appNetURL, err := url.Parse(appURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse app url %q: %s",
+			appURL, err)
+	}
+
+	return keyBundle, appNetURL, nil
 }
 
+func (h *Helper) DeleteProxy(ns string) error {
+	return h.deleteApp(ns, ProxyName, "oidc-ca")
+}
 func (h *Helper) DeleteIssuer(ns string) error {
 	return h.deleteApp(ns, IssuerName)
 }
-func (h *Helper) DeleteProxy(ns string) error {
-	return h.deleteApp(ns, ProxyName, "oidc-ca")
+func (h *Helper) DeleteFakeAPIServer(ns string) error {
+	return h.deleteApp(ns, FakeAPIServerName)
 }
 
 func (h *Helper) deleteApp(ns, name string, extraSecrets ...string) error {

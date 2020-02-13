@@ -23,7 +23,7 @@ var _ = framework.CasesDescribe("Readiness Probe", func() {
 
 		By("Deploying the Proxy should never become ready as the issuer is unavailable")
 		_, _, err := f.Helper().DeployProxy(f.Namespace, f.IssuerURL(),
-			f.ClientID(), f.IssuerKeyBundle())
+			f.ClientID(), f.IssuerKeyBundle(), nil)
 		// Error should occur (not ready)
 		Expect(err).To(HaveOccurred())
 	})
