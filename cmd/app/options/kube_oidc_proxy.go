@@ -53,10 +53,11 @@ func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (e *ExtraHeaderOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&e.EnableClientIPExtraUserHeader, "extra-user-header-client-ip", e.EnableClientIPExtraUserHeader, ""+
-		"(Alpha) If enabled, proxied requests will include the extra user header "+
-		"'Impersonate-Extra-Remote-Client-IP: <REMOTE_ADDR>' where <REMOTE_ADDR> "+
-		"will contain the remote address of the source of the request.")
+	fs.BoolVar(&e.EnableClientIPExtraUserHeader, "extra-user-header-client-ip",
+		e.EnableClientIPExtraUserHeader, "(Alpha) If enabled, proxied requests will "+
+			"include the extra user header 'Impersonate-Extra-Remote-Client-IP: "+
+			"<REMOTE_ADDR>' where <REMOTE_ADDR> will contain the remote address of "+
+			"the source of the request.")
 
 	fs.Var(flags.NewStringToStringSliceValue(&e.ExtraUserHeaders), "extra-user-headers",
 		"(Alpha) A list of key value pairs of extra user headers to pass with "+

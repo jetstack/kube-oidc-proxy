@@ -211,12 +211,18 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// If client IP user extra header option set then append the remote client
 	// address.
 	if p.options.ExtraUserHeadersClientIPEnabled {
+		klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
+			UserHeaderClientIPKey, req.RemoteAddr, reqCpy.RemoteAddr)
+
 		extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], req.RemoteAddr)
 	}
 
 	// Add custom extra user headers to impersonation request
 	for k, vs := range p.options.ExtraUserHeaders {
 		for _, v := range vs {
+			klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
+				k, v, reqCpy.RemoteAddr)
+
 			extra[k] = append(extra[k], v)
 		}
 	}
