@@ -2,8 +2,13 @@
 package fake
 
 import (
+	"context"
+
 	authv1 "k8s.io/api/authentication/v1"
+	clientauthv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 )
+
+var _ clientauthv1.TokenReviewInterface = &FakeReviewer{}
 
 type FakeReviewer struct {
 	CreateFn func(*authv1.TokenReview) (*authv1.TokenReview, error)
@@ -18,6 +23,10 @@ func New() *FakeReviewer {
 }
 
 func (f *FakeReviewer) Create(req *authv1.TokenReview) (*authv1.TokenReview, error) {
+	return f.CreateFn(req)
+}
+
+func (f *FakeReviewer) CreateContext(ctx context.Context, req *authv1.TokenReview) (*authv1.TokenReview, error) {
 	return f.CreateFn(req)
 }
 

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "1.16.1"
+	defaultNodeImage = "1.17.0"
 	defaultRootPath  = "../../."
 )
 
@@ -90,7 +90,7 @@ func (e *Environment) Node(name string) (*nodes.Node, error) {
 
 	var node *nodes.Node
 	for _, n := range ns {
-		if n.Name() == name {
+		if n.String() == name {
 			node = &n
 			break
 		}

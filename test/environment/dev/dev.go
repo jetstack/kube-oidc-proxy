@@ -32,8 +32,8 @@ func create() {
 	env, err := environment.Create(1, 1)
 	errExit(err)
 
-	fmt.Printf("dev environment created.\nexport KUBECONFIG=%s\n",
-		env.KubeConfigPath())
+	fmt.Printf("dev environment created.\n")
+	fmt.Printf("export KUBECONFIG=%s\n", env.KubeConfigPath())
 }
 
 func destroy() {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
 )
 
 func (k *Kind) LoadKubeOIDCProxy() error {
@@ -61,7 +62,7 @@ func (k *Kind) loadImage(binPath, mainPath, image, dockerfilePath string) error 
 		return err
 	}
 
-	nodes, err := k.ctx.ListNodes()
+	nodes, err := k.Nodes()
 	if err != nil {
 		return err
 	}
@@ -72,9 +73,9 @@ func (k *Kind) loadImage(binPath, mainPath, image, dockerfilePath string) error 
 	}
 
 	for _, node := range nodes {
-		log.Infof("kind: loading image %q to node %q", image, node.Name())
+		log.Infof("kind: loading image %q to node %q", image, node.String())
 		r := bytes.NewBuffer(b)
-		if err := node.LoadImageArchive(r); err != nil {
+		if err := nodeutils.LoadImageArchive(node, r); err != nil {
 			return err
 		}
 
