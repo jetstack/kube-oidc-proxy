@@ -16,8 +16,11 @@ import (
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/user"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/server"
 
+	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 )
 
 type fakeProxy struct {
@@ -110,13 +113,22 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 	return nil, nil
 }
 
-func tryError(t *testing.T, expCode int, err error) *fakeRW {
-	p := new(Proxy)
+func tryError(t *testing.T, expCode int, sendErr error) *fakeRW {
+	auditor, err := audit.New(new(options.AuditOptions), "0.0.0.0:80",
+		new(server.SecureServingInfo))
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		t.FailNow()
+	}
+
+	p := Proxy{
+		auditor: auditor,
+	}
 
 	frw := newFakeRW()
 	fr := newFakeR()
 
-	p.Error(frw, fr, err)
+	p.Error(frw, fr, sendErr)
 
 	code, err := strconv.Atoi(frw.header.Get("StatusCode"))
 	if err != nil {
@@ -259,7 +271,7 @@ func newTestProxy(t *testing.T) *fakeProxy {
 		Proxy: &Proxy{
 			oidcRequestAuther: bearertoken.New(fakeToken),
 			clientTransport:   fakeRT,
-			options:           new(Options),
+			config:            new(Config),
 		},
 	}
 }
