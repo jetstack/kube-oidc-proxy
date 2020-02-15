@@ -5,14 +5,15 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/util/flags"
+	cliflag "k8s.io/component-base/cli/flag"
 )
 
 type KubeOIDCProxyOptions struct {
 	DisableImpersonation bool
 	ReadinessProbePort   int
 
-	TokenPassthrough   TokenPassthroughOptions
 	ExtraHeaderOptions ExtraHeaderOptions
+	TokenPassthrough   TokenPassthroughOptions
 }
 
 type TokenPassthroughOptions struct {
@@ -26,7 +27,11 @@ type ExtraHeaderOptions struct {
 	ExtraUserHeaders map[string][]string
 }
 
-func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
+func NewKubeOIDCProxyOptions(nfs *cliflag.NamedFlagSets) *KubeOIDCProxyOptions {
+	return new(KubeOIDCProxyOptions).AddFlags(nfs.FlagSet("Kube-OIDC-Proxy"))
+}
+
+func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) *KubeOIDCProxyOptions {
 	fs.BoolVar(&k.DisableImpersonation, "disable-impersonation", k.DisableImpersonation,
 		"(Alpha) Disable the impersonation of authenticated requests. All "+
 			"authenticated requests will be forwarded as is.")
@@ -36,6 +41,8 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
 
 	k.TokenPassthrough.AddFlags(fs)
 	k.ExtraHeaderOptions.AddFlags(fs)
+
+	return k
 }
 
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
