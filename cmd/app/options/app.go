@@ -3,18 +3,36 @@ package options
 
 import (
 	"github.com/spf13/pflag"
+	cliflag "k8s.io/component-base/cli/flag"
 )
-
-type TokenPassthroughOptions struct {
-	Audiences []string
-	Enabled   bool
-}
 
 type KubeOIDCProxyOptions struct {
 	DisableImpersonation bool
 	TokenPassthrough     TokenPassthroughOptions
 
 	ReadinessProbePort int
+}
+
+type TokenPassthroughOptions struct {
+	Audiences []string
+	Enabled   bool
+}
+
+func NewKubeOIDCProxyOptions(nfs *cliflag.NamedFlagSets) *KubeOIDCProxyOptions {
+	return new(KubeOIDCProxyOptions).AddFlags(nfs.FlagSet("Kube-OIDC-Proxy"))
+}
+
+func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) *KubeOIDCProxyOptions {
+	fs.BoolVar(&k.DisableImpersonation, "disable-impersonation", k.DisableImpersonation,
+		"(Alpha) Disable the impersonation of authenticated requests. All "+
+			"authenticated requests will be forwarded as is.")
+
+	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
+		"Port to expose readiness probe.")
+
+	k.TokenPassthrough.AddFlags(fs)
+
+	return k
 }
 
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
@@ -29,15 +47,4 @@ func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
 		"(Alpha) Requests with Bearer tokens that fail OIDC validation are tried against "+
 		"the API server using the Token Review endpoint. If successful, the request "+
 		"is sent on as is, with no impersonation.")
-}
-
-func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&k.DisableImpersonation, "disable-impersonation", k.DisableImpersonation,
-		"(Alpha) Disable the impersonation of authenticated requests. All "+
-			"authenticated requests will be forwarded as is.")
-
-	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
-		"Port to expose readiness probe.")
-
-	k.TokenPassthrough.AddFlags(fs)
 }

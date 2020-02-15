@@ -22,6 +22,10 @@ type OIDCAuthenticationOptions struct {
 	RequiredClaims map[string]string
 }
 
+func NewOIDCAuthenticationOptions(nfs *cliflag.NamedFlagSets) *OIDCAuthenticationOptions {
+	return new(OIDCAuthenticationOptions).AddFlags(nfs.FlagSet("OIDC"))
+}
+
 func (o *OIDCAuthenticationOptions) Validate() error {
 	if o != nil && (len(o.IssuerURL) > 0) != (len(o.ClientID) > 0) {
 		return fmt.Errorf("oidc-issuer-url and oidc-client-id should be specified together")
@@ -30,7 +34,7 @@ func (o *OIDCAuthenticationOptions) Validate() error {
 	return nil
 }
 
-func (o *OIDCAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
+func (o *OIDCAuthenticationOptions) AddFlags(fs *pflag.FlagSet) *OIDCAuthenticationOptions {
 	fs.StringSliceVar(&o.APIAudiences, "api-audiences", o.APIAudiences, ""+
 		"Identifiers of the API. This can be used as an additional list of "+
 		"identifiers that exist in the target audiences of requests when "+
@@ -72,4 +76,6 @@ func (o *OIDCAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 		"A key=value pair that describes a required claim in the ID Token. "+
 		"If set, the claim is verified to be present in the ID Token with a matching value. "+
 		"Repeat this flag to specify multiple claims.")
+
+	return o
 }
