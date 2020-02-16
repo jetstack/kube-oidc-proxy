@@ -20,7 +20,7 @@ const (
 type Environment struct {
 	kind *kind.Kind
 
-	rPath string
+	rootPath string
 }
 
 func Create(masterNodes, workerNodes int) (*Environment, error) {
@@ -30,18 +30,12 @@ func Create(masterNodes, workerNodes int) (*Environment, error) {
 	}
 	nodeImage = fmt.Sprintf("kindest/node:v%s", nodeImage)
 
-	rootPath := os.Getenv("KUBE_OIDC_PROXY_ROOT_PATH")
-	if rootPath == "" {
-		rootPath = defaultRootPath
-	}
-
-	rPath, err := filepath.Abs(rootPath)
+	rootPath, err := RootPath()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path %q: %s",
-			rootPath, err)
+		return nil, err
 	}
 
-	k, err := kind.New(rPath, nodeImage, masterNodes, workerNodes)
+	k, err := kind.New(rootPath, nodeImage, masterNodes, workerNodes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kind cluster: %s", err)
 	}
@@ -59,8 +53,8 @@ func Create(masterNodes, workerNodes int) (*Environment, error) {
 	}
 
 	return &Environment{
-		kind:  k,
-		rPath: rPath,
+		kind:     k,
+		rootPath: rootPath,
 	}, nil
 }
 
@@ -83,7 +77,7 @@ func (e *Environment) KubeConfigPath() string {
 }
 
 func (e *Environment) RootPath() string {
-	return e.rPath
+	return e.rootPath
 }
 
 func (e *Environment) Node(name string) (*nodes.Node, error) {
@@ -105,4 +99,19 @@ func (e *Environment) Node(name string) (*nodes.Node, error) {
 	}
 
 	return node, nil
+}
+
+func RootPath() (string, error) {
+	rootPath := os.Getenv("KUBE_OIDC_PROXY_ROOT_PATH")
+	if rootPath == "" {
+		rootPath = defaultRootPath
+	}
+
+	rootPath, err := filepath.Abs(rootPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path %q: %s",
+			rootPath, err)
+	}
+
+	return rootPath, nil
 }

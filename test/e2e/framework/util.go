@@ -12,6 +12,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	clientID = "kube-oidc-proxy-e2e-client_id"
+)
+
 // CreateKubeNamespace creates a new Kubernetes Namespace for a test.
 func (f *Framework) CreateKubeNamespace(baseName string) (*corev1.Namespace, error) {
 	ns := &corev1.Namespace{
