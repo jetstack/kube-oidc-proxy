@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -260,7 +261,7 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 		},
 	}
 
-	pod := &corev1.Pod{
+	deploy := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: ns,
@@ -268,19 +269,34 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 				"app": name,
 			},
 		},
-		Spec: corev1.PodSpec{
-			ServiceAccountName: name,
-			Containers:         []corev1.Container{container},
-			Volumes: append(volumes,
-				corev1.Volume{
-					Name: "tls",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: name,
-						},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": name,
 					},
 				},
-			),
+
+				Spec: corev1.PodSpec{
+					ServiceAccountName: name,
+					Containers:         []corev1.Container{container},
+					Volumes: append(volumes,
+						corev1.Volume{
+							Name: "tls",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: name,
+								},
+							},
+						},
+					),
+				},
+			},
 		},
 	}
 
@@ -304,12 +320,12 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 		return nil, "", err
 	}
 
-	_, err = h.KubeClient.CoreV1().Pods(ns).Create(pod)
+	_, err = h.KubeClient.AppsV1().Deployments(ns).Create(deploy)
 	if err != nil {
 		return nil, "", err
 	}
 
-	if err := h.WaitForPodReady(ns, name, time.Second*20); err != nil {
+	if err := h.WaitForDeploymentReady(ns, name, time.Second*20); err != nil {
 		return nil, "", err
 	}
 
@@ -324,7 +340,7 @@ func (h *Helper) DeleteProxy(ns string) error {
 }
 
 func (h *Helper) deleteApp(ns, name string, extraSecrets ...string) error {
-	err := h.KubeClient.CoreV1().Pods(ns).Delete(name, nil)
+	err := h.KubeClient.AppsV1().Deployments(ns).Delete(name, nil)
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
@@ -343,10 +359,6 @@ func (h *Helper) deleteApp(ns, name string, extraSecrets ...string) error {
 
 	err = h.KubeClient.CoreV1().ServiceAccounts(ns).Delete(name, nil)
 	if err != nil && !k8sErrors.IsNotFound(err) {
-		return err
-	}
-
-	if err := h.WaitForPodDeletion(ns, name, time.Second*30); err != nil {
 		return err
 	}
 

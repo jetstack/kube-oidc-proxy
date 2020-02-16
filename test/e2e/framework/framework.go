@@ -3,6 +3,7 @@ package framework
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,10 +19,6 @@ import (
 )
 
 var DefaultConfig = &config.Config{}
-
-const (
-	clientID = "kube-oidc-proxy-e1e-client_id"
-)
 
 type Framework struct {
 	BaseName string
@@ -104,15 +101,14 @@ func (f *Framework) AfterEach() {
 	By("Deleting test namespace")
 	err = f.DeleteKubeNamespace(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
-
-	By("Waiting for test namespace to no longer exist")
-	err = f.WaitForKubeNamespaceNotExist(f.Namespace.Name)
-	Expect(err).NotTo(HaveOccurred())
 }
 
 func (f *Framework) DeployProxyWith(extraArgs ...string) {
 	By("Deleting kube-oidc-proxy deployment")
 	err := f.Helper().DeleteProxy(f.Namespace.Name)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = f.Helper().WaitForDeploymentToDelete(f.Namespace.Name, helper.ProxyName, time.Second*30)
 	Expect(err).NotTo(HaveOccurred())
 
 	By(fmt.Sprintf("Deploying kube-oidc-proxy with extra args %s", extraArgs))
