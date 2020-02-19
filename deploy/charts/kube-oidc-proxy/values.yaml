@@ -58,7 +58,6 @@ tokenPassthrough:
 # https://github.com/jetstack/kube-oidc-proxy/blob/master/docs/tasks/extra-impersonation-headers.md
 extraImpersonationHeaders:
   clientIP: false
-  headers: #{}
   #headers: key1=foo,key2=bar,key1=bar
 
 

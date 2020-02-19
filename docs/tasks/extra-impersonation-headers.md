@@ -14,7 +14,8 @@ extra header:
 
 Proxied requests will then contain the header
 `Impersonate-Extra-Remote-Client-Ip: <REMOTE_ADDR>` where  `<REMOTE_ADDR>` is
-the address of the client that made the request.
+the address of the source connection of the request. Note that this IP address
+may not be the real client IP address when the request is being proxied.
 
 # Extra User Headers
 
