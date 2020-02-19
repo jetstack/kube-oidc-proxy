@@ -30,16 +30,16 @@ func (r *Requester) RoundTrip(req *http.Request) (*http.Response, error) {
 	return r.transport.RoundTrip(req)
 }
 
-func (r *Requester) Get(target string) ([]byte, int, error) {
+func (r *Requester) Get(target string) ([]byte, *http.Response, error) {
 	resp, err := r.client.Get(target)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 
-	return body, resp.StatusCode, nil
+	return body, resp, nil
 }

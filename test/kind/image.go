@@ -4,6 +4,7 @@ package kind
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -27,6 +28,15 @@ func (k *Kind) LoadIssuer() error {
 	dockerfilePath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "oidc-issuer-e2e"
+
+	return k.loadImage(binPath, mainPath, image, dockerfilePath)
+}
+
+func (k *Kind) LoadFakeAPIServer() error {
+	binPath := filepath.Join(k.rootPath, "./test/e2e/framework/fake-apiserver/bin/fake-apiserver")
+	dockerfilePath := filepath.Join(k.rootPath, "./test/e2e/framework/fake-apiserver")
+	mainPath := filepath.Join(dockerfilePath, "cmd")
+	image := "fake-apiserver-e2e"
 
 	return k.loadImage(binPath, mainPath, image, dockerfilePath)
 }
@@ -90,11 +100,15 @@ func (k *Kind) loadImage(binPath, mainPath, image, dockerfilePath string) error 
 }
 
 func (k *Kind) runCmd(command string, args ...string) error {
+	return k.runCmdWithOut(os.Stdout, command, args...)
+}
+
+func (k *Kind) runCmdWithOut(w io.Writer, command string, args ...string) error {
 	log.Infof("kind: running command '%s %s'", command, strings.Join(args, " "))
 	cmd := exec.Command(command, args...)
 
 	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = w
 	cmd.Env = append(cmd.Env,
 		"GO111MODULE=on", "CGO_ENABLED=0", "HOME="+os.Getenv("HOME"),
 		"PATH="+os.Getenv("PATH"))

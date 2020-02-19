@@ -54,6 +54,13 @@ tokenPassthrough:
   enabled: false
   audiences: []
 
+# To add extra impersonation headers
+# https://github.com/jetstack/kube-oidc-proxy/blob/master/docs/tasks/extra-impersonation-headers.md
+extraImpersonationHeaders:
+  clientIP: false
+  #headers: key1=foo,key2=bar,key1=bar
+
+
 ingress:
   enabled: false
   annotations: {}

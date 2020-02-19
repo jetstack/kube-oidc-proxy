@@ -3,6 +3,7 @@ package framework
 
 import (
 	"fmt"
+	"net/url"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,7 +15,7 @@ import (
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/config"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/helper"
-	"github.com/jetstack/kube-oidc-proxy/test/e2e/util"
+	"github.com/jetstack/kube-oidc-proxy/test/util"
 )
 
 var DefaultConfig = &config.Config{}
@@ -35,7 +36,7 @@ type Framework struct {
 	helper *helper.Helper
 
 	issuerKeyBundle, proxyKeyBundle *util.KeyBundle
-	issuerURL, proxyURL             string
+	issuerURL, proxyURL             *url.URL
 }
 
 func NewDefaultFramework(baseName string) *Framework {
@@ -81,7 +82,7 @@ func (f *Framework) BeforeEach() {
 
 	By("Deploying kube-oidc-proxy")
 	proxyKeyBundle, proxyURL, err := f.helper.DeployProxy(f.Namespace,
-		issuerURL, clientID, issuerKeyBundle)
+		issuerURL, clientID, issuerKeyBundle, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	f.issuerURL, f.proxyURL = issuerURL, proxyURL
@@ -110,14 +111,14 @@ func (f *Framework) AfterEach() {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func (f *Framework) DeployProxyWith(extraArgs ...string) {
+func (f *Framework) DeployProxyWith(extraVolumes []corev1.Volume, extraArgs ...string) {
 	By("Deleting kube-oidc-proxy deployment")
 	err := f.Helper().DeleteProxy(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
 
 	By(fmt.Sprintf("Deploying kube-oidc-proxy with extra args %s", extraArgs))
 	f.proxyKeyBundle, f.proxyURL, err = f.helper.DeployProxy(f.Namespace, f.issuerURL,
-		clientID, f.issuerKeyBundle, extraArgs...)
+		clientID, f.issuerKeyBundle, extraVolumes, extraArgs...)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -133,11 +134,11 @@ func (f *Framework) ProxyKeyBundle() *util.KeyBundle {
 	return f.proxyKeyBundle
 }
 
-func (f *Framework) IssuerURL() string {
+func (f *Framework) IssuerURL() *url.URL {
 	return f.issuerURL
 }
 
-func (f *Framework) ProxyURL() string {
+func (f *Framework) ProxyURL() *url.URL {
 	return f.proxyURL
 }
 

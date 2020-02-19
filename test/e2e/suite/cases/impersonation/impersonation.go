@@ -65,7 +65,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 
 	It("should not error at proxy when impersonation is disabled and impersonation is attempted on a request", func() {
 		By("Enabling the disabling of impersonation")
-		f.DeployProxyWith("--disable-impersonation")
+		f.DeployProxyWith(nil, "--disable-impersonation")
 
 		// Should return an Unauthorized response from Kubernetes as it does not
 		// trust the OIDC token we have presented however it has been authenticated

@@ -51,8 +51,6 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 		Use:  appName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-
 			if cmd.Flag("version").Value.String() == "true" {
 				version.PrintVersionAndExit()
 			}
@@ -65,6 +63,7 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 				return errors.New("unable to securely serve on port 8080, used by readiness prob")
 			}
 
+			var err error
 			var restConfig *rest.Config
 			if clientConfigOptions.ClientFlagsChanged(cmd) {
 				// one or more client flags have been set to use client flag built
@@ -100,6 +99,9 @@ func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
 			proxyOptions := &proxy.Options{
 				TokenReview:          kopOptions.TokenPassthrough.Enabled,
 				DisableImpersonation: kopOptions.DisableImpersonation,
+
+				ExtraUserHeaders:                kopOptions.ExtraHeaderOptions.ExtraUserHeaders,
+				ExtraUserHeadersClientIPEnabled: kopOptions.ExtraHeaderOptions.EnableClientIPExtraUserHeader,
 			}
 
 			// Initialise proxy with OIDC token authenticator

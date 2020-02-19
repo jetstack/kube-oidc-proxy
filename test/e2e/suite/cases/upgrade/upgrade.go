@@ -263,13 +263,13 @@ func newRestConfig(f *framework.Framework) *rest.Config {
 	Expect(err).NotTo(HaveOccurred())
 
 	return &rest.Config{
-		Host: f.ProxyURL(),
+		Host: f.ProxyURL().Host,
 		AuthProvider: &clientcmdapi.AuthProviderConfig{
 			Name: "oidc",
 			Config: map[string]string{
 				"client-id":      f.ClientID(),
 				"id-token":       signedToken,
-				"idp-issuer-url": f.IssuerURL(),
+				"idp-issuer-url": f.IssuerURL().String(),
 			},
 		},
 		TLSClientConfig: rest.TLSClientConfig{

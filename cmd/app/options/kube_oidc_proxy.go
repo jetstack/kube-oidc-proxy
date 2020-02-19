@@ -3,18 +3,39 @@ package options
 
 import (
 	"github.com/spf13/pflag"
+
+	"github.com/jetstack/kube-oidc-proxy/pkg/util/flags"
 )
+
+type KubeOIDCProxyOptions struct {
+	DisableImpersonation bool
+	ReadinessProbePort   int
+
+	TokenPassthrough   TokenPassthroughOptions
+	ExtraHeaderOptions ExtraHeaderOptions
+}
 
 type TokenPassthroughOptions struct {
 	Audiences []string
 	Enabled   bool
 }
 
-type KubeOIDCProxyOptions struct {
-	DisableImpersonation bool
-	TokenPassthrough     TokenPassthroughOptions
+type ExtraHeaderOptions struct {
+	EnableClientIPExtraUserHeader bool
 
-	ReadinessProbePort int
+	ExtraUserHeaders map[string][]string
+}
+
+func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&k.DisableImpersonation, "disable-impersonation", k.DisableImpersonation,
+		"(Alpha) Disable the impersonation of authenticated requests. All "+
+			"authenticated requests will be forwarded as is.")
+
+	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
+		"Port to expose readiness probe.")
+
+	k.TokenPassthrough.AddFlags(fs)
+	k.ExtraHeaderOptions.AddFlags(fs)
 }
 
 func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
@@ -31,13 +52,15 @@ func (t *TokenPassthroughOptions) AddFlags(fs *pflag.FlagSet) {
 		"is sent on as is, with no impersonation.")
 }
 
-func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&k.DisableImpersonation, "disable-impersonation", k.DisableImpersonation,
-		"(Alpha) Disable the impersonation of authenticated requests. All "+
-			"authenticated requests will be forwarded as is.")
+func (e *ExtraHeaderOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&e.EnableClientIPExtraUserHeader, "extra-user-header-client-ip",
+		e.EnableClientIPExtraUserHeader, "(Alpha) If enabled, proxied requests will "+
+			"include the extra user header 'Impersonate-Extra-Remote-Client-IP: "+
+			"<REMOTE_ADDR>' where <REMOTE_ADDR> will contain the remote address of "+
+			"the source of the request.")
 
-	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
-		"Port to expose readiness probe.")
-
-	k.TokenPassthrough.AddFlags(fs)
+	fs.Var(flags.NewStringToStringSliceValue(&e.ExtraUserHeaders), "extra-user-headers",
+		"(Alpha) A list of key value pairs of extra user headers to pass with "+
+			"proxied requests as part of the impersonated request. A single key can "+
+			"hold multiple values.")
 }

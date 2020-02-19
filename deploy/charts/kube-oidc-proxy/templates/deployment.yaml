@@ -68,6 +68,12 @@ spec:
           - "--token-passthrough-audiences={{ join "," .Values.tokenPassthrough.audiences }}"
           {{ end }}
           {{ end }}
+          {{- if .Values.extraImpersonationHeaders.clientIP }}
+          - "--extra-user-header-client-ip"
+          {{ end }}
+          {{- if .Values.extraImpersonationHeaders.headers }}
+          - "--extra-user-headers={{ .Values.extraImpersonationHeaders.headers }}"
+          {{ end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
         env:

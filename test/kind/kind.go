@@ -130,7 +130,13 @@ func DeleteCluster(name string) error {
 }
 
 func (k *Kind) Destroy() error {
+	if err := k.collectLogs(); err != nil {
+		// Don't hard fail here as we should still attempt to delete the cluster
+		log.Errorf("kind: failed to collect logs: %s", err)
+	}
+
 	log.Infof("kind: destroying cluster %q", clusterName)
+
 	if err := DeleteCluster(clusterName); err != nil {
 		return fmt.Errorf("failed to delete kind cluster: %s", err)
 	}
@@ -140,6 +146,29 @@ func (k *Kind) Destroy() error {
 	}
 
 	log.Infof("kind: destroyed cluster %q", clusterName)
+
+	return nil
+}
+
+func (k *Kind) collectLogs() error {
+	provider := cluster.NewProvider()
+	logDir := filepath.Join(k.rootPath, "artifacts", "logs")
+
+	log.Infof("kind: collecting logs to %q", logDir)
+
+	if err := os.RemoveAll(logDir); err != nil {
+		return fmt.Errorf("failed to remove old logs directory: %s", err)
+	}
+
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory: %s", err)
+	}
+
+	if err := provider.CollectLogs(clusterName, logDir); err != nil {
+		return fmt.Errorf("failed to collect logs: %s", err)
+	}
+
+	log.Infof("kind: collected logs at %q", logDir)
 
 	return nil
 }

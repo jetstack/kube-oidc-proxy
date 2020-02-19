@@ -24,6 +24,10 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
+const (
+	UserHeaderClientIPKey = "Remote-Client-IP"
+)
+
 var (
 	errUnauthorized      = errors.New("Unauthorized")
 	errImpersonateHeader = errors.New("Impersonate-User in header")
@@ -38,6 +42,9 @@ var (
 type Options struct {
 	DisableImpersonation bool
 	TokenReview          bool
+
+	ExtraUserHeaders                map[string][]string
+	ExtraUserHeadersClientIPEnabled bool
 }
 
 type Proxy struct {
@@ -195,12 +202,36 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		groups = append(groups, authuser.AllAuthenticated)
 	}
 
-	// set impersonation header using authenticated user identity
+	extra := user.GetExtra()
 
+	if extra == nil {
+		extra = make(map[string][]string)
+	}
+
+	// If client IP user extra header option set then append the remote client
+	// address.
+	if p.options.ExtraUserHeadersClientIPEnabled {
+		klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
+			UserHeaderClientIPKey, req.RemoteAddr, reqCpy.RemoteAddr)
+
+		extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], req.RemoteAddr)
+	}
+
+	// Add custom extra user headers to impersonation request
+	for k, vs := range p.options.ExtraUserHeaders {
+		for _, v := range vs {
+			klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
+				k, v, reqCpy.RemoteAddr)
+
+			extra[k] = append(extra[k], v)
+		}
+	}
+
+	// Set impersonation header using authenticated user identity.
 	conf := transport.ImpersonationConfig{
 		UserName: user.GetName(),
 		Groups:   groups,
-		Extra:    user.GetExtra(),
+		Extra:    extra,
 	}
 
 	rt := transport.NewImpersonatingRoundTripper(conf, p.clientTransport)
