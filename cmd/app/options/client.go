@@ -5,20 +5,29 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cliflag "k8s.io/component-base/cli/flag"
 )
 
 type ClientOptions struct {
 	*genericclioptions.ConfigFlags
 }
 
-func NewClientFlags() *ClientOptions {
-	return &ClientOptions{
+func NewClientOptions(nfs *cliflag.NamedFlagSets) *ClientOptions {
+	c := &ClientOptions{
 		ConfigFlags: genericclioptions.NewConfigFlags(true),
 	}
+
+	// Disable unwanted options
+	c.CacheDir = nil
+	c.Impersonate = nil
+	c.ImpersonateGroup = nil
+
+	return c.AddFlags(nfs.FlagSet("Client"))
 }
 
-func (c *ClientOptions) AddFlags(flags *pflag.FlagSet) {
-	c.ConfigFlags.AddFlags(flags)
+func (c *ClientOptions) AddFlags(fs *pflag.FlagSet) *ClientOptions {
+	c.ConfigFlags.AddFlags(fs)
+	return c
 }
 
 func (c *ClientOptions) ClientFlagsChanged(cmd *cobra.Command) bool {
