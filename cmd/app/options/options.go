@@ -6,10 +6,9 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	k8sErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/util/term"
 	cliflag "k8s.io/component-base/cli/flag"
-
-	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
 const (
@@ -17,10 +16,10 @@ const (
 )
 
 type Options struct {
+	App                *KubeOIDCProxyOptions
 	OIDCAuthentication *OIDCAuthenticationOptions
 	SecureServing      *SecureServingOptions
 	Client             *ClientOptions
-	App                *KubeOIDCProxyOptions
 	Misc               *MiscOptions
 
 	nfs *cliflag.NamedFlagSets
@@ -31,10 +30,10 @@ func New() *Options {
 
 	// Add flags to command sets
 	return &Options{
+		App:                NewKubeOIDCProxyOptions(nfs),
 		OIDCAuthentication: NewOIDCAuthenticationOptions(nfs),
 		SecureServing:      NewSecureServingOptions(nfs),
 		Client:             NewClientOptions(nfs),
-		App:                NewKubeOIDCProxyOptions(nfs),
 		Misc:               NewMiscOptions(nfs),
 
 		nfs: nfs,
@@ -82,7 +81,7 @@ func (o *Options) Validate(cmd *cobra.Command) error {
 	}
 
 	if len(errs) > 0 {
-		return util.JoinErrors(errs)
+		return k8sErrors.NewAggregate(errs)
 	}
 
 	return nil

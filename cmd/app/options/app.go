@@ -3,9 +3,9 @@ package options
 
 import (
 	"github.com/spf13/pflag"
+	cliflag "k8s.io/component-base/cli/flag"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/util/flags"
-	cliflag "k8s.io/component-base/cli/flag"
 )
 
 type KubeOIDCProxyOptions struct {
