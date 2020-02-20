@@ -12,10 +12,42 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+func (h *Helper) WaitForDeploymentReady(namespace, name string, timeout time.Duration) error {
+	log.Infof("Waiting for Deployment to become ready %s/%s", namespace, name)
+
+	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
+		deploy, err := h.KubeClient.AppsV1().Deployments(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		if deploy.Spec.Replicas == nil {
+			return false, nil
+		}
+
+		if *deploy.Spec.Replicas == deploy.Status.ReadyReplicas {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		kErr := h.Kubectl(namespace).DescribeResource("deployment", name)
+		if kErr != nil {
+			err = fmt.Errorf("%s\n%s", err, kErr)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) error {
 	log.Infof("Waiting for Pod to become ready %s/%s", namespace, name)
 
-	err := wait.PollImmediate(time.Second*5, timeout, func() (bool, error) {
+	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
 		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -54,26 +86,24 @@ func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) 
 	return nil
 }
 
-func (h *Helper) WaitForPodDeletion(namespace, name string, timeout time.Duration) error {
-	log.Infof("Waiting for Pod to be deleted %s/%s", namespace, name)
+func (h *Helper) WaitForDeploymentToDelete(namespace, name string, timeout time.Duration) error {
+	log.Infof("Waiting for Deployment to be deleted: %s/%s", namespace, name)
 
-	err := wait.PollImmediate(time.Second*5, timeout, func() (bool, error) {
-		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
+		_, err := h.KubeClient.AppsV1().Deployments(namespace).Get(name, metav1.GetOptions{})
 		if k8sErrors.IsNotFound(err) {
 			return true, nil
 		}
 
 		if err != nil {
-			return false, err
+			return false, nil
 		}
-
-		log.Infof("helper: pod not deleted %s/%s: %v",
-			pod.Namespace, pod.Name, pod.Status.Conditions)
 
 		return false, nil
 	})
+
 	if err != nil {
-		kErr := h.Kubectl(namespace).DescribeResource("pod", name)
+		kErr := h.Kubectl(namespace).DescribeResource("deployment", name)
 		if kErr != nil {
 			err = fmt.Errorf("%s\n%s", err, kErr)
 		}
