@@ -132,3 +132,7 @@ users:
 
 ## Development
 *NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.
+
+To help with development, there is a suite of tools you can use to deploy a
+functioning proxy from source locally. You can read more
+[here](./docs/tasks/development-testing.md).
