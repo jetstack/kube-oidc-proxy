@@ -4,7 +4,6 @@ package server
 import (
 	"encoding/pem"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -68,16 +67,29 @@ func (s *Server) Run(bindAddress, listenPort string) (<-chan struct{}, error) {
 }
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	log.Infof("fake API server received url %s", r.URL)
+	log.Infof("(%s) Fake API server received url %s", r.URL, r.RemoteAddr)
 
+	log.Infof("(%s) Request headers:", r.RemoteAddr)
 	for k, vs := range r.Header {
 		for _, v := range vs {
+			log.Infof("(%s) %s: %s", r.RemoteAddr, k, v)
 			rw.Header().Add(k, v)
 		}
 	}
 
-	if _, err := io.Copy(rw, r.Body); err != nil {
-		log.Errorf("failed to copy request body to response: %s", err)
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Errorf("failed to read request body: %s", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	log.Infof("(%s) Request Body: %s", r.RemoteAddr, body)
+
+	if _, err := rw.Write(body); err != nil {
+		log.Errorf("failed to write request body to response: %s", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	rw.WriteHeader(http.StatusOK)

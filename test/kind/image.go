@@ -15,6 +15,22 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
 )
 
+func (k *Kind) LoadAllImages() error {
+	if err := k.LoadKubeOIDCProxy(); err != nil {
+		return err
+	}
+
+	if err := k.LoadIssuer(); err != nil {
+		return err
+	}
+
+	if err := k.LoadFakeAPIServer(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (k *Kind) LoadKubeOIDCProxy() error {
 	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy")
 	mainPath := filepath.Join(k.rootPath, "./cmd/.")
@@ -24,8 +40,8 @@ func (k *Kind) LoadKubeOIDCProxy() error {
 }
 
 func (k *Kind) LoadIssuer() error {
-	binPath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer/bin/oidc-issuer")
-	dockerfilePath := filepath.Join(k.rootPath, "./test/e2e/framework/issuer")
+	binPath := filepath.Join(k.rootPath, "./test/tools/issuer/bin/oidc-issuer")
+	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/issuer")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "oidc-issuer-e2e"
 
@@ -33,8 +49,8 @@ func (k *Kind) LoadIssuer() error {
 }
 
 func (k *Kind) LoadFakeAPIServer() error {
-	binPath := filepath.Join(k.rootPath, "./test/e2e/framework/fake-apiserver/bin/fake-apiserver")
-	dockerfilePath := filepath.Join(k.rootPath, "./test/e2e/framework/fake-apiserver")
+	binPath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver/bin/fake-apiserver")
+	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "fake-apiserver-e2e"
 

@@ -4,15 +4,11 @@ package headers
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework"
 	testutil "github.com/jetstack/kube-oidc-proxy/test/util"
@@ -28,10 +24,11 @@ var _ = framework.CasesDescribe("Headers", func() {
 	})
 
 	It("should not respond with any extra headers if none are set on the proxy", func() {
-		fakeAPIServerURL, extraVolumes := deployFakeAPIServer(f)
+		extraOIDCVolumes, fakeAPIServerURL, err := f.Helper().DeployFakeAPIServer(f.Namespace.Name)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Redeploying proxy to send traffic to fake API server")
-		f.DeployProxyWith(extraVolumes, fmt.Sprintf("--server=%s", fakeAPIServerURL), "--certificate-authority=/fake-apiserver/ca.pem")
+		f.DeployProxyWith(extraOIDCVolumes, fmt.Sprintf("--server=%s", fakeAPIServerURL), "--certificate-authority=/fake-apiserver/ca.pem")
 
 		resp := sendRequestToProxy(f)
 
@@ -44,10 +41,12 @@ var _ = framework.CasesDescribe("Headers", func() {
 	})
 
 	It("should respond with remote address and custom extra headers when they are set", func() {
-		fakeAPIServerURL, extraVolumes := deployFakeAPIServer(f)
+		By("Deploying fake API Server")
+		extraOIDCVolumes, fakeAPIServerURL, err := f.Helper().DeployFakeAPIServer(f.Namespace.Name)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Redeploying proxy to send traffic to fake API server with extra headers set")
-		f.DeployProxyWith(extraVolumes, fmt.Sprintf("--server=%s", fakeAPIServerURL), "--certificate-authority=/fake-apiserver/ca.pem",
+		f.DeployProxyWith(extraOIDCVolumes, fmt.Sprintf("--server=%s", fakeAPIServerURL), "--certificate-authority=/fake-apiserver/ca.pem",
 			"--extra-user-header-client-ip", "--extra-user-headers=key1=foo,key2=foo,key1=bar")
 
 		resp := sendRequestToProxy(f)
@@ -85,36 +84,6 @@ var _ = framework.CasesDescribe("Headers", func() {
 		}
 	})
 })
-
-func deployFakeAPIServer(f *framework.Framework) (*url.URL, []corev1.Volume) {
-	By("Deploying fake API Server")
-	fAPIServerBundle, fakeAPIServerURL, err := f.Helper().DeployFakeAPIServer(f.Namespace.Name)
-	Expect(err).NotTo(HaveOccurred())
-
-	sec, err := f.KubeClientSet.CoreV1().Secrets(f.Namespace.Name).Create(&corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "fake-apiserver-ca-",
-			Namespace:    f.Namespace.Name,
-		},
-		Data: map[string][]byte{
-			"ca.pem": fAPIServerBundle.CertBytes,
-		},
-	})
-	Expect(err).NotTo(HaveOccurred())
-
-	extraVolumes := []corev1.Volume{
-		{
-			Name: "fake-apiserver",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: sec.Name,
-				},
-			},
-		},
-	}
-
-	return fakeAPIServerURL, extraVolumes
-}
 
 func sendRequestToProxy(f *framework.Framework) *http.Response {
 	By("Building request to proxy")

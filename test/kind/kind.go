@@ -26,20 +26,16 @@ const (
 )
 
 type Kind struct {
-	rootPath string
+	rootPath  string
+	nodeImage string
+	conf      *configv1alpha4.Cluster
 
 	provider   *cluster.Provider
 	restConfig *rest.Config
 	client     *kubernetes.Clientset
 }
 
-func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error) {
-	log.Infof("kind: using k8s node image %q", nodeImage)
-
-	k := &Kind{
-		rootPath: rootPath,
-	}
-
+func New(rootPath, nodeImage string, masterNodes, workerNodes int) *Kind {
 	conf := new(configv1alpha4.Cluster)
 	configv1alpha4.SetDefaultsCluster(conf)
 	conf.Nodes = nil
@@ -73,49 +69,59 @@ func New(rootPath, nodeImage string, masterNodes, workerNodes int) (*Kind, error
 
 	conf.Networking.ServiceSubnet = "10.0.0.0/16"
 
+	return &Kind{
+		rootPath:  rootPath,
+		nodeImage: nodeImage,
+		conf:      conf,
+	}
+}
+
+func (k *Kind) Create() error {
+	log.Infof("kind: using k8s node image %q", k.nodeImage)
+
 	// create kind cluster
 	log.Infof("kind: creating kind cluster %q", clusterName)
 	k.provider = cluster.NewProvider()
 	if err := k.provider.Create(
 		clusterName,
-		cluster.CreateWithV1Alpha4Config(conf),
+		cluster.CreateWithV1Alpha4Config(k.conf),
 	); err != nil {
-		return nil, err
+		return err
 	}
 
 	// generate rest config to kind cluster
 	kubeconfigData, err := k.provider.KubeConfig(clusterName, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := ioutil.WriteFile(k.KubeConfigPath(), []byte(kubeconfigData), 0600); err != nil {
-		return nil, err
+		return err
 	}
 
 	restConfig, err := clientcmd.BuildConfigFromFlags("", k.KubeConfigPath())
 	if err != nil {
-		return nil, k.errDestroy(fmt.Errorf("failed to build kind rest client: %s", err))
+		return k.errDestroy(fmt.Errorf("failed to build kind rest client: %s", err))
 	}
 	k.restConfig = restConfig
 
 	client, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return nil, k.errDestroy(fmt.Errorf("failed to build kind kubernetes client: %s", err))
+		return k.errDestroy(fmt.Errorf("failed to build kind kubernetes client: %s", err))
 	}
 	k.client = client
 
 	if err := k.waitForNodesReady(); err != nil {
-		return nil, k.errDestroy(fmt.Errorf("failed to wait for nodes to become ready: %s", err))
+		return k.errDestroy(fmt.Errorf("failed to wait for nodes to become ready: %s", err))
 	}
 
 	if err := k.waitForCoreDNSReady(); err != nil {
-		return nil, k.errDestroy(fmt.Errorf("failed to wait for DNS pods to become ready: %s", err))
+		return k.errDestroy(fmt.Errorf("failed to wait for DNS pods to become ready: %s", err))
 	}
 
 	log.Infof("kind: cluster ready %q", clusterName)
 
-	return k, nil
+	return nil
 }
 
 func DeleteCluster(name string) error {
@@ -182,6 +188,9 @@ func (k *Kind) KubeConfigPath() string {
 }
 
 func (k *Kind) Nodes() ([]nodes.Node, error) {
+	if k.provider == nil {
+		k.provider = cluster.NewProvider()
+	}
 	return k.provider.ListNodes(clusterName)
 }
 
