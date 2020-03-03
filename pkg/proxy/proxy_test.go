@@ -4,7 +4,9 @@ package proxy
 import (
 	"bytes"
 	"errors"
+	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strconv"
@@ -15,7 +17,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/user"
-	authuser "k8s.io/apiserver/pkg/authentication/user"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
 )
@@ -112,11 +113,12 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 
 func tryError(t *testing.T, expCode int, err error) *fakeRW {
 	p := new(Proxy)
+	p.handleError = p.newErrorHandler()
 
 	frw := newFakeRW()
 	fr := newFakeR()
 
-	p.Error(frw, fr, err)
+	p.handleError(frw, fr, err)
 
 	code, err := strconv.Atoi(frw.header.Get("StatusCode"))
 	if err != nil {
@@ -133,7 +135,7 @@ func tryError(t *testing.T, expCode int, err error) *fakeRW {
 	return frw
 }
 
-func Test_Error(t *testing.T) {
+func TestError(t *testing.T) {
 	// no error
 	frw := tryError(t, http.StatusInternalServerError, nil)
 	if len(frw.buffer) != 1 {
@@ -161,7 +163,7 @@ func Test_Error(t *testing.T) {
 	}
 }
 
-func Test_hasImpersonation(t *testing.T) {
+func TestHasImpersonation(t *testing.T) {
 	p := new(Proxy)
 
 	// no impersonation headers
@@ -252,171 +254,343 @@ func newTestProxy(t *testing.T) *fakeProxy {
 	fakeToken := mocks.NewMockToken(ctrl)
 	fakeRT := &fakeRT{t: t}
 
-	return &fakeProxy{
+	p := &fakeProxy{
 		ctrl:      ctrl,
 		fakeToken: fakeToken,
 		fakeRT:    fakeRT,
 		Proxy: &Proxy{
-			oidcRequestAuther: bearertoken.New(fakeToken),
-			clientTransport:   fakeRT,
-			options:           new(Options),
+			oidcRequestAuther:     bearertoken.New(fakeToken),
+			clientTransport:       fakeRT,
+			noAuthClientTransport: fakeRT,
+			config:                new(Config),
 		},
 	}
+
+	p.handleError = p.newErrorHandler()
+
+	return p
 }
 
-func Test_RoundTrip(t *testing.T) {
-	p := newTestProxy(t)
-	_, err := p.RoundTrip(new(http.Request))
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
+func TestHandlers(t *testing.T) {
+	type authResponse struct {
+		resp *authenticator.Response
+		pass bool
+		err  error
 	}
 
-	req := &http.Request{
-		Header: http.Header{
-			"Authorization": []string{"foo"},
+	tests := map[string]struct {
+		req    *http.Request
+		config *Config
+
+		expAuthToken string
+		authResponse *authResponse
+
+		expCode int
+		expBody string
+
+		expUser  string
+		expGroup []string
+		expExtra map[string][]string
+	}{
+		"an empty request should 401": {
+			req:     new(http.Request),
+			expCode: http.StatusUnauthorized,
+			expBody: errUnauthorized.Error(),
 		},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
-	}
-
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, false, nil)
-	req.Header = http.Header{
-		"Authorization": []string{"bearer fake-token"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
-	}
-
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, false, errors.New("some error"))
-	req.Header = http.Header{
-		"Authorization": []string{"bearer fake-token"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
-	}
-
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, true, errors.New("some error"))
-	req.Header = http.Header{
-		"Authorization": []string{"bearer fake-token"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
-	}
-
-	// we fail at unauthorized even though we have impersonation headers
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(nil, true, errors.New("some error"))
-	req.Header = http.Header{
-		"Authorization":    []string{"bearer fake-token"},
-		"Impersonate-User": []string{"a-user"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errUnauthorized {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errUnauthorized, err)
-	}
-
-	authResponse := &authenticator.Response{
-		User: &user.DefaultInfo{},
-	}
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
-	req.Header = http.Header{
-		"Authorization":    []string{"bearer fake-token"},
-		"Impersonate-User": []string{"a-user"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errImpersonateHeader {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errImpersonateHeader, err)
-	}
-
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
-	req.Header = http.Header{
-		"Authorization":     []string{"bearer fake-token"},
-		"Impersonate-Group": []string{"a-user"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errImpersonateHeader {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errImpersonateHeader, err)
-	}
-
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
-	req.Header = http.Header{
-		"Authorization":         []string{"bearer fake-token"},
-		"Impersonate-Extra-foo": []string{"a-user"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errImpersonateHeader {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errImpersonateHeader, err)
-	}
-
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
-	req.Header = http.Header{
-		"Authorization": []string{"bearer fake-token"},
-	}
-	_, err = p.RoundTrip(req)
-	if err != errNoName {
-		t.Errorf("unexpected round trip error, exp=%s got=%s", errNoName, err)
-	}
-
-	authResponse = &authenticator.Response{
-		User: &user.DefaultInfo{
-			Name: "a-user",
+		"a request with a badly formed token should 401": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"foo"},
+				},
+			},
+			expCode: http.StatusUnauthorized,
+			expBody: errUnauthorized.Error(),
 		},
-	}
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
-	p.fakeRT.expUser = "a-user"
-	p.fakeRT.expGroup = []string{authuser.AllAuthenticated}
-	req.Header["Authorization"] = []string{"bearer fake-token"}
-	_, err = p.RoundTrip(req)
-	if err != nil {
-		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
-	}
+		"a request with a unauthed token should 401": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: nil,
+				pass: false,
+				err:  nil,
+			},
+			expCode: http.StatusUnauthorized,
+			expBody: errUnauthorized.Error(),
+		},
+		"a request with an error during token auth should 401": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: nil,
+				pass: false,
+				err:  errors.New("some error"),
+			},
+			expCode: http.StatusUnauthorized,
+			expBody: errUnauthorized.Error(),
+		},
+		"a request with an error but passes during token auth should still 401": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: nil,
+				pass: true,
+				err:  errors.New("some error"),
+			},
+			expCode: http.StatusUnauthorized,
+			expBody: errUnauthorized.Error(),
+		},
+		"a request with unauth with impersonation should 401": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":    []string{"bearer fake-token"},
+					"Impersonate-User": []string{"a-user"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: nil,
+				pass: false,
+				err:  nil,
+			},
+			expCode: http.StatusUnauthorized,
+			expBody: errUnauthorized.Error(),
+		},
+		"an authed request with impersonation user should error impersonation header": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":    []string{"bearer fake-token"},
+					"Impersonate-User": []string{"a-user"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusForbidden,
+			expBody: "Impersonation requests are disabled when using kube-oidc-proxy",
+		},
+		"an authed request with impersonation group should error impersonation header": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":     []string{"bearer fake-token"},
+					"Impersonate-Group": []string{"a-group"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusForbidden,
+			expBody: "Impersonation requests are disabled when using kube-oidc-proxy",
+		},
+		"an authed request with impersonation extra should error impersonation header": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":         []string{"bearer fake-token"},
+					"Impersonate-Extra-foo": []string{"bar"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: nil,
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusForbidden,
+			expBody: "Impersonation requests are disabled when using kube-oidc-proxy",
+		},
 
-	authResponse = &authenticator.Response{
-		User: &user.DefaultInfo{
-			Name:   "a-user",
-			Groups: []string{"a-group-a", "a-group-b", authuser.AllAuthenticated},
-			Extra: map[string][]string{
-				"foo":     []string{"a", "b"},
-				"bar":     []string{"c", "d"},
-				"foo-bar": []string{"e", "f"},
+		"an authed request with no username is token should 403": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{Name: ""},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusForbidden,
+			expBody: "Username claim not available in OIDC Issuer response",
+		},
+		"an authed request with user should 200": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{Name: "a-user"},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode:  http.StatusOK,
+			expBody:  "",
+			expUser:  "a-user",
+			expGroup: []string{"system:authenticated"},
+		},
+		"an authed request with user, group, extra should 200": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "a-user",
+						Groups: []string{"my-group"},
+						Extra: map[string][]string{
+							"foo":     []string{"a", "b"},
+							"bar":     []string{"c", "d"},
+							"foo-bar": []string{"e", "f"},
+						},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode:  http.StatusOK,
+			expBody:  "",
+			expUser:  "a-user",
+			expGroup: []string{"my-group", "system:authenticated"},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Foo":     []string{"a", "b"},
+				"Impersonate-Extra-Bar":     []string{"c", "d"},
+				"Impersonate-Extra-Foo-Bar": []string{"e", "f"},
 			},
 		},
+		"an authed request with user, group, extra but disabled impersonation should return no impersonation and should 200": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"bearer fake-token"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "a-user",
+						Groups: []string{"my-group"},
+						Extra: map[string][]string{
+							"foo":     []string{"a", "b"},
+							"bar":     []string{"c", "d"},
+							"foo-bar": []string{"e", "f"},
+						},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			config: &Config{
+				DisableImpersonation: true,
+			},
+			expCode:  http.StatusOK,
+			expBody:  "",
+			expUser:  "",
+			expGroup: nil,
+			expExtra: nil,
+		},
 	}
-	p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
-	p.fakeRT.expUser = "a-user"
-	p.fakeRT.expGroup = []string{"a-group-a", "a-group-b", authuser.AllAuthenticated}
-	p.fakeRT.expExtra = map[string][]string{
-		"Impersonate-Extra-Foo":     []string{"a", "b"},
-		"Impersonate-Extra-Bar":     []string{"c", "d"},
-		"Impersonate-Extra-Foo-Bar": []string{"e", "f"},
-	}
-	req.Header["Authorization"] = []string{"bearer fake-token"}
-	_, err = p.RoundTrip(req)
-	if err != nil {
-		t.Errorf("unexpected round trip error, exp=nil got=%s", err)
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			p := newTestProxy(t)
+			w := httptest.NewRecorder()
+
+			if test.authResponse != nil {
+				p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), test.expAuthToken).Return(
+					test.authResponse.resp, test.authResponse.pass, test.authResponse.err)
+			}
+
+			p.fakeRT.expUser = test.expUser
+			p.fakeRT.expGroup = test.expGroup
+			p.fakeRT.expExtra = test.expExtra
+
+			if test.config != nil {
+				p.config = test.config
+			}
+
+			var handler http.Handler
+			handler = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				_, err := p.RoundTrip(req)
+				if err != nil {
+					t.Errorf("unexpected error: %s", err)
+					t.FailNow()
+				}
+			})
+			handler = p.withHandlers(handler)
+			handler.ServeHTTP(w, test.req)
+
+			resp := w.Result()
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Errorf("unexpected error: %s", err)
+				t.FailNow()
+			}
+
+			if test.expBody != strings.TrimSpace(string(body)) {
+				t.Errorf("got unexpected response body, exp=%s got=%s",
+					test.expBody, body)
+			}
+
+			if test.expCode != resp.StatusCode {
+				t.Errorf("got unexpected response code, exp=%d got=%d",
+					test.expCode, resp.StatusCode)
+			}
+
+			p.ctrl.Finish()
+		})
 	}
 }
 
-func TestExtraHeadersOptions(t *testing.T) {
+func TestHeadersConfig(t *testing.T) {
 	remoteAddr := "8.8.8.8"
 
 	tests := map[string]struct {
-		options  *Options
+		config   *Config
 		expExtra map[string][]string
 	}{
 		"if no extra headers set or client IP enabled then expect no extras": {
-			options: &Options{
+			config: &Config{
 				ExtraUserHeaders:                nil,
 				ExtraUserHeadersClientIPEnabled: false,
 			},
 			expExtra: nil,
 		},
 		"if extra headers set but no client IP enabled then should return added extras": {
-			options: &Options{
+			config: &Config{
 				ExtraUserHeaders: map[string][]string{
 					"foo": []string{"a", "b"},
 					"bar": []string{"c", "d", "e"},
@@ -429,7 +603,7 @@ func TestExtraHeadersOptions(t *testing.T) {
 			},
 		},
 		"if no extra headers set but client IP enabled then should return added client IP": {
-			options: &Options{
+			config: &Config{
 				ExtraUserHeaders:                nil,
 				ExtraUserHeadersClientIPEnabled: true,
 			},
@@ -438,7 +612,7 @@ func TestExtraHeadersOptions(t *testing.T) {
 			},
 		},
 		"if extra headers set and client IP enabled then should return extra headers and client IP": {
-			options: &Options{
+			config: &Config{
 				ExtraUserHeaders: map[string][]string{
 					"foo": []string{"a", "b"},
 					"bar": []string{"c", "d", "e"},
@@ -456,7 +630,8 @@ func TestExtraHeadersOptions(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			p := newTestProxy(t)
-			p.options = test.options
+			p.config = test.config
+			w := httptest.NewRecorder()
 
 			req := &http.Request{
 				Header: http.Header{
@@ -468,20 +643,30 @@ func TestExtraHeadersOptions(t *testing.T) {
 			authResponse := &authenticator.Response{
 				User: &user.DefaultInfo{
 					Name:   "a-user",
-					Groups: []string{authuser.AllAuthenticated},
+					Groups: []string{user.AllAuthenticated},
 				},
 			}
 
 			p.fakeToken.EXPECT().AuthenticateToken(gomock.Any(), "fake-token").Return(authResponse, true, nil)
 
 			p.fakeRT.expUser = "a-user"
-			p.fakeRT.expGroup = []string{authuser.AllAuthenticated}
+			p.fakeRT.expGroup = []string{user.AllAuthenticated}
 			p.fakeRT.expExtra = test.expExtra
 
-			_, err := p.RoundTrip(req)
-			if err != nil {
-				t.Errorf("got unexpected error: %s", err)
-			}
+			var handler http.Handler
+			handler = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				_, err := p.RoundTrip(req)
+				if err != nil {
+					t.Errorf("unexpected error: %s", err)
+					t.FailNow()
+				}
+			})
+			handler = p.withHandlers(handler)
+			handler.ServeHTTP(w, req)
+
+			w.Result()
+
+			p.ctrl.Finish()
 		})
 	}
 }
