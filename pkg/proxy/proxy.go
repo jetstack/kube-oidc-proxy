@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
@@ -21,6 +21,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
@@ -29,9 +30,10 @@ const (
 )
 
 var (
-	errUnauthorized      = errors.New("Unauthorized")
-	errImpersonateHeader = errors.New("Impersonate-User in header")
-	errNoName            = errors.New("No name in OIDC info")
+	errUnauthorized          = errors.New("Unauthorized")
+	errImpersonateHeader     = errors.New("Impersonate-User in header")
+	errNoName                = errors.New("No name in OIDC info")
+	errNoImpersonationConfig = errors.New("No impersonation configuration in context")
 
 	// http headers are case-insensitive
 	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
@@ -39,7 +41,7 @@ var (
 	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
-type Options struct {
+type Config struct {
 	DisableImpersonation bool
 	TokenReview          bool
 
@@ -48,6 +50,8 @@ type Options struct {
 	ExtraUserHeaders                map[string][]string
 	ExtraUserHeadersClientIPEnabled bool
 }
+
+type errorHandlerFn func(http.ResponseWriter, *http.Request, error)
 
 type Proxy struct {
 	oidcRequestAuther *bearertoken.Authenticator
@@ -59,12 +63,14 @@ type Proxy struct {
 	clientTransport       http.RoundTripper
 	noAuthClientTransport http.RoundTripper
 
-	options *Options
+	config *Config
+
+	handleError errorHandlerFn
 }
 
 func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
 	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo,
-	options *Options) (*Proxy, error) {
+	config *Config) (*Proxy, error) {
 
 	// generate tokenAuther from oidc config
 	tokenAuther, err := oidc.New(oidc.Options{
@@ -87,7 +93,7 @@ func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions
 		restConfig:        restConfig,
 		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
-		options:           options,
+		config:            config,
 		oidcRequestAuther: bearertoken.New(tokenAuther),
 		tokenAuther:       tokenAuther,
 	}, nil
@@ -102,7 +108,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	p.clientTransport = clientRT
 
 	// No auth round tripper for no impersonation
-	if p.options.DisableImpersonation || p.options.TokenReview {
+	if p.config.DisableImpersonation || p.config.TokenReview {
 		noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
 			APIPath: p.restConfig.APIPath,
 			Host:    p.restConfig.Host,
@@ -125,11 +131,13 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 		return nil, fmt.Errorf("failed to parse url: %s", err)
 	}
 
-	// set up proxy handler using proxy
+	p.handleError = p.newErrorHandler()
+
+	// Set up proxy handler using proxy
 	proxyHandler := httputil.NewSingleHostReverseProxy(url)
 	proxyHandler.Transport = p
-	proxyHandler.ErrorHandler = p.Error
-	proxyHandler.FlushInterval = p.options.FlushInterval
+	proxyHandler.ErrorHandler = p.handleError
+	proxyHandler.FlushInterval = p.config.FlushInterval
 
 	waitCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {
@@ -139,9 +147,12 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	return waitCh, nil
 }
 
-func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{}) (<-chan struct{}, error) {
+func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan struct{}, error) {
+	// Setup proxy handlers
+	handler = p.withHandlers(handler)
+
 	// securely serve using serving config
-	waitCh, err := p.secureServingInfo.Serve(proxyHandler, time.Second*60, stopCh)
+	waitCh, err := p.secureServingInfo.Serve(handler, time.Second*60, stopCh)
 	if err != nil {
 		return nil, err
 	}
@@ -149,112 +160,170 @@ func (p *Proxy) serve(proxyHandler *httputil.ReverseProxy, stopCh <-chan struct{
 	return waitCh, nil
 }
 
+func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
+	// Set up proxy handlers
+	handler = p.withImpersonateRequest(handler)
+	handler = p.withAuthenticateRequest(handler)
+	return handler
+}
+
+// RoundTrip is called last and is used to manipulate the forwarded request using context.
 func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Clone the request here since successfully authenticating the request
-	// deletes those auth headers
-	reqCpy := utilnet.CloneRequest(req)
+	// Here we have successfully authenticated so now need to determine whether
+	// we need use impersonation or not.
 
-	// auth request and handle unauthed
-	info, ok, err := p.oidcRequestAuther.AuthenticateRequest(reqCpy)
-	if err != nil {
-
-		// attempt to passthrough request if valid token
-		if p.options.TokenReview {
-			return p.tokenReview(reqCpy)
-		}
-
-		return nil, errUnauthorized
-	}
-
-	// failed authorization
-	if !ok {
-		return nil, errUnauthorized
-	}
-
-	klog.V(4).Infof("authenticated request: %s", reqCpy.RemoteAddr)
-
-	// if we have disabled impersonation we can forward the request right away
-	if p.options.DisableImpersonation {
-		klog.V(2).Infof("passing on request with no impersonation: %s", reqCpy.RemoteAddr)
-		// Send original copy here with auth header intact
+	// If no impersonation then we return here without setting impersonation
+	// header but re-introduce the token we removed.
+	if context.NoImpersonation(req.Context()) {
+		token := context.BearerToken(req.Context())
+		req.Header.Add("Authorization", token)
 		return p.noAuthClientTransport.RoundTrip(req)
 	}
 
-	// check for incoming impersonation headers and reject if any exists
-	if p.hasImpersonation(reqCpy.Header) {
-		return nil, errImpersonateHeader
+	// Get the impersonation headers from the context.
+	conf := context.ImpersonationConfig(req.Context())
+	if conf == nil {
+		return nil, errNoImpersonationConfig
 	}
 
-	user := info.User
+	// Set up impersonation request.
+	rt := transport.NewImpersonatingRoundTripper(*conf, p.clientTransport)
 
-	// no name available so reject request
-	if user.GetName() == "" {
-		return nil, errNoName
-	}
-
-	// ensure group contains allauthenticated builtin
-	found := false
-	groups := user.GetGroups()
-	for _, elem := range groups {
-		if elem == authuser.AllAuthenticated {
-			found = true
-			break
-		}
-	}
-	if !found {
-		groups = append(groups, authuser.AllAuthenticated)
-	}
-
-	extra := user.GetExtra()
-
-	if extra == nil {
-		extra = make(map[string][]string)
-	}
-
-	// If client IP user extra header option set then append the remote client
-	// address.
-	if p.options.ExtraUserHeadersClientIPEnabled {
-		klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
-			UserHeaderClientIPKey, req.RemoteAddr, reqCpy.RemoteAddr)
-
-		extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], req.RemoteAddr)
-	}
-
-	// Add custom extra user headers to impersonation request
-	for k, vs := range p.options.ExtraUserHeaders {
-		for _, v := range vs {
-			klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
-				k, v, reqCpy.RemoteAddr)
-
-			extra[k] = append(extra[k], v)
-		}
-	}
-
-	// Set impersonation header using authenticated user identity.
-	conf := transport.ImpersonationConfig{
-		UserName: user.GetName(),
-		Groups:   groups,
-		Extra:    extra,
-	}
-
-	rt := transport.NewImpersonatingRoundTripper(conf, p.clientTransport)
-
-	// push request through round trippers to the API server
-	return rt.RoundTrip(reqCpy)
+	// Push request through round trippers to the API server.
+	return rt.RoundTrip(req)
 }
 
-func (p *Proxy) tokenReview(req *http.Request) (*http.Response, error) {
+// withAuthenticateRequest adds the proxy authentication handler to a chain.
+func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		// Auth request and handle unauthed
+		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
+		if err != nil {
+			if !p.config.TokenReview {
+				p.handleError(rw, req, errUnauthorized)
+				return
+			}
+
+			// Attempt to passthrough request if valid token
+			if p.reviewToken(rw, req) {
+				// Set no impersonation headers and re-add removed headers.
+				req = req.WithContext(context.WithNoImpersonation(req.Context()))
+
+				handler.ServeHTTP(rw, req)
+				return
+			}
+
+			// Token review failed so error
+			p.handleError(rw, req, errUnauthorized)
+			return
+		}
+
+		// Failed authorization
+		if !ok {
+			p.handleError(rw, req, errUnauthorized)
+			return
+		}
+
+		klog.V(4).Infof("authenticated request: %s", req.RemoteAddr)
+
+		// Add the user info to the request context
+		req = req.WithContext(genericapirequest.WithUser(req.Context(), info.User))
+		handler.ServeHTTP(rw, req)
+	})
+}
+
+// withImpersonateRequest adds the impersonation request handler to the chain.
+func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		// If no impersonation has already been set, return early
+		if context.NoImpersonation(req.Context()) {
+			handler.ServeHTTP(rw, req)
+			return
+		}
+
+		// If we have disabled impersonation we can forward the request right away
+		if p.config.DisableImpersonation {
+			klog.V(2).Infof("passing on request with no impersonation: %s", req.RemoteAddr)
+			// Indicate we need to not use impersonation.
+			req = req.WithContext(context.WithNoImpersonation(req.Context()))
+			handler.ServeHTTP(rw, req)
+			return
+		}
+
+		if p.hasImpersonation(req.Header) {
+			p.handleError(rw, req, errImpersonateHeader)
+			return
+		}
+
+		user, ok := genericapirequest.UserFrom(req.Context())
+		// No name available so reject request
+		if !ok || len(user.GetName()) == 0 {
+			p.handleError(rw, req, errNoName)
+			return
+		}
+
+		// Ensure group contains allauthenticated builtin
+		allAuthFound := false
+		groups := user.GetGroups()
+		for _, elem := range groups {
+			if elem == authuser.AllAuthenticated {
+				allAuthFound = true
+				break
+			}
+		}
+		if !allAuthFound {
+			groups = append(groups, authuser.AllAuthenticated)
+		}
+
+		extra := user.GetExtra()
+
+		if extra == nil {
+			extra = make(map[string][]string)
+		}
+
+		// If client IP user extra header option set then append the remote client
+		// address.
+		if p.config.ExtraUserHeadersClientIPEnabled {
+			klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
+				UserHeaderClientIPKey, req.RemoteAddr, req.RemoteAddr)
+
+			extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], req.RemoteAddr)
+		}
+
+		// Add custom extra user headers to impersonation request.
+		for k, vs := range p.config.ExtraUserHeaders {
+			for _, v := range vs {
+				klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
+					k, v, req.RemoteAddr)
+
+				extra[k] = append(extra[k], v)
+			}
+		}
+
+		conf := &transport.ImpersonationConfig{
+			UserName: user.GetName(),
+			Groups:   groups,
+			Extra:    extra,
+		}
+
+		// Add the impersonation configuration to the context.
+		req = req.WithContext(context.WithImpersonationConfig(req.Context(), conf))
+		handler.ServeHTTP(rw, req)
+	})
+}
+
+func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {
 	klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
 		req.RemoteAddr)
 
 	ok, err := p.tokenReviewer.Review(req)
-	// no error so passthrough the request
+
+	// No error and ok so passthrough the request
 	if err == nil && ok {
 		klog.V(4).Infof("passing request with valid token through (%s)",
 			req.RemoteAddr)
-		// Don't set impersonation headers and pass through without proxy auth
-		// and headers still set
-		return p.noAuthClientTransport.RoundTrip(req)
+
+		return true
 	}
 
 	if err != nil {
@@ -262,7 +331,7 @@ func (p *Proxy) tokenReview(req *http.Request) (*http.Response, error) {
 			req.RemoteAddr, err)
 	}
 
-	return nil, errUnauthorized
+	return false
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {
@@ -278,38 +347,46 @@ func (p *Proxy) hasImpersonation(header http.Header) bool {
 	return false
 }
 
-func (p *Proxy) Error(rw http.ResponseWriter, r *http.Request, err error) {
-	if err == nil {
-		klog.Error("error was called with no error")
-		http.Error(rw, "", http.StatusInternalServerError)
-		return
-	}
+// newErrorHandler returns a handler failed requests.
+func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, err error) {
+	return func(rw http.ResponseWriter, r *http.Request, err error) {
+		if err == nil {
+			klog.Error("error was called with no error")
+			http.Error(rw, "", http.StatusInternalServerError)
+			return
+		}
 
-	switch err {
+		switch err {
 
-	// failed auth
-	case errUnauthorized:
-		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
-		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
-		return
+		// Failed auth
+		case errUnauthorized:
+			klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
+			http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+			return
 
-		// user request with impersonation
-	case errImpersonateHeader:
-		klog.V(2).Infof("impersonation user request %s", r.RemoteAddr)
+			// User request with impersonation
+		case errImpersonateHeader:
+			klog.V(2).Infof("impersonation user request %s", r.RemoteAddr)
+			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
+			return
 
-		http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
-		return
+			// No name given or available in oidc request
+		case errNoName:
+			klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
+			http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
+			return
 
-		// no name given or available in oidc response
-	case errNoName:
-		klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
-		http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
-		return
+			// No impersonation configuration found in context
+		case errNoImpersonationConfig:
+			klog.Errorf("if you are seeing this, there is likely a bug in the proxy (%s): %s", r.RemoteAddr, err)
+			http.Error(rw, "", http.StatusInternalServerError)
+			return
 
-		// server or unknown error
-	default:
-		klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
-		http.Error(rw, "", http.StatusInternalServerError)
+			// Server or unknown error
+		default:
+			klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
+			http.Error(rw, "", http.StatusInternalServerError)
+		}
 	}
 }
 
