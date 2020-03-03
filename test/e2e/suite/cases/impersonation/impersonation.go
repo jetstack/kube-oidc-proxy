@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -67,13 +68,78 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		By("Enabling the disabling of impersonation")
 		f.DeployProxyWith(nil, "--disable-impersonation")
 
-		// Should return an Unauthorized response from Kubernetes as it does not
-		// trust the OIDC token we have presented however it has been authenticated
-		// by kube-oidc-proxy.
-		_, err := f.NewProxyClient().CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
-		if !k8sErrors.IsUnauthorized(err) {
-			Expect(err).NotTo(HaveOccurred())
+		By("Creating ClusterRole for system:anonymous to impersonate")
+		roleImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoles().Create(&rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: fmt.Sprintf("test-user-role-impersonate-"),
+			},
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"users"}, Verbs: []string{"impersonate"}},
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating Role for user foo to list Pods")
+		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(&rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: fmt.Sprintf("test-user-role-pods-"),
+			},
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list"}},
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating ClusterRoleBinding for user system:anonymous")
+		rolebindingImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(
+			&rbacv1.ClusterRoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-user-binding-system-anonymous",
+				},
+				Subjects: []rbacv1.Subject{{Name: "system:anonymous", Kind: "User"}},
+				RoleRef:  rbacv1.RoleRef{Name: roleImpersonate.Name, Kind: "ClusterRole"},
+			})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating RoleBinding for user foo@example.com")
+		rolebindingPods, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(
+			&rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-user-binding-user-foo-example-com",
+				},
+				Subjects: []rbacv1.Subject{{Name: "foo@example.com", Kind: "User"}},
+				RoleRef:  rbacv1.RoleRef{Name: rolePods.Name, Kind: "Role"},
+			})
+		Expect(err).NotTo(HaveOccurred())
+
+		// build client with impersonation
+		config := f.NewProxyRestConfig()
+		config.Impersonate = rest.ImpersonationConfig{
+			UserName: "foo@example.com",
 		}
+		client, err := kubernetes.NewForConfig(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Should not error since we have authorized system:anonymous to
+		// impersonate and foo@example.com to list pods
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Deleting RoleBinding for user foo@example.com")
+		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(rolebindingPods.Name, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Deleting Role for list Pods")
+		err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(rolePods.Name, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Deleting ClusterRoleBinding for user system:anonymous")
+		err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Delete(rolebindingImpersonate.Name, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Deleting ClusterRole for Impersonate")
+		err = f.Helper().KubeClient.RbacV1().ClusterRoles().Delete(roleImpersonate.Name, nil)
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
 
