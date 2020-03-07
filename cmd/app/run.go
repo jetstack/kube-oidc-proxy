@@ -72,7 +72,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				return err
 			}
 
-			proxyOptions := &proxy.Config{
+			proxyConfig := &proxy.Config{
 				TokenReview:          opts.App.TokenPassthrough.Enabled,
 				DisableImpersonation: opts.App.DisableImpersonation,
 
@@ -85,7 +85,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(restConfig, opts.OIDCAuthentication, opts.Audit,
-				tokenReviewer, secureServingInfo, proxyOptions)
+				tokenReviewer, secureServingInfo, proxyConfig)
 			if err != nil {
 				return err
 			}

@@ -93,7 +93,7 @@ func (s *Sink) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	log.Infof("%s: got events: %s", r.RemoteAddr, events)
+	log.Infof("%s: got events: %v", r.RemoteAddr, events)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

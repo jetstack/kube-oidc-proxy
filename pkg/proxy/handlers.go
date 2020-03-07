@@ -181,7 +181,6 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 
 		// Failed auth
 		case errUnauthorized:
-			klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
 			// If Unauthorized then error and report to audit
 			unauthedHandler.ServeHTTP(rw, r)
 			return
