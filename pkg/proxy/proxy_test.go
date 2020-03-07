@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
@@ -17,8 +18,12 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/server"
 
+	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
 )
 
 type fakeProxy struct {
@@ -249,7 +254,7 @@ func TestHasImpersonation(t *testing.T) {
 	}
 }
 
-func newTestProxy(t *testing.T) *fakeProxy {
+func newTestProxy(t *testing.T) (*fakeProxy, error) {
 	ctrl := gomock.NewController(t)
 	fakeToken := mocks.NewMockToken(ctrl)
 	fakeRT := &fakeRT{t: t}
@@ -263,12 +268,19 @@ func newTestProxy(t *testing.T) *fakeProxy {
 			clientTransport:       fakeRT,
 			noAuthClientTransport: fakeRT,
 			config:                new(Config),
+			hooks:                 hooks.New(),
 		},
 	}
 
+	auditor, err := audit.New(new(options.AuditOptions), "0.0.0.0:1234", new(server.SecureServingInfo))
+	if err != nil {
+		return nil, err
+	}
+	p.auditor = auditor
+
 	p.handleError = p.newErrorHandler()
 
-	return p
+	return p, nil
 }
 
 func TestHandlers(t *testing.T) {
@@ -525,7 +537,12 @@ func TestHandlers(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			p := newTestProxy(t)
+			p, err := newTestProxy(t)
+			if err != nil {
+				t.Errorf("unexpected error: %s", err)
+				t.FailNow()
+			}
+
 			w := httptest.NewRecorder()
 
 			if test.authResponse != nil {
@@ -549,6 +566,9 @@ func TestHandlers(t *testing.T) {
 					t.FailNow()
 				}
 			})
+
+			test.req.URL = new(url.URL)
+
 			handler = p.withHandlers(handler)
 			handler.ServeHTTP(w, test.req)
 
@@ -629,7 +649,12 @@ func TestHeadersConfig(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			p := newTestProxy(t)
+			p, err := newTestProxy(t)
+			if err != nil {
+				t.Errorf("unexpected error: %s", err)
+				t.FailNow()
+			}
+
 			p.config = test.config
 			w := httptest.NewRecorder()
 
@@ -638,6 +663,7 @@ func TestHeadersConfig(t *testing.T) {
 					"Authorization": []string{"bearer fake-token"},
 				},
 				RemoteAddr: remoteAddr,
+				URL:        new(url.URL),
 			}
 
 			authResponse := &authenticator.Response{
@@ -661,6 +687,7 @@ func TestHeadersConfig(t *testing.T) {
 					t.FailNow()
 				}
 			})
+
 			handler = p.withHandlers(handler)
 			handler.ServeHTTP(w, req)
 
