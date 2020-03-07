@@ -22,6 +22,7 @@ const (
 	ProxyName         = "kube-oidc-proxy-e2e"
 	IssuerName        = "oidc-issuer-e2e"
 	FakeAPIServerName = "fake-apiserver-e2e"
+	AuditWebhookName  = "audit-webhook-e2e"
 )
 
 func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID string,
@@ -264,6 +265,62 @@ func (h *Helper) DeployFakeAPIServer(ns string) ([]corev1.Volume, *url.URL, erro
 	}
 
 	return extraVolumes, appURL, nil
+}
+
+func (h *Helper) DeployAuditWebhook(ns, logPath string) (corev1.Volume, *url.URL, error) {
+	cnt := corev1.Container{
+		Name:            AuditWebhookName,
+		Image:           AuditWebhookName,
+		ImagePullPolicy: corev1.PullNever,
+		Args: []string{
+			"audit-webhook",
+			"--secure-port=6443",
+			"--tls-cert-file=/tls/cert.pem",
+			"--tls-private-key-file=/tls/key.pem",
+			"--audit-file-path=" + logPath,
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			corev1.VolumeMount{
+				MountPath: "/tls",
+				Name:      "tls",
+				ReadOnly:  true,
+			},
+		},
+		Ports: []corev1.ContainerPort{
+			corev1.ContainerPort{
+				ContainerPort: 6443,
+			},
+		},
+	}
+
+	bundle, appURL, err := h.deployApp(ns, AuditWebhookName, corev1.ServiceTypeClusterIP, cnt)
+	if err != nil {
+		return corev1.Volume{}, nil, err
+	}
+
+	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "audit-webhook-ca-",
+			Namespace:    ns,
+		},
+		Data: map[string][]byte{
+			"ca.pem": bundle.CertBytes,
+		},
+	})
+	if err != nil {
+		return corev1.Volume{}, nil, err
+	}
+
+	auditWebhookCAVol := corev1.Volume{
+		Name: "audit-webhook-ca",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: sec.Name,
+			},
+		},
+	}
+
+	return auditWebhookCAVol, appURL, nil
 }
 
 func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, *url.URL, error) {

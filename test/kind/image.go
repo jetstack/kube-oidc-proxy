@@ -28,6 +28,10 @@ func (k *Kind) LoadAllImages() error {
 		return err
 	}
 
+	if err := k.LoadAuditWebhook(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -53,6 +57,15 @@ func (k *Kind) LoadFakeAPIServer() error {
 	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "fake-apiserver-e2e"
+
+	return k.loadImage(binPath, mainPath, image, dockerfilePath)
+}
+
+func (k *Kind) LoadAuditWebhook() error {
+	binPath := filepath.Join(k.rootPath, "./test/tools/audit-webhook/bin/audit-webhook")
+	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/audit-webhook")
+	mainPath := filepath.Join(dockerfilePath, "cmd")
+	image := "audit-webhook-e2e"
 
 	return k.loadImage(binPath, mainPath, image, dockerfilePath)
 }
