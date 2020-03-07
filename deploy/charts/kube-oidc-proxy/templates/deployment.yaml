@@ -74,6 +74,9 @@ spec:
           {{- if .Values.extraImpersonationHeaders.headers }}
           - "--extra-user-headers={{ .Values.extraImpersonationHeaders.headers }}"
           {{ end }}
+          {{- range $key, $value := .Values.extraArgs -}}
+          - "--{{ $key }}={{ $value -}}"
+          {{ end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
         env:
@@ -135,7 +138,7 @@ spec:
               key: api-audiences
         {{ end }}
         volumeMounts:
-          {{ if .Values.oidc.caPEM }}
+          {{- if .Values.oidc.caPEM }}
           - name: kube-oidc-proxy-config
             mountPath: /etc/oidc
             readOnly: true
@@ -143,6 +146,7 @@ spec:
           - name: kube-oidc-proxy-tls
             mountPath: /etc/oidc/tls
             readOnly: true
+          {{- if .Values.extraVolumeMounts }}{{ toYaml .Values.extraVolumeMounts | trim | nindent 10 }}{{ end }}
       volumes:
         {{ if .Values.oidc.caPEM }}
         - name: kube-oidc-proxy-config
@@ -152,6 +156,7 @@ spec:
             - key: oidc.ca-pem
               path: oidc-ca.pem
         {{ end }}
+        {{- if .Values.extraVolumes }}{{ toYaml .Values.extraVolumes | trim | nindent 8 }}{{ end }}
         - name: kube-oidc-proxy-tls
           secret:
             secretName: {{ $tlsSecretName }}
