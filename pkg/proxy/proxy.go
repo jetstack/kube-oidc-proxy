@@ -19,7 +19,9 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
@@ -43,7 +45,8 @@ type Config struct {
 	DisableImpersonation bool
 	TokenReview          bool
 
-	FlushInterval time.Duration
+	FlushInterval   time.Duration
+	ExternalAddress string
 
 	ExtraUserHeaders                map[string][]string
 	ExtraUserHeadersClientIPEnabled bool
@@ -56,6 +59,7 @@ type Proxy struct {
 	tokenAuther       authenticator.Token
 	tokenReviewer     *tokenreview.TokenReview
 	secureServingInfo *server.SecureServingInfo
+	auditor           *audit.Audit
 
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
@@ -63,11 +67,15 @@ type Proxy struct {
 
 	config *Config
 
+	hooks       *hooks.Hooks
 	handleError errorHandlerFn
 }
 
-func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions,
-	tokenReviewer *tokenreview.TokenReview, ssinfo *server.SecureServingInfo,
+func New(restConfig *rest.Config,
+	oidcOptions *options.OIDCAuthenticationOptions,
+	auditOptions *options.AuditOptions,
+	tokenReviewer *tokenreview.TokenReview,
+	ssinfo *server.SecureServingInfo,
 	config *Config) (*Proxy, error) {
 
 	// generate tokenAuther from oidc config
@@ -87,13 +95,20 @@ func New(restConfig *rest.Config, oidcOptions *options.OIDCAuthenticationOptions
 		return nil, err
 	}
 
+	auditor, err := audit.New(auditOptions, config.ExternalAddress, ssinfo)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Proxy{
 		restConfig:        restConfig,
+		hooks:             hooks.New(),
 		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
 		config:            config,
 		oidcRequestAuther: bearertoken.New(tokenAuther),
 		tokenAuther:       tokenAuther,
+		auditor:           auditor,
 	}, nil
 }
 
@@ -148,6 +163,11 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan struct{}, error) {
 	// Setup proxy handlers
 	handler = p.withHandlers(handler)
+
+	// Run auditor
+	if err := p.auditor.Run(stopCh); err != nil {
+		return nil, err
+	}
 
 	// securely serve using serving config
 	waitCh, err := p.secureServingInfo.Serve(handler, time.Second*60, stopCh)
@@ -239,4 +259,8 @@ func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTrippe
 // Return the proxy OIDC token authenticator
 func (p *Proxy) OIDCTokenAuthenticator() authenticator.Token {
 	return p.tokenAuther
+}
+
+func (p *Proxy) RunShutdownHooks() error {
+	return p.hooks.RunPreShutdownHooks()
 }

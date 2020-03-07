@@ -19,6 +19,7 @@ type Options struct {
 	App                *KubeOIDCProxyOptions
 	OIDCAuthentication *OIDCAuthenticationOptions
 	SecureServing      *SecureServingOptions
+	Audit              *AuditOptions
 	Client             *ClientOptions
 	Misc               *MiscOptions
 
@@ -33,6 +34,7 @@ func New() *Options {
 		App:                NewKubeOIDCProxyOptions(nfs),
 		OIDCAuthentication: NewOIDCAuthenticationOptions(nfs),
 		SecureServing:      NewSecureServingOptions(nfs),
+		Audit:              NewAuditOptions(nfs),
 		Client:             NewClientOptions(nfs),
 		Misc:               NewMiscOptions(nfs),
 
@@ -80,9 +82,17 @@ func (o *Options) Validate(cmd *cobra.Command) error {
 		errs = append(errs, errors.New("unable to securely serve on port 8080 (used by readiness probe)"))
 	}
 
+	if err := o.Audit.Validate(); len(err) > 0 {
+		errs = append(errs, err...)
+	}
+
 	if o.App.DisableImpersonation &&
 		(o.App.ExtraHeaderOptions.EnableClientIPExtraUserHeader || len(o.App.ExtraHeaderOptions.ExtraUserHeaders) > 0) {
 		errs = append(errs, errors.New("cannot add extra user headers when impersonation disabled"))
+	}
+
+	if o.Audit.DynamicConfigurationFlagChanged(cmd) {
+		errs = append(errs, errors.New("The flag --audit-dynamic-configuration may not be set"))
 	}
 
 	if len(errs) > 0 {

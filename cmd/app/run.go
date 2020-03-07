@@ -72,19 +72,20 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				return err
 			}
 
-			proxyConfig := &proxy.Config{
+			proxyOptions := &proxy.Config{
 				TokenReview:          opts.App.TokenPassthrough.Enabled,
 				DisableImpersonation: opts.App.DisableImpersonation,
 
-				FlushInterval: opts.App.FlushInterval,
+				FlushInterval:   opts.App.FlushInterval,
+				ExternalAddress: opts.SecureServing.BindAddress.String(),
 
 				ExtraUserHeaders:                opts.App.ExtraHeaderOptions.ExtraUserHeaders,
 				ExtraUserHeadersClientIPEnabled: opts.App.ExtraHeaderOptions.EnableClientIPExtraUserHeader,
 			}
 
 			// Initialise proxy with OIDC token authenticator
-			p, err := proxy.New(restConfig, opts.OIDCAuthentication,
-				tokenReviewer, secureServingInfo, proxyConfig)
+			p, err := proxy.New(restConfig, opts.OIDCAuthentication, opts.Audit,
+				tokenReviewer, secureServingInfo, proxyOptions)
 			if err != nil {
 				return err
 			}
@@ -108,6 +109,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			<-waitCh
+
+			if err := p.RunShutdownHooks(); err != nil {
+				return err
+			}
 
 			return nil
 		},
