@@ -195,26 +195,14 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // withAuthenticateRequest adds the proxy authentication handler to a chain.
 func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
+	tokenReviewHandler := p.withTokenReview(handler)
+
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		// Auth request and handle unauthed
 		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
 		if err != nil {
-			if !p.config.TokenReview {
-				p.handleError(rw, req, errUnauthorized)
-				return
-			}
-
-			// Attempt to passthrough request if valid token
-			if p.reviewToken(rw, req) {
-				// Set no impersonation headers and re-add removed headers.
-				req = req.WithContext(context.WithNoImpersonation(req.Context()))
-
-				handler.ServeHTTP(rw, req)
-				return
-			}
-
-			// Token review failed so error
-			p.handleError(rw, req, errUnauthorized)
+			// Since we have failed OIDC auth, we will try a token review, if enabled.
+			tokenReviewHandler.ServeHTTP(rw, req)
 			return
 		}
 
@@ -228,6 +216,30 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 
 		// Add the user info to the request context
 		req = req.WithContext(genericapirequest.WithUser(req.Context(), info.User))
+		handler.ServeHTTP(rw, req)
+	})
+}
+
+// withTokenReview will attempt a token review on the incoming request, if
+// enabled.
+func (p *Proxy) withTokenReview(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		// If token review is not enabled then error.
+		if !p.config.TokenReview {
+			p.handleError(rw, req, errUnauthorized)
+			return
+		}
+
+		// Attempt to passthrough request if valid token
+		if !p.reviewToken(rw, req) {
+			// Token review failed so error
+			p.handleError(rw, req, errUnauthorized)
+			return
+		}
+
+		// Set no impersonation headers and re-add removed headers.
+		req = req.WithContext(context.WithNoImpersonation(req.Context()))
+
 		handler.ServeHTTP(rw, req)
 	})
 }
@@ -317,21 +329,21 @@ func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {
 		req.RemoteAddr)
 
 	ok, err := p.tokenReviewer.Review(req)
-
-	// No error and ok so passthrough the request
-	if err == nil && ok {
-		klog.V(4).Infof("passing request with valid token through (%s)",
-			req.RemoteAddr)
-
-		return true
-	}
-
 	if err != nil {
 		klog.Errorf("unable to authenticate the request via TokenReview due to an error (%s): %s",
 			req.RemoteAddr, err)
+		return false
 	}
 
-	return false
+	if !ok {
+		klog.V(4).Infof("passing request with valid token through (%s)",
+			req.RemoteAddr)
+
+		return false
+	}
+
+	// No error and ok so passthrough the request
+	return true
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {
