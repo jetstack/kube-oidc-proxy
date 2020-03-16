@@ -46,8 +46,8 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) *KubeOIDCProxyOptions
 	fs.DurationVar(&k.FlushInterval, "flush-interval", time.Millisecond*50,
 		"Specifies the interval to flush request bodies. If 0ms, "+
 			"no periodic flushing is done. A negative value means to flush "+
-			"immediately after each write. Ignored, and flushed immediately, when "+
-			"responses are recognised as streaming (i.e. kubectl exec).")
+			"immediately after each write. Streaming requests such as 'kubectl exec' "+
+			"will ignore this option and flush immediately.")
 
 	k.TokenPassthrough.AddFlags(fs)
 	k.ExtraHeaderOptions.AddFlags(fs)
