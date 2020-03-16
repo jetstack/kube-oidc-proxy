@@ -32,7 +32,7 @@ func (k *Kind) LoadAllImages() error {
 }
 
 func (k *Kind) LoadKubeOIDCProxy() error {
-	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy")
+	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy-linux")
 	mainPath := filepath.Join(k.rootPath, "./cmd/.")
 	image := "kube-oidc-proxy-e2e"
 
@@ -40,7 +40,7 @@ func (k *Kind) LoadKubeOIDCProxy() error {
 }
 
 func (k *Kind) LoadIssuer() error {
-	binPath := filepath.Join(k.rootPath, "./test/tools/issuer/bin/oidc-issuer")
+	binPath := filepath.Join(k.rootPath, "./test/tools/issuer/bin/oidc-issuer-linux")
 	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/issuer")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "oidc-issuer-e2e"
@@ -49,7 +49,7 @@ func (k *Kind) LoadIssuer() error {
 }
 
 func (k *Kind) LoadFakeAPIServer() error {
-	binPath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver/bin/fake-apiserver")
+	binPath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver/bin/fake-apiserver-linux")
 	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
 	image := "fake-apiserver-e2e"
@@ -127,7 +127,8 @@ func (k *Kind) runCmdWithOut(w io.Writer, command string, args ...string) error 
 	cmd.Stdout = w
 	cmd.Env = append(cmd.Env,
 		"GO111MODULE=on", "CGO_ENABLED=0", "HOME="+os.Getenv("HOME"),
-		"PATH="+os.Getenv("PATH"))
+		"PATH="+os.Getenv("PATH"),
+		"GOOS=linux")
 
 	if err := cmd.Start(); err != nil {
 		return err

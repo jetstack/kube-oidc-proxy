@@ -11,10 +11,15 @@ onto each node.
 
 # Deploying the Proxy
 
-Use `make dev_cluster_deploy` to build the proxy and other tooling from source,
-build the images, and load them onto each node. This will then deploy the proxy
-alongside a fake OIDC issuer so that the proxy is fully functional. The proxy
-will then be reachable from a node port service in the cluster.
+This will build the proxy and other tooling from source,build the images, and
+load them onto each node. This will then deploy the proxy alongside a fake OIDC
+issuer so that the proxy is fully functional. The proxy will then be reachable
+from a node port service in the cluster.
+
+
+```bash
+make dev_cluster_deploy
+```
 
 This command will output a signed OIDC token that is valid for the proxy. You
 can then make calls to the proxy, like the following:

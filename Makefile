@@ -99,17 +99,18 @@ build: generate ## build kube-oidc-proxy
 	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy ./cmd/.
 
 docker_build: generate test build ## build docker image
+	GOOS=linux CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy-linux  ./cmd/.
 	docker build -t kube-oidc-proxy .
 
 all: test build ## runs tests, build
 
 image: all docker_build ## runs tests, build and docker build
 
-dev_cluster_create: ## create dev cluster for development testing
+dev_cluster_create: depend ## create dev cluster for development testing
 	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev create
 
-dev_cluster_deploy: ## deploy into dev cluster
+dev_cluster_deploy: depend ## deploy into dev cluster
 	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev deploy
 
-dev_cluster_destroy: ## destroy dev cluster
+dev_cluster_destroy: depend ## destroy dev cluster
 	KUBE_OIDC_PROXY_ROOT_PATH="$$(pwd)" go run -v ./test/environment/dev destroy
