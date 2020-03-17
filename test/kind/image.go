@@ -128,7 +128,7 @@ func (k *Kind) runCmdWithOut(w io.Writer, command string, args ...string) error 
 	cmd.Env = append(cmd.Env,
 		"GO111MODULE=on", "CGO_ENABLED=0", "HOME="+os.Getenv("HOME"),
 		"PATH="+os.Getenv("PATH"),
-		"GOOS=linux")
+		"GOARCH=amd64", "GOOS=linux")
 
 	if err := cmd.Start(); err != nil {
 		return err
