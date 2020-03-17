@@ -20,10 +20,11 @@ const (
 type Environment struct {
 	kind *kind.Kind
 
-	rootPath string
+	rootPath  string
+	nodeImage string
 }
 
-func Create(masterNodes, workerNodes int) (*Environment, error) {
+func New(masterNodesCount, workerNodesCount int) (*Environment, error) {
 	nodeImage := os.Getenv("KUBE_OIDC_PROXY_K8S_VERSION")
 	if nodeImage == "" {
 		nodeImage = defaultNodeImage
@@ -35,27 +36,25 @@ func Create(masterNodes, workerNodes int) (*Environment, error) {
 		return nil, err
 	}
 
-	k, err := kind.New(rootPath, nodeImage, masterNodes, workerNodes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kind cluster: %s", err)
-	}
-
-	if err := k.LoadKubeOIDCProxy(); err != nil {
-		return nil, err
-	}
-
-	if err := k.LoadIssuer(); err != nil {
-		return nil, err
-	}
-
-	if err := k.LoadFakeAPIServer(); err != nil {
-		return nil, err
-	}
+	kind := kind.New(rootPath, nodeImage, masterNodesCount, workerNodesCount)
 
 	return &Environment{
-		kind:     k,
-		rootPath: rootPath,
+		rootPath:  rootPath,
+		nodeImage: nodeImage,
+		kind:      kind,
 	}, nil
+}
+
+func (e *Environment) Create() error {
+	if err := e.kind.Create(); err != nil {
+		return fmt.Errorf("failed to create kind cluster: %s", err)
+	}
+
+	if err := e.kind.LoadAllImages(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (e *Environment) Destory() error {
@@ -99,6 +98,10 @@ func (e *Environment) Node(name string) (*nodes.Node, error) {
 	}
 
 	return node, nil
+}
+
+func (e *Environment) Kind() *kind.Kind {
+	return e.kind
 }
 
 func RootPath() (string, error) {

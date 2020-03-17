@@ -209,7 +209,7 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, *url.URL, error) {
 	return bundle, appURL, nil
 }
 
-func (h *Helper) DeployFakeAPIServer(ns string) (*util.KeyBundle, *url.URL, error) {
+func (h *Helper) DeployFakeAPIServer(ns string) ([]corev1.Volume, *url.URL, error) {
 	cnt := corev1.Container{
 		Name:            FakeAPIServerName,
 		Image:           FakeAPIServerName,
@@ -239,7 +239,31 @@ func (h *Helper) DeployFakeAPIServer(ns string) (*util.KeyBundle, *url.URL, erro
 		return nil, nil, err
 	}
 
-	return bundle, appURL, nil
+	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "fake-apiserver-ca-",
+			Namespace:    ns,
+		},
+		Data: map[string][]byte{
+			"ca.pem": bundle.CertBytes,
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	extraVolumes := []corev1.Volume{
+		{
+			Name: "fake-apiserver",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: sec.Name,
+				},
+			},
+		},
+	}
+
+	return extraVolumes, appURL, nil
 }
 
 func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, *url.URL, error) {

@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
-	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/issuer/cmd/options"
-	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/issuer/pkg/issuer"
+	"github.com/jetstack/kube-oidc-proxy/test/tools/fake-apiserver/cmd/options"
+	"github.com/jetstack/kube-oidc-proxy/test/tools/fake-apiserver/pkg/server"
 )
 
 func main() {
@@ -17,16 +17,15 @@ func main() {
 	stopCh := util.SignalHandler()
 
 	cmd := &cobra.Command{
-		Use:   "oidc-issuer",
-		Short: "A very basic OIDC issuer to present a well-known endpoint.",
+		Use:   "fake-apiserver",
+		Short: "A fake apiserver that will respond to requests with the same body and headers",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
-			iss, err := issuer.New(opts.IssuerURL, opts.KeyFile, opts.CertFile, stopCh)
+			server, err := server.New(opts.KeyFile, opts.CertFile, stopCh)
 			if err != nil {
 				return err
 			}
 
-			compCh, err := iss.Run(opts.BindAddress, opts.ListenPort)
+			compCh, err := server.Run(opts.BindAddress, opts.ListenPort)
 			if err != nil {
 				return err
 			}

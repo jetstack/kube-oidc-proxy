@@ -3,8 +3,10 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -20,6 +22,8 @@ import (
 
 const (
 	clientID = "kube-oidc-proxy-e2e-client-id"
+
+	EnvFakeAPIServer = "KUBE_OIDC_PROXY_FAKE_APISERVER"
 )
 
 func main() {
@@ -44,23 +48,28 @@ func main() {
 }
 
 func create() {
-	env, err := environment.Create(1, 1)
+	env, err := environment.New(1, 1)
 	errExit(err)
+
+	errExit(env.Create())
 
 	fmt.Printf("> dev environment created.\n")
 	fmt.Printf("export KUBECONFIG=%s\n", env.KubeConfigPath())
 }
 
 func deploy() {
-	k := new(kind.Kind)
-	kubeconfig := k.KubeConfigPath()
-	rootPath, err := environment.RootPath()
+	env, err := environment.New(1, 1)
 	errExit(err)
+
+	fmt.Printf("> reloading all images\n")
+	errExit(env.Kind().LoadAllImages())
+
+	kubeconfig := env.KubeConfigPath()
 
 	cfg := &config.Config{
 		KubeConfigPath: kubeconfig,
-		RepoRoot:       rootPath,
-		Kubectl:        filepath.Join(rootPath, "bin", "kubectl"),
+		RepoRoot:       env.RootPath(),
+		Kubectl:        filepath.Join(env.RootPath(), "bin", "kubectl"),
 	}
 
 	err = cfg.Validate()
@@ -93,9 +102,24 @@ func deploy() {
 
 	fmt.Printf("> deployed issuer at url %s\n", issuerURL)
 
-	_, proxyURL, err := helper.DeployProxy(ns, issuerURL,
-		"kube-oidc-proxy-e2e-client-id", issuerKeyBundle, nil)
-	errExit(err)
+	var proxyURL *url.URL
+	if e := os.Getenv(EnvFakeAPIServer); strings.ToLower(e) == "true" {
+		extraOIDCVolume, fURL, err := helper.DeployFakeAPIServer(ns.Name)
+		errExit(err)
+
+		fmt.Printf("> deployed fake API server at url %s\n", fURL)
+
+		_, proxyURL, err = helper.DeployProxy(ns, issuerURL,
+			"kube-oidc-proxy-e2e-client-id", issuerKeyBundle, extraOIDCVolume,
+			fmt.Sprintf("--server=%s", fURL), "--certificate-authority=/fake-apiserver/ca.pem")
+		errExit(err)
+
+	} else {
+		_, proxyURL, err = helper.DeployProxy(ns, issuerURL,
+			"kube-oidc-proxy-e2e-client-id", issuerKeyBundle, nil)
+		errExit(err)
+	}
+
 	fmt.Printf("> deployed proxy at url %s\n", proxyURL)
 
 	tokenPayload := helper.NewTokenPayload(issuerURL, clientID, time.Now().Add(time.Hour*48))

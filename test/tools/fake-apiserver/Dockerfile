@@ -5,6 +5,6 @@ LABEL description="A fake API server that will respond to requests with the same
 
 RUN apk --no-cache --update add ca-certificates
 
-COPY ./bin/fake-apiserver /usr/bin/fake-apiserver
+COPY ./bin/fake-apiserver-linux /usr/bin/fake-apiserver
 
 CMD ["/usr/bin/fake-apiserver"]
