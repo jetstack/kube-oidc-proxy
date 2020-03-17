@@ -43,6 +43,8 @@ type Options struct {
 	DisableImpersonation bool
 	TokenReview          bool
 
+	FlushInterval time.Duration
+
 	ExtraUserHeaders                map[string][]string
 	ExtraUserHeadersClientIPEnabled bool
 }
@@ -127,6 +129,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler := httputil.NewSingleHostReverseProxy(url)
 	proxyHandler.Transport = p
 	proxyHandler.ErrorHandler = p.Error
+	proxyHandler.FlushInterval = p.options.FlushInterval
 
 	waitCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {

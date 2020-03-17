@@ -2,6 +2,8 @@
 package options
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 	cliflag "k8s.io/component-base/cli/flag"
 
@@ -11,6 +13,8 @@ import (
 type KubeOIDCProxyOptions struct {
 	DisableImpersonation bool
 	ReadinessProbePort   int
+
+	FlushInterval time.Duration
 
 	ExtraHeaderOptions ExtraHeaderOptions
 	TokenPassthrough   TokenPassthroughOptions
@@ -38,6 +42,12 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) *KubeOIDCProxyOptions
 
 	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
 		"Port to expose readiness probe.")
+
+	fs.DurationVar(&k.FlushInterval, "flush-interval", time.Millisecond*50,
+		"Specifies the interval to flush request bodies. If 0ms, "+
+			"no periodic flushing is done. A negative value means to flush "+
+			"immediately after each write. Streaming requests such as 'kubectl exec' "+
+			"will ignore this option and flush immediately.")
 
 	k.TokenPassthrough.AddFlags(fs)
 	k.ExtraHeaderOptions.AddFlags(fs)
