@@ -72,7 +72,7 @@ go_vet:
 	go vet ./cmd
 
 go_lint: $(BINDIR)/golangci-lint ## lint golang code for problems
-	$(BINDIR)/golangci-lint run
+	$(BINDIR)/golangci-lint run --timeout 3m
 
 clean: ## clean up created files
 	rm -rf \

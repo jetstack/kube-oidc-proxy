@@ -91,8 +91,14 @@ func (f *Framework) BeforeEach() {
 
 // AfterEach deletes the namespace, after reading its events.
 func (f *Framework) AfterEach() {
+	// Output logs from proxy of test case.
+	err := f.Helper().Kubectl(f.Namespace.Name).Run("logs", "-lapp=kube-oidc-proxy-e2e")
+	if err != nil {
+		By("Failed to gather logs from kube-oidc-proxy: " + err.Error())
+	}
+
 	By("Deleting kube-oidc-proxy deployment")
-	err := f.Helper().DeleteProxy(f.Namespace.Name)
+	err = f.Helper().DeleteProxy(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deleting mock OIDC issuer")

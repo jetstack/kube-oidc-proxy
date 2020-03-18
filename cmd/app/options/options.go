@@ -80,6 +80,11 @@ func (o *Options) Validate(cmd *cobra.Command) error {
 		errs = append(errs, errors.New("unable to securely serve on port 8080 (used by readiness probe)"))
 	}
 
+	if o.App.DisableImpersonation &&
+		(o.App.ExtraHeaderOptions.EnableClientIPExtraUserHeader || len(o.App.ExtraHeaderOptions.ExtraUserHeaders) > 0) {
+		errs = append(errs, errors.New("cannot add extra user headers when impersonation disabled"))
+	}
+
 	if len(errs) > 0 {
 		return k8sErrors.NewAggregate(errs)
 	}
