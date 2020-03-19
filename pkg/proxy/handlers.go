@@ -39,7 +39,10 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 			return
 		}
 
-		klog.V(4).Infof("authenticated request: %s", req.RemoteAddr)
+		var remoteAddr string
+		req, remoteAddr = context.RemoteAddr(req)
+
+		klog.V(4).Infof("authenticated request: %s", remoteAddr)
 
 		// Add the user info to the request context
 		req = req.WithContext(genericapirequest.WithUser(req.Context(), info.User))
@@ -65,7 +68,7 @@ func (p *Proxy) withTokenReview(handler http.Handler) http.Handler {
 		}
 
 		// Set no impersonation headers and re-add removed headers.
-		req = req.WithContext(context.WithNoImpersonation(req.Context()))
+		req = context.WithNoImpersonation(req)
 
 		handler.ServeHTTP(rw, req)
 	})
@@ -75,16 +78,19 @@ func (p *Proxy) withTokenReview(handler http.Handler) http.Handler {
 func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		// If no impersonation has already been set, return early
-		if context.NoImpersonation(req.Context()) {
+		if context.NoImpersonation(req) {
 			handler.ServeHTTP(rw, req)
 			return
 		}
 
+		var remoteAddr string
+		req, remoteAddr = context.RemoteAddr(req)
+
 		// If we have disabled impersonation we can forward the request right away
 		if p.config.DisableImpersonation {
-			klog.V(2).Infof("passing on request with no impersonation: %s", req.RemoteAddr)
+			klog.V(2).Infof("passing on request with no impersonation: %s", remoteAddr)
 			// Indicate we need to not use impersonation.
-			req = req.WithContext(context.WithNoImpersonation(req.Context()))
+			req = context.WithNoImpersonation(req)
 			handler.ServeHTTP(rw, req)
 			return
 		}
@@ -124,16 +130,16 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 		// address.
 		if p.config.ExtraUserHeadersClientIPEnabled {
 			klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
-				UserHeaderClientIPKey, req.RemoteAddr, req.RemoteAddr)
+				UserHeaderClientIPKey, remoteAddr, remoteAddr)
 
-			extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], req.RemoteAddr)
+			extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], remoteAddr)
 		}
 
 		// Add custom extra user headers to impersonation request.
 		for k, vs := range p.config.ExtraUserHeaders {
 			for _, v := range vs {
 				klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
-					k, v, req.RemoteAddr)
+					k, v, remoteAddr)
 
 				extra[k] = append(extra[k], v)
 			}
@@ -146,7 +152,7 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 		}
 
 		// Add the impersonation configuration to the context.
-		req = req.WithContext(context.WithImpersonationConfig(req.Context(), conf))
+		req = context.WithImpersonationConfig(req, conf)
 		handler.ServeHTTP(rw, req)
 	})
 }

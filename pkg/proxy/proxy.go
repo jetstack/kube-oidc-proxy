@@ -165,14 +165,14 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// If no impersonation then we return here without setting impersonation
 	// header but re-introduce the token we removed.
-	if context.NoImpersonation(req.Context()) {
-		token := context.BearerToken(req.Context())
+	if context.NoImpersonation(req) {
+		token := context.BearerToken(req)
 		req.Header.Add("Authorization", token)
 		return p.noAuthClientTransport.RoundTrip(req)
 	}
 
 	// Get the impersonation headers from the context.
-	conf := context.ImpersonationConfig(req.Context())
+	conf := context.ImpersonationConfig(req)
 	if conf == nil {
 		return nil, errNoImpersonationConfig
 	}
@@ -183,20 +183,24 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Push request through round trippers to the API server.
 	return rt.RoundTrip(req)
 }
+
 func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {
+	var remoteAddr string
+	req, remoteAddr = context.RemoteAddr(req)
+
 	klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
-		req.RemoteAddr)
+		remoteAddr)
 
 	ok, err := p.tokenReviewer.Review(req)
 	if err != nil {
 		klog.Errorf("unable to authenticate the request via TokenReview due to an error (%s): %s",
-			req.RemoteAddr, err)
+			remoteAddr, err)
 		return false
 	}
 
 	if !ok {
 		klog.V(4).Infof("passing request with valid token through (%s)",
-			req.RemoteAddr)
+			remoteAddr)
 
 		return false
 	}
