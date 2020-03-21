@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework"
-	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/helper"
+	"github.com/jetstack/kube-oidc-proxy/test/kind"
 )
 
 var _ = framework.CasesDescribe("Readiness Probe", func() {
@@ -34,7 +34,7 @@ var _ = framework.CasesDescribe("Readiness Probe", func() {
 
 		time.Sleep(time.Second * 10)
 
-		err := f.Helper().WaitForDeploymentReady(f.Namespace.Name, helper.ProxyName, time.Second*5)
+		err := f.Helper().WaitForDeploymentReady(f.Namespace.Name, kind.ProxyImageName, time.Second*5)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

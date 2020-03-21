@@ -2,6 +2,7 @@
 package helper
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -31,6 +32,10 @@ func (h *Helper) Kubectl(ns string) *Kubectl {
 }
 
 func (k *Kubectl) Run(args ...string) error {
+	return k.RunWithStdout(os.Stdout, args...)
+}
+
+func (k *Kubectl) RunWithStdout(stdout io.Writer, args ...string) error {
 	baseArgs := []string{"--kubeconfig", k.kubeconfig}
 	if k.namespace == "" {
 		baseArgs = append(baseArgs, "--all-namespaces")
@@ -39,7 +44,7 @@ func (k *Kubectl) Run(args ...string) error {
 	}
 	args = append(baseArgs, args...)
 	cmd := exec.Command(k.kubectl, args...)
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }

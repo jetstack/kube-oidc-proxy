@@ -16,6 +16,7 @@ import (
 
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/config"
 	"github.com/jetstack/kube-oidc-proxy/test/e2e/framework/helper"
+	"github.com/jetstack/kube-oidc-proxy/test/kind"
 	"github.com/jetstack/kube-oidc-proxy/test/util"
 )
 
@@ -115,7 +116,7 @@ func (f *Framework) DeployProxyWith(extraVolumes []corev1.Volume, extraArgs ...s
 	err := f.Helper().DeleteProxy(f.Namespace.Name)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = f.Helper().WaitForDeploymentToDelete(f.Namespace.Name, helper.ProxyName, time.Second*30)
+	err = f.Helper().WaitForDeploymentToDelete(f.Namespace.Name, kind.ProxyImageName, time.Second*30)
 	Expect(err).NotTo(HaveOccurred())
 
 	By(fmt.Sprintf("Deploying kube-oidc-proxy with extra args %s", extraArgs))

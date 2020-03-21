@@ -6,10 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"os"
-	"path/filepath"
 	"reflect"
 	"time"
 
@@ -160,6 +157,7 @@ func testAuditLogs(f *framework.Framework, podLabelSelector string) {
 	}
 
 	By("Waiting for audit logs to be written")
+	// 5 seconds here is longer than the proxy flush interval.
 	time.Sleep(time.Second * 5)
 
 	By("Copying audit log from proxy locally")
@@ -172,23 +170,12 @@ func testAuditLogs(f *framework.Framework, podLabelSelector string) {
 		Expect(fmt.Errorf("expected single kube-oidc-proxy pod running, got=%d", len(pods.Items))).NotTo(HaveOccurred())
 	}
 
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "kube-oidc-proxy-e2e")
+	var auditLogsBuffer bytes.Buffer
+	err = f.Helper().Kubectl(f.Namespace.Name).RunWithStdout(&auditLogsBuffer,
+		"exec", pods.Items[0].Name, "cat", "/audit-log")
 	Expect(err).NotTo(HaveOccurred())
 
-	defer func() {
-		err := os.RemoveAll(tmpDir)
-		Expect(err).NotTo(HaveOccurred())
-	}()
-
-	logFile := filepath.Join(tmpDir, "log.txt")
-
-	err = f.Helper().Kubectl(f.Namespace.Name).Run(
-		"cp", fmt.Sprintf("%s:audit-log", pods.Items[0].Name), logFile)
-	Expect(err).NotTo(HaveOccurred())
-
-	logs, err := ioutil.ReadFile(logFile)
-	Expect(err).NotTo(HaveOccurred())
-
+	logs := auditLogsBuffer.Bytes()
 	scanner := bufio.NewScanner(bytes.NewReader(logs))
 
 	expAuditEvents := []auditv1.Event{
