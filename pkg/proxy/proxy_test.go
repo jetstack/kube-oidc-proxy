@@ -254,7 +254,7 @@ func TestHasImpersonation(t *testing.T) {
 	}
 }
 
-func newTestProxy(t *testing.T) (*fakeProxy, error) {
+func newTestProxy(t *testing.T) *fakeProxy {
 	ctrl := gomock.NewController(t)
 	fakeToken := mocks.NewMockToken(ctrl)
 	fakeRT := &fakeRT{t: t}
@@ -274,13 +274,13 @@ func newTestProxy(t *testing.T) (*fakeProxy, error) {
 
 	auditor, err := audit.New(new(options.AuditOptions), "0.0.0.0:1234", new(server.SecureServingInfo))
 	if err != nil {
-		return nil, err
+		t.Fatalf("failed to create auditor: %s", err)
 	}
 	p.auditor = auditor
 
 	p.handleError = p.newErrorHandler()
 
-	return p, nil
+	return p
 }
 
 func TestHandlers(t *testing.T) {
@@ -537,11 +537,7 @@ func TestHandlers(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			p, err := newTestProxy(t)
-			if err != nil {
-				t.Errorf("unexpected error: %s", err)
-				t.FailNow()
-			}
+			p := newTestProxy(t)
 
 			w := httptest.NewRecorder()
 
@@ -649,11 +645,7 @@ func TestHeadersConfig(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			p, err := newTestProxy(t)
-			if err != nil {
-				t.Errorf("unexpected error: %s", err)
-				t.FailNow()
-			}
+			p := newTestProxy(t)
 
 			p.config = test.config
 			w := httptest.NewRecorder()

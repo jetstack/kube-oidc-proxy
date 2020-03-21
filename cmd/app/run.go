@@ -110,7 +110,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			<-waitCh
 
-			if err := p.RunShutdownHooks(); err != nil {
+			if err := p.RunPreShutdownHooks(); err != nil {
 				return err
 			}
 

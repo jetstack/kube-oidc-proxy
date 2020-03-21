@@ -261,6 +261,6 @@ func (p *Proxy) OIDCTokenAuthenticator() authenticator.Token {
 	return p.tokenAuther
 }
 
-func (p *Proxy) RunShutdownHooks() error {
+func (p *Proxy) RunPreShutdownHooks() error {
 	return p.hooks.RunPreShutdownHooks()
 }
