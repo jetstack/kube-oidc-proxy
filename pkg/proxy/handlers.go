@@ -10,13 +10,19 @@ import (
 	"k8s.io/client-go/transport"
 	"k8s.io/klog"
 
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 )
 
 func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
 	// Set up proxy handlers
+	handler = p.auditor.WithRequest(handler)
 	handler = p.withImpersonateRequest(handler)
 	handler = p.withAuthenticateRequest(handler)
+
+	// Add the auditor backend as a shutdown hook
+	p.hooks.AddPreShutdownHook("AuditBackend", p.auditor.Shutdown)
+
 	return handler
 }
 
@@ -159,6 +165,11 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 
 // newErrorHandler returns a handler failed requests.
 func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, err error) {
+	unauthedHandler := audit.NewUnauthenticatedHandler(p.auditor, func(rw http.ResponseWriter, r *http.Request) {
+		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
+		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+	})
+
 	return func(rw http.ResponseWriter, r *http.Request, err error) {
 		if err == nil {
 			klog.Error("error was called with no error")
@@ -170,8 +181,8 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 
 		// Failed auth
 		case errUnauthorized:
-			klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
-			http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+			// If Unauthorized then error and report to audit
+			unauthedHandler.ServeHTTP(rw, r)
 			return
 
 			// User request with impersonation

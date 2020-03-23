@@ -15,6 +15,13 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
 )
 
+const (
+	ProxyImageName         = "kube-oidc-proxy-e2e"
+	IssuerImageName        = "oidc-issuer-e2e"
+	FakeAPIServerImageName = "fake-apiserver-e2e"
+	AuditWebhookImageName  = "audit-webhook-e2e"
+)
+
 func (k *Kind) LoadAllImages() error {
 	if err := k.LoadKubeOIDCProxy(); err != nil {
 		return err
@@ -28,33 +35,42 @@ func (k *Kind) LoadAllImages() error {
 		return err
 	}
 
+	if err := k.LoadAuditWebhook(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (k *Kind) LoadKubeOIDCProxy() error {
 	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy-linux")
 	mainPath := filepath.Join(k.rootPath, "./cmd/.")
-	image := "kube-oidc-proxy-e2e"
 
-	return k.loadImage(binPath, mainPath, image, k.rootPath)
+	return k.loadImage(binPath, mainPath, ProxyImageName, k.rootPath)
 }
 
 func (k *Kind) LoadIssuer() error {
 	binPath := filepath.Join(k.rootPath, "./test/tools/issuer/bin/oidc-issuer-linux")
 	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/issuer")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
-	image := "oidc-issuer-e2e"
 
-	return k.loadImage(binPath, mainPath, image, dockerfilePath)
+	return k.loadImage(binPath, mainPath, IssuerImageName, dockerfilePath)
 }
 
 func (k *Kind) LoadFakeAPIServer() error {
 	binPath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver/bin/fake-apiserver-linux")
 	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/fake-apiserver")
 	mainPath := filepath.Join(dockerfilePath, "cmd")
-	image := "fake-apiserver-e2e"
 
-	return k.loadImage(binPath, mainPath, image, dockerfilePath)
+	return k.loadImage(binPath, mainPath, FakeAPIServerImageName, dockerfilePath)
+}
+
+func (k *Kind) LoadAuditWebhook() error {
+	binPath := filepath.Join(k.rootPath, "./test/tools/audit-webhook/bin/audit-webhook")
+	dockerfilePath := filepath.Join(k.rootPath, "./test/tools/audit-webhook")
+	mainPath := filepath.Join(dockerfilePath, "cmd")
+
+	return k.loadImage(binPath, mainPath, AuditWebhookImageName, dockerfilePath)
 }
 
 func (k *Kind) loadImage(binPath, mainPath, image, dockerfilePath string) error {

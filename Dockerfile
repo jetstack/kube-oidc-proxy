@@ -2,7 +2,7 @@
 FROM alpine:3.10
 LABEL description="OIDC reverse proxy authenticator based on Kubernetes"
 
-RUN apk --no-cache --update add ca-certificates
+RUN apk --no-cache add ca-certificates
 
 COPY ./bin/kube-oidc-proxy-linux /usr/bin/kube-oidc-proxy
 

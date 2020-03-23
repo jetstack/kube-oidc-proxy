@@ -15,20 +15,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/jetstack/kube-oidc-proxy/test/kind"
 	"github.com/jetstack/kube-oidc-proxy/test/util"
-)
-
-const (
-	ProxyName         = "kube-oidc-proxy-e2e"
-	IssuerName        = "oidc-issuer-e2e"
-	FakeAPIServerName = "fake-apiserver-e2e"
 )
 
 func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID string,
 	oidcKeyBundle *util.KeyBundle, extraVolumes []corev1.Volume, extraArgs ...string) (*util.KeyBundle, *url.URL, error) {
 	cnt := corev1.Container{
-		Name:            ProxyName,
-		Image:           ProxyName,
+		Name:            kind.ProxyImageName,
+		Image:           kind.ProxyImageName,
 		ImagePullPolicy: corev1.PullNever,
 		Args: append([]string{
 			"kube-oidc-proxy",
@@ -107,7 +102,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 		return nil, nil, err
 	}
 
-	bundle, appURL, err := h.deployApp(ns.Name, ProxyName, corev1.ServiceTypeNodePort, cnt, volumes...)
+	bundle, appURL, err := h.deployApp(ns.Name, kind.ProxyImageName, corev1.ServiceTypeNodePort, cnt, volumes...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -117,7 +112,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 
 	crole, err := h.KubeClient.RbacV1().ClusterRoles().Create(&rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: ProxyName + "-",
+			GenerateName: kind.ProxyImageName + "-",
 			OwnerReferences: []metav1.OwnerReference{
 				metav1.OwnerReference{
 					APIVersion:         "core/v1",
@@ -149,7 +144,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 	_, err = h.KubeClient.RbacV1().ClusterRoleBindings().Create(
 		&rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: ProxyName + "-",
+				GenerateName: kind.ProxyImageName + "-",
 				OwnerReferences: []metav1.OwnerReference{
 					metav1.OwnerReference{
 						APIVersion:         "core/v1",
@@ -165,7 +160,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 				Name: crole.Name, Kind: "ClusterRole",
 			},
 			Subjects: []rbacv1.Subject{
-				{Name: ProxyName, Namespace: ns.Name, Kind: "ServiceAccount"},
+				{Name: kind.ProxyImageName, Namespace: ns.Name, Kind: "ServiceAccount"},
 			},
 		})
 	if err != nil {
@@ -177,8 +172,8 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 
 func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, *url.URL, error) {
 	cnt := corev1.Container{
-		Name:            IssuerName,
-		Image:           IssuerName,
+		Name:            kind.IssuerImageName,
+		Image:           kind.IssuerImageName,
 		ImagePullPolicy: corev1.PullNever,
 		Args: []string{
 			"oidc-issuer",
@@ -201,7 +196,7 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, *url.URL, error) {
 		},
 	}
 
-	bundle, appURL, err := h.deployApp(ns, IssuerName, corev1.ServiceTypeClusterIP, cnt)
+	bundle, appURL, err := h.deployApp(ns, kind.IssuerImageName, corev1.ServiceTypeClusterIP, cnt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -211,8 +206,8 @@ func (h *Helper) DeployIssuer(ns string) (*util.KeyBundle, *url.URL, error) {
 
 func (h *Helper) DeployFakeAPIServer(ns string) ([]corev1.Volume, *url.URL, error) {
 	cnt := corev1.Container{
-		Name:            FakeAPIServerName,
-		Image:           FakeAPIServerName,
+		Name:            kind.FakeAPIServerImageName,
+		Image:           kind.FakeAPIServerImageName,
 		ImagePullPolicy: corev1.PullNever,
 		Args: []string{
 			"fake-apiserver",
@@ -234,7 +229,7 @@ func (h *Helper) DeployFakeAPIServer(ns string) ([]corev1.Volume, *url.URL, erro
 		},
 	}
 
-	bundle, appURL, err := h.deployApp(ns, FakeAPIServerName, corev1.ServiceTypeClusterIP, cnt)
+	bundle, appURL, err := h.deployApp(ns, kind.FakeAPIServerImageName, corev1.ServiceTypeClusterIP, cnt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -264,6 +259,62 @@ func (h *Helper) DeployFakeAPIServer(ns string) ([]corev1.Volume, *url.URL, erro
 	}
 
 	return extraVolumes, appURL, nil
+}
+
+func (h *Helper) DeployAuditWebhook(ns, logPath string) (corev1.Volume, *url.URL, error) {
+	cnt := corev1.Container{
+		Name:            kind.AuditWebhookImageName,
+		Image:           kind.AuditWebhookImageName,
+		ImagePullPolicy: corev1.PullNever,
+		Args: []string{
+			"audit-webhook",
+			"--secure-port=6443",
+			"--tls-cert-file=/tls/cert.pem",
+			"--tls-private-key-file=/tls/key.pem",
+			"--audit-file-path=" + logPath,
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			corev1.VolumeMount{
+				MountPath: "/tls",
+				Name:      "tls",
+				ReadOnly:  true,
+			},
+		},
+		Ports: []corev1.ContainerPort{
+			corev1.ContainerPort{
+				ContainerPort: 6443,
+			},
+		},
+	}
+
+	bundle, appURL, err := h.deployApp(ns, kind.AuditWebhookImageName, corev1.ServiceTypeClusterIP, cnt)
+	if err != nil {
+		return corev1.Volume{}, nil, err
+	}
+
+	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "audit-webhook-ca-",
+			Namespace:    ns,
+		},
+		Data: map[string][]byte{
+			"ca.pem": bundle.CertBytes,
+		},
+	})
+	if err != nil {
+		return corev1.Volume{}, nil, err
+	}
+
+	auditWebhookCAVol := corev1.Volume{
+		Name: "audit-webhook-ca",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: sec.Name,
+			},
+		},
+	}
+
+	return auditWebhookCAVol, appURL, nil
 }
 
 func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, container corev1.Container, volumes ...corev1.Volume) (*util.KeyBundle, *url.URL, error) {
@@ -406,13 +457,13 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 }
 
 func (h *Helper) DeleteProxy(ns string) error {
-	return h.deleteApp(ns, ProxyName, "oidc-ca")
+	return h.deleteApp(ns, kind.ProxyImageName, "oidc-ca")
 }
 func (h *Helper) DeleteIssuer(ns string) error {
-	return h.deleteApp(ns, IssuerName)
+	return h.deleteApp(ns, kind.IssuerImageName)
 }
 func (h *Helper) DeleteFakeAPIServer(ns string) error {
-	return h.deleteApp(ns, FakeAPIServerName)
+	return h.deleteApp(ns, kind.FakeAPIServerImageName)
 }
 
 func (h *Helper) deleteApp(ns, name string, extraSecrets ...string) error {

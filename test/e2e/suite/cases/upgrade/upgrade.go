@@ -140,7 +140,7 @@ var _ = framework.CasesDescribe("Upgrade", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		By(fmt.Sprintf("exec outpu t%s/%s: %s", pod.Namespace, pod.Name, execOut.String()))
+		By(fmt.Sprintf("exec output %s/%s: %s", pod.Namespace, pod.Name, execOut.String()))
 
 		// should have correct stdout output from echo server
 		if !strings.HasSuffix(execOut.String(), "BODY:\nhello world") {

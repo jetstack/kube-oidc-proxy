@@ -60,6 +60,20 @@ extraImpersonationHeaders:
   clientIP: false
   #headers: key1=foo,key2=bar,key1=bar
 
+extraArgs: {}
+  #audit-log-path: /audit-log
+  #audit-policy-file: /audit/audit.yaml
+
+extraVolumeMounts: {}
+  #- name: audit
+  #  mountPath: /audit
+  #  readOnly: true
+
+extraVolumes: {}
+  #- configMap:
+      #defaultMode: 420
+      #name: kube-oidc-proxy-policy
+    #name: audit
 
 ingress:
   enabled: false
@@ -91,6 +105,7 @@ resources: {}
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
+  #
 
 initContainers: []
 
