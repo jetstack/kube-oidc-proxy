@@ -11,7 +11,7 @@ local READINESS_PORT = 8080;
 
   app:: 'kube-oidc-proxy',
 
-  image:: 'quay.io/jetstack/kube-oidc-proxy:v0.2.0',
+  image:: 'quay.io/jetstack/kube-oidc-proxy:v0.3.0',
 
   name:: $.p + $.app,
 

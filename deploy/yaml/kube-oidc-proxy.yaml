@@ -29,7 +29,7 @@ spec:
     spec:
       serviceAccountName: kube-oidc-proxy
       containers:
-      - image: quay.io/jetstack/kube-oidc-proxy:v0.2.0
+      - image: quay.io/jetstack/kube-oidc-proxy:v0.3.0
         ports:
         - containerPort: 443
         - containerPort: 8080
