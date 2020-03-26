@@ -21,6 +21,9 @@ service:
     # Define it in a key-value pairs. E.g.
     # service.beta.kubernetes.io/aws-load-balancer-internal: true
 
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+
 tls:
   # `secretName` must be a name of Secret of TLS type. If not provided a
   # self-signed certificate will get generated.
