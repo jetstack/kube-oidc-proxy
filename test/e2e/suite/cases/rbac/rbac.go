@@ -2,6 +2,7 @@
 package rbac
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
@@ -19,25 +20,25 @@ var _ = framework.CasesDescribe("RBAC", func() {
 
 	It("should return with a forbidden request with a valid token without rbac", func() {
 		By("Attempting to Get Pods")
-		_, err := f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err := f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Services")
-		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Secrets")
-		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Nodes")
-		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
@@ -48,7 +49,7 @@ var _ = framework.CasesDescribe("RBAC", func() {
 			"pods", "services", "secrets",
 		} {
 			By("Creating Role for Resource " + resource)
-			_, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(&rbacv1.Role{
+			_, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.Background(), &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("test-user-role-%s", resource),
 				},
@@ -59,12 +60,12 @@ var _ = framework.CasesDescribe("RBAC", func() {
 						Verbs:     []string{"get", "list"},
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		By("Creating RoleBinding for Group 'group-1' to access Pods")
-		_, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(
+		_, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.Background(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-user-binding-group-1-pods",
@@ -74,33 +75,33 @@ var _ = framework.CasesDescribe("RBAC", func() {
 				},
 				RoleRef: rbacv1.RoleRef{
 					Name: "test-user-role-pods", Kind: "Role"},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Pods")
-		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Services")
-		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Secrets")
-		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Nodes")
-		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Creating RoleBinding for Group 'group-2' to access Services")
-		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(
+		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.Background(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-user-binding-group-2-services",
@@ -110,31 +111,31 @@ var _ = framework.CasesDescribe("RBAC", func() {
 				},
 				RoleRef: rbacv1.RoleRef{
 					Name: "test-user-role-services", Kind: "Role"},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Pods")
-		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Services")
-		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Secrets")
-		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Attempting to Get Nodes")
-		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}
 
 		By("Creating RoleBinding for Group 'group-2' to access Secrets")
-		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(
+		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.Background(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-user-binding-group-2-secrets",
@@ -144,23 +145,23 @@ var _ = framework.CasesDescribe("RBAC", func() {
 				},
 				RoleRef: rbacv1.RoleRef{
 					Name: "test-user-role-secrets", Kind: "Role"},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Pods")
-		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Services")
-		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Services(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Secrets")
-		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Attempting to Get Nodes")
-		_, err = f.ProxyClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		_, err = f.ProxyClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(fmt.Errorf("expected forbidden error, got=%s", err)).NotTo(HaveOccurred())
 		}

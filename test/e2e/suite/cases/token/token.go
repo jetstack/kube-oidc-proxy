@@ -3,6 +3,7 @@ package token
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -46,7 +47,7 @@ var _ = framework.CasesDescribe("Token", func() {
 		client := f.NewProxyClient()
 
 		// If does not return with Kubernetes forbidden error then error
-		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
 		if !k8sErrors.IsForbidden(err) {
 			Expect(err).NotTo(HaveOccurred())
 		}

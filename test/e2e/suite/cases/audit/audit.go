@@ -4,6 +4,7 @@ package passthrough
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -26,7 +27,7 @@ var _ = framework.CasesDescribe("Audit", func() {
 
 	It("should be able to write audit logs to file", func() {
 		By("Creating policy file ConfigMap")
-		cm, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(&corev1.ConfigMap{
+		cm, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.Background(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "kube-oidc-proxy-policy-",
 			},
@@ -36,7 +37,7 @@ kind: Policy
 rules:
 - level: RequestResponse`,
 			},
-		})
+		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		vols := []corev1.Volume{
@@ -60,7 +61,7 @@ rules:
 
 	It("should be able to write audit logs to webhook", func() {
 		By("Creating policy file ConfigMap")
-		cmPolicy, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(&corev1.ConfigMap{
+		cmPolicy, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.Background(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "kube-oidc-proxy-policy-",
 			},
@@ -70,13 +71,13 @@ kind: Policy
 rules:
 - level: RequestResponse`,
 			},
-		})
+		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		extraWebhookVol, webhookURL, err := f.Helper().DeployAuditWebhook(f.Namespace.Name, "/audit-log")
 		Expect(err).NotTo(HaveOccurred())
 
-		cmWebhook, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(&corev1.ConfigMap{
+		cmWebhook, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.Background(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "kube-oidc-proxy-webhook-config-",
 			},
@@ -97,7 +98,7 @@ current-context: default-context
 preferences: {}
 users: []`,
 			},
-		})
+		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		vols := []corev1.Volume{
@@ -162,7 +163,7 @@ func testAuditLogs(f *framework.Framework, podLabelSelector string) {
 
 	By("Copying audit log from proxy locally")
 	// Get pod
-	pods, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{
+	pods, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{
 		LabelSelector: podLabelSelector,
 	})
 	Expect(err).NotTo(HaveOccurred())
