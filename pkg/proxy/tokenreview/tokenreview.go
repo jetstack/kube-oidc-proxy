@@ -17,6 +17,10 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
 
+var (
+	timeout = time.Second * 10
+)
+
 type TokenReview struct {
 	reviewRequester clientauthv1.TokenReviewInterface
 	audiences       []string
@@ -42,7 +46,7 @@ func (t *TokenReview) Review(req *http.Request) (bool, error) {
 
 	review := t.buildReview(token)
 
-	ctx, cancel := context.WithTimeout(req.Context(), time.Second*10)
+	ctx, cancel := context.WithTimeout(req.Context(), timeout)
 	defer cancel()
 
 	resp, err := t.reviewRequester.Create(ctx, review, metav1.CreateOptions{})
