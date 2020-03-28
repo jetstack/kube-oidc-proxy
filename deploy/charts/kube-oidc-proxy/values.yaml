@@ -36,7 +36,7 @@ oidc:
   usernameClaim: ""
 
   # PEM encoded value of CA cert that will verify TLS connection to
-  # OIDC issuer URL. If not provided default hosts root CA's will be used.
+  # OIDC issuer URL. If not provided, default hosts root CA's will be used.
   caPEM:
 
   usernamePrefix:
@@ -46,7 +46,6 @@ oidc:
   signingAlgs:
     - RS256
   requiredClaims: {}
-  apiAudiences: []
 
 # To enable token passthrough feature
 # https://github.com/jetstack/kube-oidc-proxy/blob/master/docs/tasks/token-passthrough.md
