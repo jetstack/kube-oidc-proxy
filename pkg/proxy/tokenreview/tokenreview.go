@@ -2,11 +2,14 @@
 package tokenreview
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	authv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	clientauthv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
@@ -39,7 +42,10 @@ func (t *TokenReview) Review(req *http.Request) (bool, error) {
 
 	review := t.buildReview(token)
 
-	resp, err := t.reviewRequester.Create(review)
+	ctx, cancel := context.WithTimeout(req.Context(), time.Second*10)
+	defer cancel()
+
+	resp, err := t.reviewRequester.Create(ctx, review, metav1.CreateOptions{})
 	if err != nil {
 		return false, err
 	}

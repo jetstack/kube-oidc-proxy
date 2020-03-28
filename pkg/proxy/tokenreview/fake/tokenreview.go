@@ -5,6 +5,7 @@ import (
 	"context"
 
 	authv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 )
 
@@ -22,7 +23,7 @@ func New() *FakeReviewer {
 	}
 }
 
-func (f *FakeReviewer) Create(req *authv1.TokenReview) (*authv1.TokenReview, error) {
+func (f *FakeReviewer) Create(ctx context.Context, req *authv1.TokenReview, co metav1.CreateOptions) (*authv1.TokenReview, error) {
 	return f.CreateFn(req)
 }
 

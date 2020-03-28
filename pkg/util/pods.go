@@ -2,6 +2,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,7 +16,7 @@ func WaitForPodReady(kubeclient *kubernetes.Clientset,
 	i := 0
 
 	for {
-		pod, err := kubeclient.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+		pod, err := kubeclient.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
