@@ -2,6 +2,7 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -24,12 +25,12 @@ func (f *Framework) CreateKubeNamespace(baseName string) (*corev1.Namespace, err
 		},
 	}
 
-	return f.KubeClientSet.CoreV1().Namespaces().Create(ns)
+	return f.KubeClientSet.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 }
 
 // DeleteKubeNamespace will delete a namespace resource
 func (f *Framework) DeleteKubeNamespace(namespace string) error {
-	return f.KubeClientSet.CoreV1().Namespaces().Delete(namespace, nil)
+	return f.KubeClientSet.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
 }
 
 // WaitForKubeNamespaceNotExist will wait for the namespace with the given name
@@ -40,7 +41,7 @@ func (f *Framework) WaitForKubeNamespaceNotExist(namespace string) error {
 
 func namespaceNotExist(c kubernetes.Interface, namespace string) wait.ConditionFunc {
 	return func() (bool, error) {
-		_, err := c.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{})
+		_, err := c.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return true, nil
 		}

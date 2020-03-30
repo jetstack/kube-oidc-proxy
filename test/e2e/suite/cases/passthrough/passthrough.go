@@ -2,6 +2,7 @@
 package passthrough
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -23,7 +24,7 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 
 	JustBeforeEach(func() {
 		By("Creating List Pods Role")
-		_, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(
+		_, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.TODO(),
 			&rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "e2e-impersonation-pods-list",
@@ -35,12 +36,12 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 						Verbs:     []string{"get", "list"},
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create bindings for both the OIDC user and default ServiceAccount
 		By("Creating List Pods RoleBinding")
-		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(
+		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.TODO(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "e2e-impersonation-pods-list",
@@ -51,7 +52,7 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 				},
 				RoleRef: rbacv1.RoleRef{
 					Name: "e2e-impersonation-pods-list", Kind: "Role"},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Geting the token for the default ServiceAccount")
@@ -70,20 +71,20 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 
 	JustAfterEach(func() {
 		By("Deleting List Pods Role")
-		err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(
-			"e2e-impersonation-pods-list", nil)
+		err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(context.TODO(),
+			"e2e-impersonation-pods-list", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating List Pods RoleBinding")
-		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(
-			"e2e-impersonation-pods-list", nil)
+		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(context.TODO(),
+			"e2e-impersonation-pods-list", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("error when a valid OIDC token is used but return correct when passthrough is disabled", func() {
 		By("A valid OIDC token should respond without error")
 		proxyClient := f.NewProxyClient()
-		_, err := proxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err := proxyClient.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Using a ServiceAccount token should error by the proxy")
@@ -95,7 +96,7 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 		client, err := kubernetes.NewForConfig(config)
 		Expect(err).NotTo(HaveOccurred())
 
-		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		kErr, ok := err.(*k8sErrors.StatusError)
 		if !ok {
 			Expect(err).NotTo(HaveOccurred())
@@ -118,7 +119,7 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 
 		By("A valid OIDC token should respond without error")
 		proxyClient := f.NewProxyClient()
-		_, err := proxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err := proxyClient.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Using a ServiceAccount token should not error")
@@ -129,7 +130,7 @@ var _ = framework.CasesDescribe("Passthrough", func() {
 		kubeProxyClient, err := kubernetes.NewForConfig(proxyConfig)
 		Expect(err).NotTo(HaveOccurred())
 
-		_, err = kubeProxyClient.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = kubeProxyClient.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

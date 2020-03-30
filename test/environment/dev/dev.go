@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -92,7 +93,7 @@ func deploy() {
 			GenerateName: "kube-oidc-proxy-e2e-",
 		},
 	}
-	ns, err = kubeClient.CoreV1().Namespaces().Create(ns)
+	ns, err = kubeClient.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	errExit(err)
 
 	fmt.Printf("> created new namespace %s\n", ns.Name)

@@ -14,6 +14,10 @@ import (
 	"k8s.io/klog"
 )
 
+const (
+	timeout = time.Second * 10
+)
+
 type HealthCheck struct {
 	handler healthcheck.Handler
 
@@ -50,7 +54,10 @@ func (h *HealthCheck) Check() error {
 		return nil
 	}
 
-	_, _, err := h.oidcAuther.AuthenticateToken(context.Background(), h.fakeJWT)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	_, _, err := h.oidcAuther.AuthenticateToken(ctx, h.fakeJWT)
 	if err != nil && strings.HasSuffix(err.Error(), "authenticator not initialized") {
 		err = fmt.Errorf("OIDC provider not yet initialized: %s", err)
 		klog.V(4).Infof(err.Error())

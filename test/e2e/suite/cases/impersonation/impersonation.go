@@ -2,6 +2,7 @@
 package impersonation
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -69,47 +70,47 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		f.DeployProxyWith(nil, "--disable-impersonation")
 
 		By("Creating ClusterRole for system:anonymous to impersonate")
-		roleImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoles().Create(&rbacv1.ClusterRole{
+		roleImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: fmt.Sprintf("test-user-role-impersonate-"),
 			},
 			Rules: []rbacv1.PolicyRule{
 				{APIGroups: []string{""}, Resources: []string{"users"}, Verbs: []string{"impersonate"}},
 			},
-		})
+		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating Role for user foo to list Pods")
-		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(&rbacv1.Role{
+		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.TODO(), &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: fmt.Sprintf("test-user-role-pods-"),
 			},
 			Rules: []rbacv1.PolicyRule{
 				{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list"}},
 			},
-		})
+		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating ClusterRoleBinding for user system:anonymous")
-		rolebindingImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(
+		rolebindingImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(),
 			&rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-user-binding-system-anonymous",
 				},
 				Subjects: []rbacv1.Subject{{Name: "system:anonymous", Kind: "User"}},
 				RoleRef:  rbacv1.RoleRef{Name: roleImpersonate.Name, Kind: "ClusterRole"},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating RoleBinding for user foo@example.com")
-		rolebindingPods, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(
+		rolebindingPods, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.TODO(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-user-binding-user-foo-example-com",
 				},
 				Subjects: []rbacv1.Subject{{Name: "foo@example.com", Kind: "User"}},
 				RoleRef:  rbacv1.RoleRef{Name: rolePods.Name, Kind: "Role"},
-			})
+			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// build client with impersonation
@@ -122,23 +123,23 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 
 		// Should not error since we have authorized system:anonymous to
 		// impersonate and foo@example.com to list pods
-		_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting RoleBinding for user foo@example.com")
-		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(rolebindingPods.Name, nil)
+		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(context.TODO(), rolebindingPods.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting Role for list Pods")
-		err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(rolePods.Name, nil)
+		err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(context.TODO(), rolePods.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting ClusterRoleBinding for user system:anonymous")
-		err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Delete(rolebindingImpersonate.Name, nil)
+		err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Delete(context.TODO(), rolebindingImpersonate.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting ClusterRole for Impersonate")
-		err = f.Helper().KubeClient.RbacV1().ClusterRoles().Delete(roleImpersonate.Name, nil)
+		err = f.Helper().KubeClient.RbacV1().ClusterRoles().Delete(context.TODO(), roleImpersonate.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -150,7 +151,7 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 	client, err := kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 
-	_, err = client.CoreV1().Pods(f.Namespace.Name).List(metav1.ListOptions{})
+	_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 	kErr, ok := err.(*k8sErrors.StatusError)
 	if !ok {
 		Expect(err).NotTo(HaveOccurred())

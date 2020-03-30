@@ -2,6 +2,7 @@
 package kind
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -206,7 +207,7 @@ func (k *Kind) waitForNodesReady() error {
 	log.Infof("kind: waiting for all nodes to become ready...")
 
 	return wait.PollImmediate(time.Second*5, time.Minute*10, func() (bool, error) {
-		nodes, err := k.client.CoreV1().Nodes().List(metav1.ListOptions{})
+		nodes, err := k.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -248,7 +249,7 @@ func (k *Kind) waitForCoreDNSReady() error {
 
 func (k *Kind) waitForPodsReady(namespace, labelSelector string) error {
 	return wait.PollImmediate(time.Second*5, time.Minute*10, func() (bool, error) {
-		pods, err := k.client.CoreV1().Pods(namespace).List(metav1.ListOptions{
+		pods, err := k.client.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: labelSelector,
 		})
 		if err != nil {

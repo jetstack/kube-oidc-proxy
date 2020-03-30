@@ -38,7 +38,7 @@ func TestRun(t *testing.T) {
 		t.FailNow()
 	}
 
-	fakeJWT, err := util.FakeJWT("issuer", nil)
+	fakeJWT, err := util.FakeJWT("issuer")
 	if err != nil {
 		t.Error(err.Error())
 		t.FailNow()

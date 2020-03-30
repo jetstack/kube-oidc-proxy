@@ -91,7 +91,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			// Create a fake JWT to set up readiness probe
-			fakeJWT, err := util.FakeJWT(opts.OIDCAuthentication.IssuerURL, opts.OIDCAuthentication.APIAudiences)
+			fakeJWT, err := util.FakeJWT(opts.OIDCAuthentication.IssuerURL)
 			if err != nil {
 				return err
 			}

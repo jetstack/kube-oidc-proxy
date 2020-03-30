@@ -10,7 +10,6 @@ import (
 )
 
 type OIDCAuthenticationOptions struct {
-	APIAudiences   []string
 	CAFile         string
 	ClientID       string
 	IssuerURL      string
@@ -35,11 +34,6 @@ func (o *OIDCAuthenticationOptions) Validate() error {
 }
 
 func (o *OIDCAuthenticationOptions) AddFlags(fs *pflag.FlagSet) *OIDCAuthenticationOptions {
-	fs.StringSliceVar(&o.APIAudiences, "api-audiences", o.APIAudiences, ""+
-		"Identifiers of the API. This can be used as an additional list of "+
-		"identifiers that exist in the target audiences of requests when "+
-		"authenticating with OIDC.")
-
 	fs.StringVar(&o.IssuerURL, "oidc-issuer-url", o.IssuerURL, ""+
 		"The URL of the OpenID issuer, only HTTPS scheme will be accepted.")
 

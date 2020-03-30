@@ -39,7 +39,7 @@ func ParseTokenFromRequest(req *http.Request) (string, bool) {
 // fakeJWT generates a valid JWT using the passed input parameters which is
 // signed by a generated key. This is useful for checking the status of a
 // signer.
-func FakeJWT(issuerURL string, apiAudiences []string) (string, error) {
+func FakeJWT(issuerURL string) (string, error) {
 	key := []byte("secret")
 
 	sig, err := jose.NewSigner(
@@ -53,7 +53,7 @@ func FakeJWT(issuerURL string, apiAudiences []string) (string, error) {
 		Subject:   "fake",
 		Issuer:    issuerURL,
 		NotBefore: jwt.NewNumericDate(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)),
-		Audience:  jwt.Audience(apiAudiences),
+		Audience:  jwt.Audience(nil),
 	}
 
 	return jwt.Signed(sig).Claims(cl).CompactSerialize()
