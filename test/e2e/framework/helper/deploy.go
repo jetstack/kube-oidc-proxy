@@ -98,7 +98,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 		},
 	}
 
-	_, err := h.KubeClient.CoreV1().Secrets(ns.Name).Create(context.Background(), sec, metav1.CreateOptions{})
+	_, err := h.KubeClient.CoreV1().Secrets(ns.Name).Create(context.TODO(), sec, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -111,7 +111,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 	pTrue := true
 	pFalse := false
 
-	crole, err := h.KubeClient.RbacV1().ClusterRoles().Create(context.Background(), &rbacv1.ClusterRole{
+	crole, err := h.KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: kind.ProxyImageName + "-",
 			OwnerReferences: []metav1.OwnerReference{
@@ -142,7 +142,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 		return nil, nil, err
 	}
 
-	_, err = h.KubeClient.RbacV1().ClusterRoleBindings().Create(context.Background(),
+	_, err = h.KubeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(),
 		&rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: kind.ProxyImageName + "-",
@@ -235,7 +235,7 @@ func (h *Helper) DeployFakeAPIServer(ns string) ([]corev1.Volume, *url.URL, erro
 		return nil, nil, err
 	}
 
-	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(context.Background(), &corev1.Secret{
+	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(context.TODO(), &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "fake-apiserver-ca-",
 			Namespace:    ns,
@@ -293,7 +293,7 @@ func (h *Helper) DeployAuditWebhook(ns, logPath string) (corev1.Volume, *url.URL
 		return corev1.Volume{}, nil, err
 	}
 
-	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(context.Background(), &corev1.Secret{
+	sec, err := h.KubeClient.CoreV1().Secrets(ns).Create(context.TODO(), &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "audit-webhook-ca-",
 			Namespace:    ns,
@@ -323,7 +323,7 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 
 	var netIPs []net.IP
 	if serviceType == corev1.ServiceTypeNodePort {
-		nodes, err := h.KubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+		nodes, err := h.KubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -419,7 +419,7 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 		},
 	}
 
-	svc, err = h.KubeClient.CoreV1().Services(ns).Create(context.Background(), svc, metav1.CreateOptions{})
+	svc, err = h.KubeClient.CoreV1().Services(ns).Create(context.TODO(), svc, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -429,17 +429,17 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 			strconv.FormatUint(uint64(svc.Spec.Ports[0].NodePort), 10))
 	}
 
-	_, err = h.KubeClient.CoreV1().Secrets(ns).Create(context.Background(), sec, metav1.CreateOptions{})
+	_, err = h.KubeClient.CoreV1().Secrets(ns).Create(context.TODO(), sec, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	_, err = h.KubeClient.CoreV1().ServiceAccounts(ns).Create(context.Background(), sa, metav1.CreateOptions{})
+	_, err = h.KubeClient.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	_, err = h.KubeClient.AppsV1().Deployments(ns).Create(context.Background(), deploy, metav1.CreateOptions{})
+	_, err = h.KubeClient.AppsV1().Deployments(ns).Create(context.TODO(), deploy, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -468,24 +468,24 @@ func (h *Helper) DeleteFakeAPIServer(ns string) error {
 }
 
 func (h *Helper) deleteApp(ns, name string, extraSecrets ...string) error {
-	err := h.KubeClient.AppsV1().Deployments(ns).Delete(context.Background(), name, metav1.DeleteOptions{})
+	err := h.KubeClient.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
 
 	for _, s := range append(extraSecrets, name) {
-		err = h.KubeClient.CoreV1().Secrets(ns).Delete(context.Background(), s, metav1.DeleteOptions{})
+		err = h.KubeClient.CoreV1().Secrets(ns).Delete(context.TODO(), s, metav1.DeleteOptions{})
 		if err != nil && !k8sErrors.IsNotFound(err) {
 			return err
 		}
 	}
 
-	err = h.KubeClient.CoreV1().Services(ns).Delete(context.Background(), name, metav1.DeleteOptions{})
+	err = h.KubeClient.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
 
-	err = h.KubeClient.CoreV1().ServiceAccounts(ns).Delete(context.Background(), name, metav1.DeleteOptions{})
+	err = h.KubeClient.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}

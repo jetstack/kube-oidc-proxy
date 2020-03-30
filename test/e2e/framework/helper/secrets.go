@@ -9,11 +9,11 @@ import (
 )
 
 func (h *Helper) GetServiceAccountSecret(ns, name string) (*corev1.Secret, error) {
-	sa, err := h.KubeClient.CoreV1().ServiceAccounts(ns).Get(context.Background(), name, metav1.GetOptions{})
+	sa, err := h.KubeClient.CoreV1().ServiceAccounts(ns).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	sec, err := h.KubeClient.CoreV1().Secrets(ns).Get(context.Background(), sa.Secrets[0].Name, metav1.GetOptions{})
+	sec, err := h.KubeClient.CoreV1().Secrets(ns).Get(context.TODO(), sa.Secrets[0].Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

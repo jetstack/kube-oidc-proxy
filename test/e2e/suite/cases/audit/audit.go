@@ -27,7 +27,7 @@ var _ = framework.CasesDescribe("Audit", func() {
 
 	It("should be able to write audit logs to file", func() {
 		By("Creating policy file ConfigMap")
-		cm, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.Background(), &corev1.ConfigMap{
+		cm, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.TODO(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "kube-oidc-proxy-policy-",
 			},
@@ -61,7 +61,7 @@ rules:
 
 	It("should be able to write audit logs to webhook", func() {
 		By("Creating policy file ConfigMap")
-		cmPolicy, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.Background(), &corev1.ConfigMap{
+		cmPolicy, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.TODO(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "kube-oidc-proxy-policy-",
 			},
@@ -77,7 +77,7 @@ rules:
 		extraWebhookVol, webhookURL, err := f.Helper().DeployAuditWebhook(f.Namespace.Name, "/audit-log")
 		Expect(err).NotTo(HaveOccurred())
 
-		cmWebhook, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.Background(), &corev1.ConfigMap{
+		cmWebhook, err := f.Helper().KubeClient.CoreV1().ConfigMaps(f.Namespace.Name).Create(context.TODO(), &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "kube-oidc-proxy-webhook-config-",
 			},
@@ -163,7 +163,7 @@ func testAuditLogs(f *framework.Framework, podLabelSelector string) {
 
 	By("Copying audit log from proxy locally")
 	// Get pod
-	pods, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{
+	pods, err := f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: podLabelSelector,
 	})
 	Expect(err).NotTo(HaveOccurred())

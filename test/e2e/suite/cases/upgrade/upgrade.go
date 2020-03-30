@@ -38,7 +38,7 @@ var _ = framework.CasesDescribe("Upgrade", func() {
 		By("Deploying echo server to exec to")
 
 		var err error
-		pod, err = f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Create(context.Background(), &corev1.Pod{
+		pod, err = f.Helper().KubeClient.CoreV1().Pods(f.Namespace.Name).Create(context.TODO(), &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "echoserver-",
 			},
@@ -58,7 +58,7 @@ var _ = framework.CasesDescribe("Upgrade", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating Role")
-		_, err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.Background(), &rbacv1.Role{
+		_, err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.TODO(), &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "e2e-test-exec",
 			},
@@ -77,7 +77,7 @@ var _ = framework.CasesDescribe("Upgrade", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating RoleBinding")
-		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.Background(),
+		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.TODO(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "e2e-test-exec",

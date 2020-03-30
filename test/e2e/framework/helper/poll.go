@@ -17,7 +17,7 @@ func (h *Helper) WaitForDeploymentReady(namespace, name string, timeout time.Dur
 	log.Infof("Waiting for Deployment to become ready %s/%s", namespace, name)
 
 	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
-		deploy, err := h.KubeClient.AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		deploy, err := h.KubeClient.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -49,7 +49,7 @@ func (h *Helper) WaitForPodReady(namespace, name string, timeout time.Duration) 
 	log.Infof("Waiting for Pod to become ready %s/%s", namespace, name)
 
 	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
-		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		pod, err := h.KubeClient.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -91,7 +91,7 @@ func (h *Helper) WaitForDeploymentToDelete(namespace, name string, timeout time.
 	log.Infof("Waiting for Deployment to be deleted: %s/%s", namespace, name)
 
 	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
-		_, err := h.KubeClient.AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		_, err := h.KubeClient.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if k8sErrors.IsNotFound(err) {
 			return true, nil
 		}

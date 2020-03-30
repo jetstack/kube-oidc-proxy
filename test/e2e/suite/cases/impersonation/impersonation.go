@@ -70,7 +70,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		f.DeployProxyWith(nil, "--disable-impersonation")
 
 		By("Creating ClusterRole for system:anonymous to impersonate")
-		roleImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoles().Create(context.Background(), &rbacv1.ClusterRole{
+		roleImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: fmt.Sprintf("test-user-role-impersonate-"),
 			},
@@ -81,7 +81,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating Role for user foo to list Pods")
-		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.Background(), &rbacv1.Role{
+		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.TODO(), &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: fmt.Sprintf("test-user-role-pods-"),
 			},
@@ -92,7 +92,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating ClusterRoleBinding for user system:anonymous")
-		rolebindingImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(context.Background(),
+		rolebindingImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(),
 			&rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-user-binding-system-anonymous",
@@ -103,7 +103,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating RoleBinding for user foo@example.com")
-		rolebindingPods, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.Background(),
+		rolebindingPods, err := f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.TODO(),
 			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-user-binding-user-foo-example-com",
@@ -123,23 +123,23 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 
 		// Should not error since we have authorized system:anonymous to
 		// impersonate and foo@example.com to list pods
-		_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
+		_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting RoleBinding for user foo@example.com")
-		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(context.Background(), rolebindingPods.Name, metav1.DeleteOptions{})
+		err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Delete(context.TODO(), rolebindingPods.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting Role for list Pods")
-		err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(context.Background(), rolePods.Name, metav1.DeleteOptions{})
+		err = f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Delete(context.TODO(), rolePods.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting ClusterRoleBinding for user system:anonymous")
-		err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Delete(context.Background(), rolebindingImpersonate.Name, metav1.DeleteOptions{})
+		err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Delete(context.TODO(), rolebindingImpersonate.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deleting ClusterRole for Impersonate")
-		err = f.Helper().KubeClient.RbacV1().ClusterRoles().Delete(context.Background(), roleImpersonate.Name, metav1.DeleteOptions{})
+		err = f.Helper().KubeClient.RbacV1().ClusterRoles().Delete(context.TODO(), roleImpersonate.Name, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -151,7 +151,7 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 	client, err := kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 
-	_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.Background(), metav1.ListOptions{})
+	_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 	kErr, ok := err.(*k8sErrors.StatusError)
 	if !ok {
 		Expect(err).NotTo(HaveOccurred())
