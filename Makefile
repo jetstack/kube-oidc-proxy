@@ -18,15 +18,15 @@ UNAME_S := $(shell uname -s)
 GOLANGCILINT_VERSION := 1.21.0
 ifeq ($(UNAME_S),Linux)
 	SHASUM := sha256sum -c
-	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/linux/amd64/kubectl
-	KUBECTL_HASH := ecec7fe4ffa03018ff00f14e228442af5c2284e57771e4916b977c20ba4e5b39
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/linux/amd64/kubectl
+	KUBECTL_HASH := bb16739fcad964c197752200ff89d89aad7b118cb1de5725dc53fe924c40e3f7
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v$(GOLANGCILINT_VERSION)/golangci-lint-$(GOLANGCILINT_VERSION)-linux-amd64.tar.gz
 	GOLANGCILINT_HASH := 2c861f8dc56b560474aa27cab0c075991628cc01af3451e27ac82f5d10d5106b
 endif
 ifeq ($(UNAME_S),Darwin)
 	SHASUM := shasum -a 256 -c
-	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.15.0/bin/darwin/amd64/kubectl
-	KUBECTL_HASH := 63f1ace419edffa1f5ebb64a6c63597afd48f8d94a61d4fb44e820139adbbe54
+	KUBECTL_URL := https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/darwin/amd64/kubectl
+	KUBECTL_HASH := 5eda86058a3db112821761b32afce3fdd2f6963ab580b1780a638ac323864eba
 	GOLANGCILINT_URL := https://github.com/golangci/golangci-lint/releases/download/v$(GOLANGCILINT_VERSION)/golangci-lint-$(GOLANGCILINT_VERSION)-darwin-amd64.tar.gz
 	GOLANGCILINT_HASH := 2b2713ec5007e67883aa501eebb81f22abfab0cf0909134ba90f60a066db3760
 endif
