@@ -66,8 +66,8 @@ func (h *HealthCheck) Check() error {
 
 	h.ready = true
 
+	klog.V(4).Infof("OIDC provider initialized, readiness check returned expected error: %s", err)
 	klog.Info("OIDC provider initialized, proxy ready")
-	klog.V(4).Infof("OIDC provider initialized, readiness check returned error: %s", err)
 
 	return nil
 }
