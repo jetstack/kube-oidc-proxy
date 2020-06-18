@@ -19,34 +19,45 @@ const (
 )
 
 type HealthCheck struct {
-	handler healthcheck.Handler
-
+	*http.Server
 	oidcAuther authenticator.Token
 	fakeJWT    string
 
 	ready bool
 }
 
-func Run(port, fakeJWT string, oidcAuther authenticator.Token) error {
-	h := &HealthCheck{
-		handler:    healthcheck.NewHandler(),
-		oidcAuther: oidcAuther,
-		fakeJWT:    fakeJWT,
+func Run(port, fakeJWT string, oidcAuther authenticator.Token) (*HealthCheck, error) {
+	handler := healthcheck.NewHandler()
+
+	ln, err := net.Listen("tcp", "0.0.0.0:"+port)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on health check port: %s", err)
 	}
 
-	h.handler.AddReadinessCheck("secure serving", h.Check)
+	h := &HealthCheck{
+		oidcAuther: oidcAuther,
+		fakeJWT:    fakeJWT,
+		Server: &http.Server{
+			Addr:           ln.Addr().String(),
+			ReadTimeout:    8 * time.Second,
+			WriteTimeout:   8 * time.Second,
+			MaxHeaderBytes: 1 << 20, // 1 MiB
+			Handler:        handler,
+		},
+	}
+
+	handler.AddReadinessCheck("secure serving", h.Check)
 
 	go func() {
-		for {
-			err := http.ListenAndServe(net.JoinHostPort("0.0.0.0", port), h.handler)
-			if err != nil {
-				klog.Errorf("ready probe listener failed: %s", err)
-			}
-			time.Sleep(5 * time.Second)
+		klog.Infof("serving readiness probe on %s/ready", ln.Addr())
+
+		if err := h.Serve(ln); err != nil {
+			klog.Errorf("failed to serve readiness probe: %s", err)
+			return
 		}
 	}()
 
-	return nil
+	return h, nil
 }
 
 func (h *HealthCheck) Check() error {
@@ -68,6 +79,26 @@ func (h *HealthCheck) Check() error {
 
 	klog.V(4).Infof("OIDC provider initialized, readiness check returned expected error: %s", err)
 	klog.Info("OIDC provider initialized, proxy ready")
+
+	return nil
+}
+
+func (h *HealthCheck) Shutdown() error {
+	// If readiness probe server is not started than exit early
+	if h.Server == nil {
+		return nil
+	}
+
+	klog.Info("shutting down readiness probe server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	if err := h.Server.Shutdown(ctx); err != nil {
+		return fmt.Errorf("readiness probe server shutdown failed: %s", err)
+	}
+
+	klog.Info("readines probe server gracefully stopped")
 
 	return nil
 }

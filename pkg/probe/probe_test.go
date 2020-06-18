@@ -44,10 +44,17 @@ func TestRun(t *testing.T) {
 		t.FailNow()
 	}
 
-	if err := Run(port, fakeJWT, f); err != nil {
+	readinessHandler, err := Run(port, fakeJWT, f)
+	if err != nil {
 		t.Error(err.Error())
 		t.FailNow()
 	}
+
+	defer func() {
+		if err := readinessHandler.Shutdown(); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	url := fmt.Sprintf("http://0.0.0.0:%s", port)
 
