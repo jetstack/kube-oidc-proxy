@@ -25,6 +25,9 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
+        {{- if and .Values.metrics.enabled }}
+        - containerPort: {{ .Values.metrics.port }}
+        {{ end }}
         - containerPort: 443
         - containerPort: 8080
         readinessProbe:
@@ -73,6 +76,9 @@ spec:
           {{ end }}
           {{- range $key, $value := .Values.extraArgs -}}
           - "--{{ $key }}={{ $value -}}"
+          {{ end }}
+          {{- if and .Values.metrics.enabled }}
+          - "--metrics-serving-address={{ .Values.metrics.address }}:{{ .Values.metrics.port }}"
           {{ end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
