@@ -44,7 +44,7 @@ func New() *Metrics {
 			prometheus.CounterOpts{
 				Namespace: promNamespace,
 				Name:      "http_client_requests",
-				Help:      "The number of requests for incomming requests.",
+				Help:      "The number of requests for incoming requests.",
 			},
 			[]string{"code", "path", "remote_address"},
 		)
