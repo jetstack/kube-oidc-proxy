@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultNodeImage = "1.18.0"
+	defaultNodeImage = "1.18.2"
 	defaultRootPath  = "../../."
 )
 
