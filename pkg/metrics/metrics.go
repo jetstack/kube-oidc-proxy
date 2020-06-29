@@ -53,7 +53,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "http_client_duration_seconds",
 				Help:      "The duration in seconds for incoming client requests to be responded to.",
-				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14),
+				Buckets:   prometheus.ExponentialBuckets(0.001, 2.5, 10),
 			},
 			[]string{"remote_address"},
 		)
@@ -71,7 +71,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "http_server_duration_seconds",
 				Help:      "The duration in seconds for outgoing server requests to be responded to.",
-				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14),
+				Buckets:   prometheus.ExponentialBuckets(0.001, 2.5, 14),
 			},
 			[]string{"remote_address"},
 		)
@@ -90,7 +90,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "token_review_duration_seconds",
 				Help:      "The duration in seconds for a token review lookup. Authenticated requests are 1, else 0.",
-				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14),
+				Buckets:   prometheus.ExponentialBuckets(0.001, 2.5, 14),
 			},
 			[]string{"authenticated", "code", "remote_address", "user"},
 		)
