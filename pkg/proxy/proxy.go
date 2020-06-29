@@ -237,6 +237,7 @@ func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTrippe
 
 	// create tls transport to request
 	tlsTransport := &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: tlsConfig,
 	}
 
