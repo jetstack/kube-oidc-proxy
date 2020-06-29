@@ -11,7 +11,7 @@ The proxy exposes the following metrics:
 
 ### kube_oidc_proxy_http_client_requests
 counter - {http status code, path, remote address}
-The number of requests for incoming requests.
+The number of incoming requests.
 
 ### kube_oidc_proxy_http_client_duration_seconds
 histogram - {remote address}
@@ -19,7 +19,7 @@ The duration in seconds for incoming client requests to be responded to.
 
 ### kube_oidc_proxy_http_server_requests
 counter - {http status code, path, remote address}
-The requests for outgoing server requests.
+The number of outgoing server requests.
 
 ### kube_oidc_proxy_http_server_duration_seconds
 histogram - {remote address}

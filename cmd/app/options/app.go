@@ -45,8 +45,8 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) *KubeOIDCProxyOptions
 		"Port to expose readiness probe.")
 
 	fs.StringVar(&k.MetricsListenAddress, "metrics-serving-address", "0.0.0.0:80",
-		"Adress to serving metrics on at the /metrics path. An empty address will "+
-			"disable serving metrics.")
+		"Address to serve metrics on at the /metrics path. An empty address will "+
+			"disable serving metrics. Cannot use the same address as proxy or probe.")
 
 	fs.DurationVar(&k.FlushInterval, "flush-interval", time.Millisecond*50,
 		"Specifies the interval to flush request bodies. If 0ms, "+

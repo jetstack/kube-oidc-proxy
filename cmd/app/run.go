@@ -70,6 +70,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			// Initialise metrics handler
 			metrics := metrics.New()
+			// Add the metrics server as a shutdown hook
 			hooks.AddPreShutdownHook("Metrics", metrics.Shutdown)
 
 			// Initialise token reviewer if enabled
@@ -124,7 +125,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					return err
 				}
 			} else {
-				klog.Info("metrics listen address empty, disabling serving")
+				klog.Info("metrics listen address empty, disabling serving metrics")
 			}
 
 			// Run proxy
