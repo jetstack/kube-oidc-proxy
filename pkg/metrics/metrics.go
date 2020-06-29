@@ -44,7 +44,7 @@ func New() *Metrics {
 			prometheus.CounterOpts{
 				Namespace: promNamespace,
 				Name:      "http_client_requests",
-				Help:      "The number of requests for incoming requests.",
+				Help:      "The number of incoming requests.",
 			},
 			[]string{"code", "path", "remote_address"},
 		)
@@ -53,7 +53,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "http_client_duration_seconds",
 				Help:      "The duration in seconds for incoming client requests to be responded to.",
-				Buckets:   prometheus.LinearBuckets(.000, .05, 30),
+				Buckets:   prometheus.ExponentialBuckets(0.005, 0.005, 10),
 			},
 			[]string{"remote_address"},
 		)
@@ -62,7 +62,7 @@ func New() *Metrics {
 			prometheus.CounterOpts{
 				Namespace: promNamespace,
 				Name:      "http_server_requests",
-				Help:      "The requests for outgoing server requests.",
+				Help:      "The number of outgoing server requests.",
 			},
 			[]string{"code", "path", "remote_address"},
 		)
@@ -71,7 +71,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "http_server_duration_seconds",
 				Help:      "The duration in seconds for outgoing server requests to be responded to.",
-				Buckets:   prometheus.LinearBuckets(.000, .05, 30),
+				Buckets:   prometheus.ExponentialBuckets(0.005, 0.005, 10),
 			},
 			[]string{"remote_address"},
 		)
@@ -90,7 +90,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "token_review_duration_seconds",
 				Help:      "The duration in seconds for a token review lookup. Authenticated requests are 1, else 0.",
-				Buckets:   prometheus.LinearBuckets(.000, .05, 30),
+				Buckets:   prometheus.ExponentialBuckets(0.005, 0.005, 10),
 			},
 			[]string{"authenticated", "code", "remote_address", "user"},
 		)
@@ -170,9 +170,8 @@ func (m *Metrics) Shutdown() error {
 
 func (m *Metrics) ObserveClient(code int, path, remoteAddress string, duration time.Duration) {
 	m.clientRequests.With(prometheus.Labels{
-		"code":           strconv.Itoa(code),
-		"path":           path,
-		"remote_address": remoteAddress,
+		"code": strconv.Itoa(code),
+		"path": path,
 	}).Inc()
 
 	m.clientDuration.With(prometheus.Labels{
@@ -182,9 +181,8 @@ func (m *Metrics) ObserveClient(code int, path, remoteAddress string, duration t
 
 func (m *Metrics) ObserveServer(code int, path, remoteAddress string, duration time.Duration) {
 	m.serverRequests.With(prometheus.Labels{
-		"code":           strconv.Itoa(code),
-		"path":           path,
-		"remote_address": remoteAddress,
+		"code": strconv.Itoa(code),
+		"path": path,
 	}).Inc()
 
 	m.serverDuration.With(prometheus.Labels{

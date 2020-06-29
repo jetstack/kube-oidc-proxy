@@ -198,7 +198,11 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		statusCode = resp.StatusCode
 	}
 
-	p.metrics.ObserveClient(statusCode, req.URL.Path, remoteAddr, time.Since(clientDuration))
+	// If we get an error here, then the client metrics observation will happen
+	// at the proxy error handler.
+	if err == nil {
+		p.metrics.ObserveClient(statusCode, req.URL.Path, remoteAddr, time.Since(clientDuration))
+	}
 	p.metrics.ObserveServer(statusCode, req.URL.Path, remoteAddr, time.Since(serverDuration))
 
 	return resp, err

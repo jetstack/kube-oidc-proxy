@@ -41,8 +41,6 @@ func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
 
 	// Add the auditor backend as a shutdown hook
 	p.hooks.AddPreShutdownHook("AuditBackend", p.auditor.Shutdown)
-	// Add the metrics server as a shutdown hook
-	p.hooks.AddPreShutdownHook("Metrics", p.metrics.Shutdown)
 
 	return handler
 }
@@ -186,7 +184,7 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 }
 
 // withClientTimestamp adds the current timestamp for the client request to the
-// request contect.
+// request context.
 func (p *Proxy) withClientTimestamp(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		req = context.WithClientRequestTimestamp(req)
@@ -233,28 +231,28 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, req *http.Request
 		case errImpersonateHeader:
 			statusCode = http.StatusForbidden
 			klog.V(2).Infof("impersonation user request %s", remoteAddr)
-			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
+			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", statusCode)
 			return
 
 			// No name given or available in oidc request
 		case errNoName:
 			statusCode = http.StatusForbidden
 			klog.V(2).Infof("no name available in oidc info %s", remoteAddr)
-			http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
+			http.Error(rw, "Username claim not available in OIDC Issuer response", statusCode)
 			return
 
 			// No impersonation configuration found in context
 		case errNoImpersonationConfig:
 			statusCode = http.StatusInternalServerError
 			klog.Errorf("if you are seeing this, there is likely a bug in the proxy (%s): %s", remoteAddr, err)
-			http.Error(rw, "", http.StatusInternalServerError)
+			http.Error(rw, "", statusCode)
 			return
 
 			// Server or unknown error
 		default:
 			statusCode = http.StatusInternalServerError
 			klog.Errorf("unknown error (%s): %s", remoteAddr, err)
-			http.Error(rw, "", http.StatusInternalServerError)
+			http.Error(rw, "", statusCode)
 		}
 	}
 }

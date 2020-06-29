@@ -67,7 +67,7 @@ func WithClientRequestTimestamp(req *http.Request) *http.Request {
 	return req.WithContext(request.WithValue(req.Context(), clientRequestTimestampKey, time.Now()))
 }
 
-// ClientRequestTimestampKey will return thetimestamp that the client request was received.
+// ClientRequestTimestamp will return thetimestamp that the client request was received.
 func ClientRequestTimestamp(req *http.Request) time.Time {
 	stamp, _ := req.Context().Value(clientRequestTimestampKey).(time.Time)
 	return stamp
