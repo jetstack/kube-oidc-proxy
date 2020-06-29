@@ -18,6 +18,11 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "kube-oidc-proxy.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        {{- if and .Values.metrics.enabled }}
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '{{ .Values.metrics.port }}'
+        {{ end }}
     spec:
       serviceAccountName: {{ include "kube-oidc-proxy.fullname" . }}
       containers:
