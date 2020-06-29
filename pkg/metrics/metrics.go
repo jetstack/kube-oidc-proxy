@@ -46,14 +46,14 @@ func New() *Metrics {
 				Name:      "http_client_requests",
 				Help:      "The number of incoming requests.",
 			},
-			[]string{"code", "path", "remote_address"},
+			[]string{"code", "path"},
 		)
 		clientDuration = prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: promNamespace,
 				Name:      "http_client_duration_seconds",
 				Help:      "The duration in seconds for incoming client requests to be responded to.",
-				Buckets:   prometheus.ExponentialBuckets(0.005, 0.005, 10),
+				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14),
 			},
 			[]string{"remote_address"},
 		)
@@ -64,14 +64,14 @@ func New() *Metrics {
 				Name:      "http_server_requests",
 				Help:      "The number of outgoing server requests.",
 			},
-			[]string{"code", "path", "remote_address"},
+			[]string{"code", "path"},
 		)
 		serverDuration = prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: promNamespace,
 				Name:      "http_server_duration_seconds",
 				Help:      "The duration in seconds for outgoing server requests to be responded to.",
-				Buckets:   prometheus.ExponentialBuckets(0.005, 0.005, 10),
+				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14),
 			},
 			[]string{"remote_address"},
 		)
@@ -90,7 +90,7 @@ func New() *Metrics {
 				Namespace: promNamespace,
 				Name:      "token_review_duration_seconds",
 				Help:      "The duration in seconds for a token review lookup. Authenticated requests are 1, else 0.",
-				Buckets:   prometheus.ExponentialBuckets(0.005, 0.005, 10),
+				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14),
 			},
 			[]string{"authenticated", "code", "remote_address", "user"},
 		)
