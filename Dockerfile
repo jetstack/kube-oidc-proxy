@@ -7,7 +7,7 @@ RUN apk --no-cache add ca-certificates \
 
 COPY ./bin/kube-oidc-proxy-linux /usr/bin/kube-oidc-proxy
 
-# On alpine "nobody" has uid of 65534
+# On alpine "nobody" has uid 65534
 USER 65534
 
 CMD ["/usr/bin/kube-oidc-proxy"]
