@@ -20,6 +20,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       serviceAccountName: {{ include "kube-oidc-proxy.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

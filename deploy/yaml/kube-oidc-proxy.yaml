@@ -28,6 +28,9 @@ spec:
         app: kube-oidc-proxy
     spec:
       serviceAccountName: kube-oidc-proxy
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
       containers:
       - image: quay.io/jetstack/kube-oidc-proxy:v0.3.0
         ports:

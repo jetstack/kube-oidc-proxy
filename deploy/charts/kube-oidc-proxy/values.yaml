@@ -116,3 +116,7 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
