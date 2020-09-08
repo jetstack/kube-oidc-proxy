@@ -21,8 +21,8 @@ spec:
     spec:
       serviceAccountName: {{ include "kube-oidc-proxy.fullname" . }}
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
