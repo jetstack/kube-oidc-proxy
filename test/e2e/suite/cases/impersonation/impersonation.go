@@ -72,7 +72,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		By("Creating ClusterRole for system:anonymous to impersonate")
 		roleImpersonate, err := f.Helper().KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: fmt.Sprintf("test-user-role-impersonate-"),
+				GenerateName: "test-user-role-impersonate-",
 			},
 			Rules: []rbacv1.PolicyRule{
 				{APIGroups: []string{""}, Resources: []string{"users"}, Verbs: []string{"impersonate"}},
@@ -83,7 +83,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		By("Creating Role for user foo to list Pods")
 		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.TODO(), &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: fmt.Sprintf("test-user-role-pods-"),
+				GenerateName: "test-user-role-pods-",
 			},
 			Rules: []rbacv1.PolicyRule{
 				{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list"}},
