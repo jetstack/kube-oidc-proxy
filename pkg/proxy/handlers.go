@@ -34,6 +34,7 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 		// Auth request and handle unauthed
 		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
 		if err != nil {
+			klog.V(6).Infof("OIDC authenticate request failed due to: %q", err)
 			// Since we have failed OIDC auth, we will try a token review, if enabled.
 			tokenReviewHandler.ServeHTTP(rw, req)
 			return
