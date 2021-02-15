@@ -91,6 +91,13 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
+# Allows setting the Deployment update strategy
+#rollingUpdateStrategy:
+#  type: RollingUpdate
+#  rollingUpdate:
+#    maxSurge: 34%
+#    maxUnavailable: 33%
+
 # Enable Pod Disruption Budget
 podDisruptionBudget:
   enabled: false
