@@ -26,6 +26,10 @@ spec:
     metadata:
       labels:
         app: kube-oidc-proxy
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "80"
+        prometheus.io/scrape: "true"
     spec:
       serviceAccountName: kube-oidc-proxy
       containers:
@@ -33,6 +37,7 @@ spec:
         ports:
         - containerPort: 443
         - containerPort: 8080
+        - containerPort: 80
         readinessProbe:
           httpGet:
             path: /ready
