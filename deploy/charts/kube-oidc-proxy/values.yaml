@@ -16,13 +16,18 @@ fullnameOverride: ""
 service:
   type: ClusterIP
   port: 443
-  annotations:
+  annotations: {}
     # You can use this field to add annotations to the Service.
     # Define it in a key-value pairs. E.g.
     # service.beta.kubernetes.io/aws-load-balancer-internal: true
 
   loadBalancerIP: ""
   loadBalancerSourceRanges: []
+
+  additionalSpec: {}
+    # You can use this field to add additional spec parametes to the Service.
+    # Define it in a key-value pairs. E.g.
+    # externalTrafficPolicy: Local
 
 tls:
   # `secretName` must be a name of Secret of TLS type. If not provided a
