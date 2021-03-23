@@ -25,3 +25,6 @@ spec:
   selector:
     app.kubernetes.io/name: {{ include "kube-oidc-proxy.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
+{{- with .Values.service.additionalSpec }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
