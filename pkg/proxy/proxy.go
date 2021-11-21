@@ -4,6 +4,7 @@ package proxy
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -71,6 +72,17 @@ type Proxy struct {
 	handleError errorHandlerFn
 }
 
+// implement oidc.CAContentProvider to load
+// the ca file from the options
+type CAFromFile struct {
+	CAFile string
+}
+
+func (caFromFile CAFromFile) CurrentCABundleContent() []byte {
+	res, _ := ioutil.ReadFile(caFromFile.CAFile)
+	return res
+}
+
 func New(restConfig *rest.Config,
 	oidcOptions *options.OIDCAuthenticationOptions,
 	auditOptions *options.AuditOptions,
@@ -78,9 +90,14 @@ func New(restConfig *rest.Config,
 	ssinfo *server.SecureServingInfo,
 	config *Config) (*Proxy, error) {
 
+	// load the CA from the file listed in the options
+	caFromFile := CAFromFile{
+		CAFile: oidcOptions.CAFile,
+	}
+
 	// generate tokenAuther from oidc config
 	tokenAuther, err := oidc.New(oidc.Options{
-		CAFile:               oidcOptions.CAFile,
+		CAContentProvider:    caFromFile,
 		ClientID:             oidcOptions.ClientID,
 		GroupsClaim:          oidcOptions.GroupsClaim,
 		GroupsPrefix:         oidcOptions.GroupsPrefix,
