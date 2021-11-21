@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	k8sErrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apiserver/pkg/util/term"
+
 	cliflag "k8s.io/component-base/cli/flag"
 )
 
@@ -45,7 +46,7 @@ func New() *Options {
 func (o *Options) AddFlags(cmd *cobra.Command) {
 	// pretty output from kube-apiserver
 	usageFmt := "Usage:\n  %s\n"
-	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
+	cols, _, _ := term.GetSize(0)
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStderr(), *o.nfs, cols)
@@ -89,10 +90,6 @@ func (o *Options) Validate(cmd *cobra.Command) error {
 	if o.App.DisableImpersonation &&
 		(o.App.ExtraHeaderOptions.EnableClientIPExtraUserHeader || len(o.App.ExtraHeaderOptions.ExtraUserHeaders) > 0) {
 		errs = append(errs, errors.New("cannot add extra user headers when impersonation disabled"))
-	}
-
-	if o.Audit.DynamicOptions.Enabled {
-		errs = append(errs, errors.New("The flag --audit-dynamic-configuration may not be set"))
 	}
 
 	if len(errs) > 0 {

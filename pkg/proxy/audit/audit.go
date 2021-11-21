@@ -34,7 +34,7 @@ func New(opts *options.AuditOptions, externalAddress string, secureServingInfo *
 	}
 
 	// We do not support dynamic auditing, so leave nil
-	if err := opts.ApplyTo(serverConfig, nil, nil, nil, nil); err != nil {
+	if err := opts.ApplyTo(serverConfig); err != nil {
 		return nil, err
 	}
 
