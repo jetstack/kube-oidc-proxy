@@ -1,5 +1,5 @@
 # Copyright Jetstack Ltd. See LICENSE for details.
-FROM alpine:3.10
+FROM alpine:alpine:latest
 LABEL description="OIDC reverse proxy authenticator based on Kubernetes"
 
 RUN apk --no-cache add ca-certificates \
