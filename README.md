@@ -131,6 +131,24 @@ users:
  - [Extra Impersonations Headers](./docs/tasks/extra-impersonation-headers.md)
  - [Auditing](./docs/tasks/auditing.md)
 
+## Logging
+
+In addition to auditing, kube-oidc-proxy logs all requests to standard out so the requests can be captured by a common Security Information and Event Management (SIEM) system.  SIEMs will typically import logs directly from containers via tools like fluentd.  This logging is also useful in debugging.  An example successful event:
+
+```
+[2021-11-25T01:05:17+0000] AuSuccess src:[10.42.0.5 / 10.42.1.3, 10.42.0.5] URI:/api/v1/namespaces/openunison/pods?limit=500 inbound:[mlbadmin1 / system:masters|system:authenticated /]
+```
+
+The first block, between `[]` is an ISO-8601 timestamp.  The next text, `AuSuccess`, indicates that authentication was successful.  the `src` block containers the remote address of the request, followed by the value of the `X-Forwarded-For` HTTP header if provided.  The `URI` is the URL path of the request.  The `inbound` section provides the user name, groups, and extra-info provided to the proxy from the JWT.
+
+When there's an error or failure:
+
+```
+[2021-11-25T01:05:24+0000] AuFail src:[10.42.0.5 / 10.42.1.3] URI:/api/v1/nodes
+```
+
+This is similar to success, but without the token information.
+
 ## Development
 *NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.
 
