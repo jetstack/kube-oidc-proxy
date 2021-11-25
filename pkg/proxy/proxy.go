@@ -28,6 +28,7 @@ import (
 
 const (
 	UserHeaderClientIPKey = "Remote-Client-IP"
+	timestampLayout       = "2006-01-02T15:04:05-0700"
 )
 
 var (
@@ -216,8 +217,41 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Set up impersonation request.
 	rt := transport.NewImpersonatingRoundTripper(*conf, p.clientTransport)
 
+	// Log the request
+	p.logSuccessfulRequest(req, conf)
+
 	// Push request through round trippers to the API server.
 	return rt.RoundTrip(req)
+}
+
+// logs the request
+func (p *Proxy) logSuccessfulRequest(req *http.Request, conf *transport.ImpersonationConfig) {
+	remoteAddr := req.RemoteAddr
+	indexOfColon := strings.Index(remoteAddr, ":")
+	if indexOfColon > 0 {
+		remoteAddr = remoteAddr[0:indexOfColon]
+	}
+
+	inboundExtras := ""
+
+	if conf.Extra != nil {
+		for key, value := range conf.Extra {
+			inboundExtras += key + "=" + strings.Join(value, "|") + " "
+		}
+	}
+
+	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s /%s]\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI, conf.UserName, strings.Join(conf.Groups, "|"), inboundExtras)
+}
+
+// logs the failed request
+func (p *Proxy) logFailedRequest(req *http.Request) {
+	remoteAddr := req.RemoteAddr
+	indexOfColon := strings.Index(remoteAddr, ":")
+	if indexOfColon > 0 {
+		remoteAddr = remoteAddr[0:indexOfColon]
+	}
+
+	fmt.Printf("[%s] AuFail src:[%s / % s] URI:%s\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI)
 }
 
 func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {

@@ -165,17 +165,22 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 
 // newErrorHandler returns a handler failed requests.
 func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, err error) {
+
 	unauthedHandler := audit.NewUnauthenticatedHandler(p.auditor, func(rw http.ResponseWriter, r *http.Request) {
 		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
 		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 	})
 
 	return func(rw http.ResponseWriter, r *http.Request, err error) {
+
 		if err == nil {
 			klog.Error("error was called with no error")
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 		}
+
+		// regardless of reason, log failed auth
+		p.logFailedRequest(r)
 
 		switch err {
 
