@@ -17,11 +17,7 @@ import (
 
 // structure for storing the review data
 type SubjectAccessReview struct {
-	subjectAccessReviewer   clientazv1.SubjectAccessReviewInterface
-	requester               user.Info
-	target                  user.Info
-	success                 bool
-	impersonateHeadersFound bool
+	subjectAccessReviewer clientazv1.SubjectAccessReviewInterface
 }
 
 // create a new SubjectAccessReview structure
@@ -32,21 +28,17 @@ func New(restConfig *rest.Config, requester user.Info, target user.Info) (*Subje
 	}
 
 	return &SubjectAccessReview{
-		subjectAccessReviewer:   kubeclient.AuthorizationV1().SubjectAccessReviews(),
-		requester:               requester,
-		target:                  target,
-		success:                 false,
-		impersonateHeadersFound: false,
+		subjectAccessReviewer: kubeclient.AuthorizationV1().SubjectAccessReviews(),
 	}, nil
 }
 
 // checks the request for impersonation headers, validates that the user is able to perform that impersonation,
 // and builds the target object
-func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(req *http.Request) error {
+func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(req *http.Request, requester user.Info) (user.Info, error) {
 
-	subjectAccessReview.impersonateHeadersFound = false
+	hasImpersonation := false
 
-	targetUser := user.DefaultInfo{
+	targetUser := &user.DefaultInfo{
 		Name:   "",
 		Groups: make([]string, 0),
 		Extra:  map[string][]string{},
@@ -54,65 +46,58 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 	}
 
 	for key, values := range req.Header {
-		if strings.HasPrefix(key, "Impersonate-") {
-			subjectAccessReview.impersonateHeadersFound = true
-
-			if key == "Impersonate-User" {
+		keyToCheck := strings.ToLower(key)
+		if strings.HasPrefix(keyToCheck, "impersonate-") {
+			hasImpersonation = true
+			if keyToCheck == "impersonate-user" {
 				userToImpersonate := values[0]
-				result, err := subjectAccessReview.checkRbacImpersonationAuthorization("users", userToImpersonate)
+				result, err := subjectAccessReview.checkRbacImpersonationAuthorization("users", userToImpersonate, requester)
 				if err != nil {
-					return err
+					return nil, err
 				} else {
 					if !result {
-						subjectAccessReview.success = false
-						subjectAccessReview.target = &user.DefaultInfo{}
-						return fmt.Errorf("%s is not allowed to impersonate user '%s'", subjectAccessReview.requester.GetName(), userToImpersonate)
+						return nil, fmt.Errorf("%s is not allowed to impersonate user '%s'", requester.GetName(), userToImpersonate)
 					} else {
 						targetUser.Name = userToImpersonate
 					}
 				}
-			} else if key == "Impersonate-Group" {
+			} else if keyToCheck == "impersonate-group" {
 
 				for i := range values {
 					groupName := values[i]
-					result, err := subjectAccessReview.checkRbacImpersonationAuthorization("groups", groupName)
+					result, err := subjectAccessReview.checkRbacImpersonationAuthorization("groups", groupName, requester)
 					if err != nil {
-						return err
+						return nil, err
 					} else {
 						if !result {
-							subjectAccessReview.success = false
-							subjectAccessReview.target = &user.DefaultInfo{}
-							return fmt.Errorf("%s is not allowed to impersonate group '%s'", subjectAccessReview.requester.GetName(), groupName)
+							return nil, fmt.Errorf("%s is not allowed to impersonate group '%s'", requester.GetName(), groupName)
 						} else {
 							targetUser.Groups = append(targetUser.Groups, groupName)
 						}
 					}
 				}
-			} else if key == "Impersonate-Uid" {
+			} else if keyToCheck == "impersonate-uid" {
 				uidToImpersonate := values[0]
-				result, err := subjectAccessReview.checkRbacImpersonationAuthorization("uids", uidToImpersonate)
+				result, err := subjectAccessReview.checkRbacImpersonationAuthorization("uids", uidToImpersonate, requester)
 				if err != nil {
-					return err
+					return nil, err
 				} else {
 					if !result {
-						subjectAccessReview.success = false
-						subjectAccessReview.target = &user.DefaultInfo{}
-						return fmt.Errorf("%s is not allowed to impersonate uid '%s'", subjectAccessReview.requester.GetName(), uidToImpersonate)
+						return nil, fmt.Errorf("%s is not allowed to impersonate uid '%s'", requester.GetName(), uidToImpersonate)
 					} else {
 						targetUser.UID = uidToImpersonate
 					}
 				}
-			} else if strings.HasPrefix(key, "Impersonate-Extra-") {
+			} else if strings.HasPrefix(keyToCheck, "impersonate-extra-") {
 				extraName := key[18:]
 				for i := range values {
-					result, err := subjectAccessReview.checkRbacImpersonationAuthorization("userextras/"+extraName, values[i])
+					result, err := subjectAccessReview.checkRbacImpersonationAuthorization("userextras/"+extraName, values[i], requester)
 					if err != nil {
-						return err
+						return nil, err
 					} else {
 						if !result {
-							subjectAccessReview.success = false
-							subjectAccessReview.target = &user.DefaultInfo{}
-							return fmt.Errorf("%s is not allowed to impersonate extra info '%s'='%s'", subjectAccessReview.requester.GetName(), extraName, values[i])
+
+							return nil, fmt.Errorf("%s is not allowed to impersonate extra info '%s'='%s'", requester.GetName(), extraName, values[i])
 						} else {
 							infoVals, ok := targetUser.Extra[extraName]
 
@@ -126,37 +111,36 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 						}
 					}
 				}
-			} else if strings.HasPrefix(key, "Impersonate-") {
+			} else if strings.HasPrefix(keyToCheck, "impersonate-") {
 				// unkown impersonation header, fail
-				subjectAccessReview.success = false
-				subjectAccessReview.target = &user.DefaultInfo{}
-				return fmt.Errorf("unknown impersonation header '%s'", key)
+				return nil, fmt.Errorf("unknown impersonation header '%s'", key)
 			}
 
 		}
 
-		if subjectAccessReview.impersonateHeadersFound {
-			// made it this far and have not errored out, we're successful
-			subjectAccessReview.success = true
-			subjectAccessReview.target = &targetUser
-		}
 	}
 
-	return nil
+	if hasImpersonation {
+		//haven't errored out, but has impersonation - returning target user
+		return targetUser, nil
+	} else {
+		//no impersonation, no user to return
+		return nil, nil
+	}
 }
 
 // submit a SubjectAccessReview request to the API server to validate that impersonation can occur
-func (subjectAccessReview *SubjectAccessReview) checkRbacImpersonationAuthorization(resource string, name string) (bool, error) {
+func (subjectAccessReview *SubjectAccessReview) checkRbacImpersonationAuthorization(resource string, name string, requester user.Info) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
 
-	for key, value := range subjectAccessReview.requester.GetExtra() {
+	for key, value := range requester.GetExtra() {
 		extras[key] = value
 	}
 
 	clusterSubjectAccessReview := v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
-			User:   subjectAccessReview.requester.GetName(),
-			Groups: subjectAccessReview.requester.GetGroups(),
+			User:   requester.GetName(),
+			Groups: requester.GetGroups(),
 			Extra:  extras,
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "impersonate",

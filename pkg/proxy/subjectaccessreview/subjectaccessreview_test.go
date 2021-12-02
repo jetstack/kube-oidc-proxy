@@ -251,11 +251,6 @@ func runTest(t *testing.T, name string, test testT) {
 
 	testReviewer := &SubjectAccessReview{
 		subjectAccessReviewer: fake.New(test.expErrorRbac),
-		requester:             test.requester,
-		target: &user.DefaultInfo{
-			Extra: make(map[string][]string),
-		},
-		success: false,
 	}
 
 	headers := map[string][]string{}
@@ -274,11 +269,10 @@ func runTest(t *testing.T, name string, test testT) {
 		}
 	}
 
-	err := testReviewer.CheckAuthorizedForImpersonation(
+	target, err := testReviewer.CheckAuthorizedForImpersonation(
 		&http.Request{
 			Header: headers,
-		},
-	)
+		}, test.requester)
 
 	// check if the errors match
 	if !reflect.DeepEqual(test.expErr, err) {
@@ -286,24 +280,28 @@ func runTest(t *testing.T, name string, test testT) {
 	}
 
 	//check if impersonation was found when expected
-	if test.expImpersonationHeaders != testReviewer.impersonateHeadersFound {
-		t.Errorf("unexpected result when checking if impersonation headers were present, exp=%t got=%t", test.expImpersonationHeaders, testReviewer.impersonateHeadersFound)
+
+	headersFound := !(err == nil && target == nil)
+
+	if test.expImpersonationHeaders != headersFound {
+		t.Errorf("unexpected result when checking if impersonation headers were present, exp=%t got=%t", test.expImpersonationHeaders, (err == nil && target == nil))
 	}
 
+	azSuccess := target != nil && err == nil
 	// check if authorization matchs
-	if testReviewer.success != test.expAz {
-		t.Errorf("authorization decision doesn't match, exp=%t got=%t", testReviewer.success, test.expAz)
+	if azSuccess != test.expAz {
+		t.Errorf("authorization decision doesn't match, exp=%t got=%t", azSuccess, test.expAz)
 	}
 
 	// check that the final impersonated user lines up with the expected test case
-	if testReviewer.success {
-		if !reflect.DeepEqual(test.expTarget, testReviewer.target) {
-			t.Errorf(" target doesn't match, exp=%+v got %+v", test.expTarget, testReviewer.target)
+	if azSuccess {
+		if !reflect.DeepEqual(test.expTarget, target) {
+			t.Errorf(" target doesn't match, exp=%+v got %+v", test.expTarget, target)
 		}
 	} else {
 
-		if testReviewer.target.GetName() != "" || testReviewer.target.GetUID() != "" || len(testReviewer.target.GetGroups()) > 0 || len(testReviewer.target.GetExtra()) > 0 {
-			t.Errorf("expected empty target, got=%+v", testReviewer.target)
+		if target != nil {
+			t.Errorf("expected empty target, got=%+v", target)
 		}
 	}
 
