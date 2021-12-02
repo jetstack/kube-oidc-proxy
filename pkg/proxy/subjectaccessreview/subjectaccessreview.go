@@ -9,30 +9,23 @@ import (
 
 	v1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes"
 	clientazv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 )
 
-// stores information about a user
-type Subject struct {
-	userName  string
-	groups    []string
-	extraInfo map[string][]string
-	uid       string
-}
-
 // structure for storing the review data
 type SubjectAccessReview struct {
 	subjectAccessReviewer   clientazv1.SubjectAccessReviewInterface
-	requester               Subject
-	target                  Subject
+	requester               user.Info
+	target                  user.Info
 	success                 bool
 	impersonateHeadersFound bool
 }
 
 // create a new SubjectAccessReview structure
-func New(restConfig *rest.Config, requester Subject, target Subject) (*SubjectAccessReview, error) {
+func New(restConfig *rest.Config, requester user.Info, target user.Info) (*SubjectAccessReview, error) {
 	kubeclient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
@@ -53,6 +46,13 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 
 	subjectAccessReview.impersonateHeadersFound = false
 
+	targetUser := user.DefaultInfo{
+		Name:   "",
+		Groups: make([]string, 0),
+		Extra:  map[string][]string{},
+		UID:    "",
+	}
+
 	for key, values := range req.Header {
 		if strings.HasPrefix(key, "Impersonate-") {
 			subjectAccessReview.impersonateHeadersFound = true
@@ -65,10 +65,10 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 				} else {
 					if !result {
 						subjectAccessReview.success = false
-						subjectAccessReview.target = Subject{}
-						return fmt.Errorf("%s is not allowed to impersonate user '%s'", subjectAccessReview.requester.userName, userToImpersonate)
+						subjectAccessReview.target = &user.DefaultInfo{}
+						return fmt.Errorf("%s is not allowed to impersonate user '%s'", subjectAccessReview.requester.GetName(), userToImpersonate)
 					} else {
-						subjectAccessReview.target.userName = userToImpersonate
+						targetUser.Name = userToImpersonate
 					}
 				}
 			} else if key == "Impersonate-Group" {
@@ -81,10 +81,10 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 					} else {
 						if !result {
 							subjectAccessReview.success = false
-							subjectAccessReview.target = Subject{}
-							return fmt.Errorf("%s is not allowed to impersonate group '%s'", subjectAccessReview.requester.userName, groupName)
+							subjectAccessReview.target = &user.DefaultInfo{}
+							return fmt.Errorf("%s is not allowed to impersonate group '%s'", subjectAccessReview.requester.GetName(), groupName)
 						} else {
-							subjectAccessReview.target.groups = append(subjectAccessReview.target.groups, groupName)
+							targetUser.Groups = append(targetUser.Groups, groupName)
 						}
 					}
 				}
@@ -96,10 +96,10 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 				} else {
 					if !result {
 						subjectAccessReview.success = false
-						subjectAccessReview.target = Subject{}
-						return fmt.Errorf("%s is not allowed to impersonate uid '%s'", subjectAccessReview.requester.userName, uidToImpersonate)
+						subjectAccessReview.target = &user.DefaultInfo{}
+						return fmt.Errorf("%s is not allowed to impersonate uid '%s'", subjectAccessReview.requester.GetName(), uidToImpersonate)
 					} else {
-						subjectAccessReview.target.uid = uidToImpersonate
+						targetUser.UID = uidToImpersonate
 					}
 				}
 			} else if strings.HasPrefix(key, "Impersonate-Extra-") {
@@ -111,10 +111,10 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 					} else {
 						if !result {
 							subjectAccessReview.success = false
-							subjectAccessReview.target = Subject{}
-							return fmt.Errorf("%s is not allowed to impersonate extra info '%s'='%s'", subjectAccessReview.requester.userName, extraName, values[i])
+							subjectAccessReview.target = &user.DefaultInfo{}
+							return fmt.Errorf("%s is not allowed to impersonate extra info '%s'='%s'", subjectAccessReview.requester.GetName(), extraName, values[i])
 						} else {
-							infoVals, ok := subjectAccessReview.target.extraInfo[extraName]
+							infoVals, ok := targetUser.Extra[extraName]
 
 							if !ok {
 								infoVals = make([]string, 0)
@@ -122,14 +122,14 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 							}
 
 							infoVals = append(infoVals, values[i])
-							subjectAccessReview.target.extraInfo[extraName] = infoVals
+							targetUser.Extra[extraName] = infoVals
 						}
 					}
 				}
 			} else if strings.HasPrefix(key, "Impersonate-") {
 				// unkown impersonation header, fail
 				subjectAccessReview.success = false
-				subjectAccessReview.target = Subject{}
+				subjectAccessReview.target = &user.DefaultInfo{}
 				return fmt.Errorf("unknown impersonation header '%s'", key)
 			}
 
@@ -138,6 +138,7 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 		if subjectAccessReview.impersonateHeadersFound {
 			// made it this far and have not errored out, we're successful
 			subjectAccessReview.success = true
+			subjectAccessReview.target = &targetUser
 		}
 	}
 
@@ -148,14 +149,14 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 func (subjectAccessReview *SubjectAccessReview) checkRbacImpersonationAuthorization(resource string, name string) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
 
-	for key, value := range subjectAccessReview.requester.extraInfo {
+	for key, value := range subjectAccessReview.requester.GetExtra() {
 		extras[key] = value
 	}
 
 	clusterSubjectAccessReview := v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
-			User:   subjectAccessReview.requester.userName,
-			Groups: subjectAccessReview.requester.groups,
+			User:   subjectAccessReview.requester.GetName(),
+			Groups: subjectAccessReview.requester.GetGroups(),
 			Extra:  extras,
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "impersonate",

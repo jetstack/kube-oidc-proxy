@@ -9,15 +9,16 @@ import (
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview/fake"
 	v1 "k8s.io/api/authorization/v1"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 // stores the context for each test case
 type testT struct {
 	// the already authenticated user
-	requester Subject
+	requester user.Info
 
 	// the expected target information from the request
-	expTarget Subject
+	expTarget user.Info
 
 	// the expected authorization decision
 	expAz bool
@@ -38,21 +39,21 @@ type testT struct {
 func TestSubectAccessReview(t *testing.T) {
 	tests := map[string]testT{
 		"if all reviews pass, user is authorized to impersonate": {
-			requester: Subject{
-				userName: "mmosley",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
 			},
 
-			expTarget: Subject{
-				userName: "jjackson",
-				groups:   []string{"group3"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
 			expImpersonationHeaders:  true,
@@ -63,21 +64,21 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"user not authorized to impersonate target username": {
-			requester: Subject{
-				userName: "mmosley",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
 			},
 
-			expTarget: Subject{
-				userName: "jjackson-x",
-				groups:   []string{"group3"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson-x",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
 			expImpersonationHeaders:  true,
@@ -88,22 +89,22 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"user not authorized to impersonate target group": {
-			requester: Subject{
-				userName: "mmosley",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
-			expTarget: Subject{
-				userName: "jjackson",
-				groups:   []string{"group4"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson",
+				Groups: []string{"group4"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
 			expImpersonationHeaders:  true,
@@ -114,22 +115,22 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"user not authorized to impersonate target extraInfo": {
-			requester: Subject{
-				userName: "mmosley",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
-			expTarget: Subject{
-				userName: "jjackson",
-				groups:   []string{"group3"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.5"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
 			expImpersonationHeaders:  true,
@@ -140,21 +141,21 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"user is not authorized to impersonate the uid": {
-			requester: Subject{
-				userName: "mmosley",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
 			},
 
-			expTarget: Subject{
-				userName: "jjackson",
-				groups:   []string{"group3"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-5",
+				UID: "1-2-3-5",
 			},
 
 			expImpersonationHeaders:  true,
@@ -165,21 +166,21 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"error on the call returns false": {
-			requester: Subject{
-				userName: "mmosley-x",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley-x",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
 			},
 
-			expTarget: Subject{
-				userName: "jjackson",
-				groups:   []string{"group3"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
 			expImpersonationHeaders:  true,
@@ -190,15 +191,15 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"no impersonation headers found, should set flag as such": {
-			requester: Subject{
-				userName: "mmosley-x",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley-x",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
 			},
 
-			expTarget: Subject{},
+			expTarget: &user.DefaultInfo{},
 
 			expImpersonationHeaders:  false,
 			expAz:                    false,
@@ -208,21 +209,21 @@ func TestSubectAccessReview(t *testing.T) {
 		},
 
 		"unknown impersonation header, error": {
-			requester: Subject{
-				userName: "mmosley-x",
-				groups:   []string{"group1", "group2"},
-				extraInfo: map[string][]string{
+			requester: &user.DefaultInfo{
+				Name:   "mmosley-x",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
 			},
 
-			expTarget: Subject{
-				userName: "jjackson",
-				groups:   []string{"group3"},
-				extraInfo: map[string][]string{
+			expTarget: &user.DefaultInfo{
+				Name:   "jjackson",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
 					"remoteAddr": []string{"1.2.3.4"},
 				},
-				uid: "1-2-3-4",
+				UID: "1-2-3-4",
 			},
 
 			expImpersonationHeaders:  true,
@@ -244,15 +245,15 @@ func runTest(t *testing.T, name string, test testT) {
 
 	extras := map[string]v1.ExtraValue{}
 
-	for key, value := range test.requester.extraInfo {
+	for key, value := range test.requester.GetExtra() {
 		extras[key] = value
 	}
 
 	testReviewer := &SubjectAccessReview{
 		subjectAccessReviewer: fake.New(test.expErrorRbac),
 		requester:             test.requester,
-		target: Subject{
-			extraInfo: make(map[string][]string),
+		target: &user.DefaultInfo{
+			Extra: make(map[string][]string),
 		},
 		success: false,
 	}
@@ -260,11 +261,11 @@ func runTest(t *testing.T, name string, test testT) {
 	headers := map[string][]string{}
 
 	if test.expImpersonationHeaders {
-		headers["Impersonate-User"] = []string{test.expTarget.userName}
-		headers["Impersonate-Group"] = test.expTarget.groups
-		headers["Impersonate-Uid"] = []string{test.expTarget.uid}
+		headers["Impersonate-User"] = []string{test.expTarget.GetName()}
+		headers["Impersonate-Group"] = test.expTarget.GetGroups()
+		headers["Impersonate-Uid"] = []string{test.expTarget.GetUID()}
 
-		for key, value := range test.expTarget.extraInfo {
+		for key, value := range test.expTarget.GetExtra() {
 			headers["Impersonate-Extra-"+key] = value
 		}
 
@@ -301,7 +302,7 @@ func runTest(t *testing.T, name string, test testT) {
 		}
 	} else {
 
-		if testReviewer.target.userName != "" || testReviewer.target.uid != "" || len(testReviewer.target.groups) > 0 || len(testReviewer.target.extraInfo) > 0 {
+		if testReviewer.target.GetName() != "" || testReviewer.target.GetUID() != "" || len(testReviewer.target.GetGroups()) > 0 || len(testReviewer.target.GetExtra()) > 0 {
 			t.Errorf("expected empty target, got=%+v", testReviewer.target)
 		}
 	}
