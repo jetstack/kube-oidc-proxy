@@ -249,9 +249,7 @@ func runTest(t *testing.T, name string, test testT) {
 		extras[key] = value
 	}
 
-	testReviewer := &SubjectAccessReview{
-		subjectAccessReviewer: fake.New(test.expErrorRbac),
-	}
+	testReviewer, _ := New(fake.New(test.expErrorRbac))
 
 	headers := map[string][]string{}
 

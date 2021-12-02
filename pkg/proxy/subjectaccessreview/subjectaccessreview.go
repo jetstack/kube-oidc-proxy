@@ -10,9 +10,7 @@ import (
 	v1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
-	"k8s.io/client-go/kubernetes"
 	clientazv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
-	"k8s.io/client-go/rest"
 )
 
 // structure for storing the review data
@@ -21,14 +19,10 @@ type SubjectAccessReview struct {
 }
 
 // create a new SubjectAccessReview structure
-func New(restConfig *rest.Config, requester user.Info, target user.Info) (*SubjectAccessReview, error) {
-	kubeclient, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return nil, err
-	}
+func New(subjectAccessReviewer clientazv1.SubjectAccessReviewInterface) (*SubjectAccessReview, error) {
 
 	return &SubjectAccessReview{
-		subjectAccessReviewer: kubeclient.AuthorizationV1().SubjectAccessReviews(),
+		subjectAccessReviewer: subjectAccessReviewer,
 	}, nil
 }
 
