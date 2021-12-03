@@ -50,7 +50,7 @@ func (f *FakeReviewer) Create(ctx context.Context, req *azv1.SubjectAccessReview
 		return req, nil
 	}
 
-	if req.Spec.ResourceAttributes.Resource == "userextras/remoteAddr" && req.Spec.ResourceAttributes.Name == "1.2.3.4" {
+	if req.Spec.ResourceAttributes.Resource == "userextras/remoteaddr" && req.Spec.ResourceAttributes.Name == "1.2.3.4" {
 		req.Status = azv1.SubjectAccessReviewStatus{
 			Allowed: true,
 		}

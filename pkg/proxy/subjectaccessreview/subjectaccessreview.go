@@ -39,9 +39,12 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 		UID:    "",
 	}
 
+	headersToRemove := make(map[string]string)
+
 	for key, values := range req.Header {
 		keyToCheck := strings.ToLower(key)
 		if strings.HasPrefix(keyToCheck, "impersonate-") {
+			headersToRemove[key] = key
 			hasImpersonation = true
 			if keyToCheck == "impersonate-user" {
 				userToImpersonate := values[0]
@@ -116,6 +119,20 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 
 	if hasImpersonation {
 		//haven't errored out, but has impersonation - returning target user
+
+		// first clearing out the old headers
+		newHeaders := http.Header{}
+
+		for k := range req.Header {
+			if _, ok := headersToRemove[k]; !ok {
+				for _, v := range req.Header.Values(k) {
+					newHeaders.Add(k, v)
+				}
+			}
+		}
+
+		req.Header = newHeaders
+
 		return targetUser, nil
 	} else {
 		//no impersonation, no user to return
