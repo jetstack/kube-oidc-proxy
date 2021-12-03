@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
@@ -23,6 +24,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
@@ -33,14 +35,8 @@ const (
 
 var (
 	errUnauthorized          = errors.New("Unauthorized")
-	errImpersonateHeader     = errors.New("Impersonate-User in header")
 	errNoName                = errors.New("No name in OIDC info")
 	errNoImpersonationConfig = errors.New("No impersonation configuration in context")
-
-	// http headers are case-insensitive
-	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
-	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
-	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
 type Config struct {
@@ -57,11 +53,12 @@ type Config struct {
 type errorHandlerFn func(http.ResponseWriter, *http.Request, error)
 
 type Proxy struct {
-	oidcRequestAuther *bearertoken.Authenticator
-	tokenAuther       authenticator.Token
-	tokenReviewer     *tokenreview.TokenReview
-	secureServingInfo *server.SecureServingInfo
-	auditor           *audit.Audit
+	oidcRequestAuther     *bearertoken.Authenticator
+	tokenAuther           authenticator.Token
+	tokenReviewer         *tokenreview.TokenReview
+	subjectAccessReviewer *subjectaccessreview.SubjectAccessReview
+	secureServingInfo     *server.SecureServingInfo
+	auditor               *audit.Audit
 
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
@@ -88,6 +85,7 @@ func New(restConfig *rest.Config,
 	oidcOptions *options.OIDCAuthenticationOptions,
 	auditOptions *options.AuditOptions,
 	tokenReviewer *tokenreview.TokenReview,
+	subjectAccessReviewer *subjectaccessreview.SubjectAccessReview,
 	ssinfo *server.SecureServingInfo,
 	config *Config) (*Proxy, error) {
 
@@ -118,14 +116,15 @@ func New(restConfig *rest.Config,
 	}
 
 	return &Proxy{
-		restConfig:        restConfig,
-		hooks:             hooks.New(),
-		tokenReviewer:     tokenReviewer,
-		secureServingInfo: ssinfo,
-		config:            config,
-		oidcRequestAuther: bearertoken.New(tokenAuther),
-		tokenAuther:       tokenAuther,
-		auditor:           auditor,
+		restConfig:            restConfig,
+		hooks:                 hooks.New(),
+		tokenReviewer:         tokenReviewer,
+		subjectAccessReviewer: subjectAccessReviewer,
+		secureServingInfo:     ssinfo,
+		config:                config,
+		oidcRequestAuther:     bearertoken.New(tokenAuther),
+		tokenAuther:           tokenAuther,
+		auditor:               auditor,
 	}, nil
 }
 
@@ -209,23 +208,23 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// Get the impersonation headers from the context.
-	conf := context.ImpersonationConfig(req)
-	if conf == nil {
+	impersonationConf := context.ImpersonationConfig(req)
+	if impersonationConf == nil {
 		return nil, errNoImpersonationConfig
 	}
 
 	// Set up impersonation request.
-	rt := transport.NewImpersonatingRoundTripper(*conf, p.clientTransport)
+	rt := transport.NewImpersonatingRoundTripper(*impersonationConf.ImpersonationConfig, p.clientTransport)
 
 	// Log the request
-	p.logSuccessfulRequest(req, conf)
+	p.logSuccessfulRequest(req, *impersonationConf.InboundUser, *impersonationConf.ImpersonatedUser)
 
 	// Push request through round trippers to the API server.
 	return rt.RoundTrip(req)
 }
 
 // logs the request
-func (p *Proxy) logSuccessfulRequest(req *http.Request, conf *transport.ImpersonationConfig) {
+func (p *Proxy) logSuccessfulRequest(req *http.Request, inboundUser user.Info, outboundUser user.Info) {
 	remoteAddr := req.RemoteAddr
 	indexOfColon := strings.Index(remoteAddr, ":")
 	if indexOfColon > 0 {
@@ -234,13 +233,27 @@ func (p *Proxy) logSuccessfulRequest(req *http.Request, conf *transport.Imperson
 
 	inboundExtras := ""
 
-	if conf.Extra != nil {
-		for key, value := range conf.Extra {
+	if inboundUser.GetExtra() != nil {
+		for key, value := range inboundUser.GetExtra() {
 			inboundExtras += key + "=" + strings.Join(value, "|") + " "
 		}
 	}
 
-	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s /%s]\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI, conf.UserName, strings.Join(conf.Groups, "|"), inboundExtras)
+	outboundUserLog := ""
+
+	if outboundUser != nil {
+		outboundExtras := ""
+
+		if outboundUser.GetExtra() != nil {
+			for key, value := range outboundUser.GetExtra() {
+				outboundExtras += key + "=" + strings.Join(value, "|") + " "
+			}
+		}
+
+		outboundUserLog = fmt.Sprintf(" outbound:[%s / %s / %s / %s]", outboundUser.GetName(), strings.Join(outboundUser.GetGroups(), "|"), outboundUser.GetUID(), outboundExtras)
+	}
+
+	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s / %s]%s\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI, inboundUser.GetName(), strings.Join(inboundUser.GetGroups(), "|"), inboundExtras, outboundUserLog)
 }
 
 // logs the failed request

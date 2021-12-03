@@ -232,6 +232,31 @@ func TestSubectAccessReview(t *testing.T) {
 			expErrorRbac:             nil,
 			extraImpersonationHeader: true,
 		},
+
+		"missing impersonation-user": {
+			requester: &user.DefaultInfo{
+				Name:   "mmosley-x",
+				Groups: []string{"group1", "group2"},
+				Extra: map[string][]string{
+					"remoteaddr": []string{"1.2.3.4"},
+				},
+			},
+
+			expTarget: &user.DefaultInfo{
+				Name:   "",
+				Groups: []string{"group3"},
+				Extra: map[string][]string{
+					"remoteaddr": []string{"1.2.3.4"},
+				},
+				UID: "1-2-3-4",
+			},
+
+			expImpersonationHeaders:  true,
+			expAz:                    false,
+			expErr:                   errors.New("no Impersonation-User header found for request"),
+			expErrorRbac:             nil,
+			extraImpersonationHeader: false,
+		},
 	}
 
 	for name, test := range tests {
@@ -254,7 +279,10 @@ func runTest(t *testing.T, name string, test testT) {
 	headers := map[string][]string{}
 
 	if test.expImpersonationHeaders {
-		headers["Impersonate-User"] = []string{test.expTarget.GetName()}
+		if test.expTarget.GetName() != "" {
+			headers["Impersonate-User"] = []string{test.expTarget.GetName()}
+		}
+
 		headers["Impersonate-Group"] = test.expTarget.GetGroups()
 		headers["Impersonate-Uid"] = []string{test.expTarget.GetUID()}
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"k8s.io/apiserver/pkg/authentication/user"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/transport"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 )
 
 func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
@@ -89,6 +91,9 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			return
 		}
 
+		var targetForContext user.Info
+		targetForContext = nil
+
 		var remoteAddr string
 		req, remoteAddr = context.RemoteAddr(req)
 
@@ -101,16 +106,30 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			return
 		}
 
-		if p.hasImpersonation(req.Header) {
-			p.handleError(rw, req, errImpersonateHeader)
-			return
-		}
-
 		user, ok := genericapirequest.UserFrom(req.Context())
 		// No name available so reject request
 		if !ok || len(user.GetName()) == 0 {
 			p.handleError(rw, req, errNoName)
 			return
+		}
+
+		userForContext := user
+
+		if p.hasImpersonation(req.Header) {
+			// if impersonation headers are present, let's check to see
+			// if the user is authorized to perform the impersonation
+			target, err := p.subjectAccessReviewer.CheckAuthorizedForImpersonation(req, user)
+
+			if err != nil {
+				p.handleError(rw, req, err)
+				return
+			}
+
+			if target != nil {
+				// TODO - store original context for logging
+				user = target
+				targetForContext = target
+			}
 		}
 
 		// Ensure group contains allauthenticated builtin
@@ -151,10 +170,40 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			}
 		}
 
-		conf := &transport.ImpersonationConfig{
-			UserName: user.GetName(),
-			Groups:   groups,
-			Extra:    extra,
+		if targetForContext != nil {
+			// add the original user's information as extra headers
+			// so they're recorded in the API server's audit log
+			extra["originaluser.jetstack.io-user"] = []string{userForContext.GetName()}
+
+			numGroups := len(userForContext.GetGroups())
+			if numGroups > 0 {
+				groupNames := make([]string, numGroups)
+				for i, groupName := range userForContext.GetGroups() {
+					groupNames[i] = groupName
+				}
+
+				extra["originaluser.jetstack.io-groups"] = groupNames
+			}
+
+			if userForContext.GetUID() != "" {
+				extra["originaluser.jetstack.io-uid"] = []string{userForContext.GetUID()}
+			}
+
+			if userForContext.GetExtra() != nil && len(userForContext.GetExtra()) > 0 {
+				for extraName, values := range userForContext.GetExtra() {
+					extra["originaluser.jetstack.io-extra-"+extraName] = values
+				}
+			}
+		}
+
+		conf := &context.ImpersonationRequest{
+			ImpersonationConfig: &transport.ImpersonationConfig{
+				UserName: user.GetName(),
+				Groups:   groups,
+				Extra:    extra,
+			},
+			InboundUser:      &userForContext,
+			ImpersonatedUser: &targetForContext,
 		}
 
 		// Add the impersonation configuration to the context.
@@ -190,12 +239,6 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 			unauthedHandler.ServeHTTP(rw, r)
 			return
 
-			// User request with impersonation
-		case errImpersonateHeader:
-			klog.V(2).Infof("impersonation user request %s", r.RemoteAddr)
-			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
-			return
-
 			// No name given or available in oidc request
 		case errNoName:
 			klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
@@ -208,20 +251,29 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 
+			// No impersonation user found
+		case subjectaccessreview.ErrorNoImpersonationUserFound:
+			http.Error(rw, subjectaccessreview.ErrorNoImpersonationUserFound.Error(), http.StatusInternalServerError)
+			return
+
 			// Server or unknown error
 		default:
-			klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
-			http.Error(rw, "", http.StatusInternalServerError)
+
+			if strings.Contains(err.Error(), "not allowed to impersonate") {
+				klog.V(2).Infof(err.Error(), r.RemoteAddr)
+				http.Error(rw, err.Error(), http.StatusForbidden)
+			} else {
+				klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
+				http.Error(rw, "", http.StatusInternalServerError)
+			}
+
 		}
 	}
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {
 	for h := range header {
-		if strings.ToLower(h) == impersonateUserHeader ||
-			strings.ToLower(h) == impersonateGroupHeader ||
-			strings.HasPrefix(strings.ToLower(h), impersonateExtraHeader) {
-
+		if strings.HasPrefix(strings.ToLower(h), "impersonate-") {
 			return true
 		}
 	}

@@ -3,6 +3,7 @@ package subjectaccessreview
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,6 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 	clientazv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
+)
+
+var (
+	ErrorNoImpersonationUserFound = errors.New("no Impersonation-User header found for request")
 )
 
 // structure for storing the review data
@@ -30,6 +35,10 @@ func New(subjectAccessReviewer clientazv1.SubjectAccessReviewInterface) (*Subjec
 // and builds the target object
 func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(req *http.Request, requester user.Info) (user.Info, error) {
 
+	impersonatedUser := req.Header.Get("impersonate-user")
+
+	hasImpersonatedUser := impersonatedUser != ""
+
 	hasImpersonation := false
 
 	targetUser := &user.DefaultInfo{
@@ -44,18 +53,25 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 	for key, values := range req.Header {
 		keyToCheck := strings.ToLower(key)
 		if strings.HasPrefix(keyToCheck, "impersonate-") {
+			if !hasImpersonatedUser {
+				// found impersonation header, but not a user
+				return nil, ErrorNoImpersonationUserFound
+			}
+
 			headersToRemove[key] = key
 			hasImpersonation = true
 			if keyToCheck == "impersonate-user" {
 				userToImpersonate := values[0]
-				result, err := subjectAccessReview.checkRbacImpersonationAuthorization("users", userToImpersonate, requester)
-				if err != nil {
-					return nil, err
-				} else {
-					if !result {
-						return nil, fmt.Errorf("%s is not allowed to impersonate user '%s'", requester.GetName(), userToImpersonate)
+				if userToImpersonate != "" {
+					result, err := subjectAccessReview.checkRbacImpersonationAuthorization("users", userToImpersonate, requester)
+					if err != nil {
+						return nil, err
 					} else {
-						targetUser.Name = userToImpersonate
+						if !result {
+							return nil, fmt.Errorf("%s is not allowed to impersonate user '%s'", requester.GetName(), userToImpersonate)
+						} else {
+							targetUser.Name = userToImpersonate
+						}
 					}
 				}
 			} else if keyToCheck == "impersonate-group" {
@@ -118,7 +134,6 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 	}
 
 	if hasImpersonation {
-		//haven't errored out, but has impersonation - returning target user
 
 		// first clearing out the old headers
 		newHeaders := http.Header{}
@@ -131,6 +146,7 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 			}
 		}
 
+		//haven't errored out, but has impersonation - returning target user
 		req.Header = newHeaders
 
 		return targetUser, nil

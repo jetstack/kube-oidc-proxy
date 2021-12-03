@@ -3,6 +3,7 @@ package fake
 
 import (
 	"context"
+	"strings"
 
 	azv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +51,7 @@ func (f *FakeReviewer) Create(ctx context.Context, req *azv1.SubjectAccessReview
 		return req, nil
 	}
 
-	if req.Spec.ResourceAttributes.Resource == "userextras/remoteaddr" && req.Spec.ResourceAttributes.Name == "1.2.3.4" {
+	if strings.ToLower(req.Spec.ResourceAttributes.Resource) == "userextras/remoteaddr" && req.Spec.ResourceAttributes.Name == "1.2.3.4" {
 		req.Status = azv1.SubjectAccessReviewStatus{
 			Allowed: true,
 		}
