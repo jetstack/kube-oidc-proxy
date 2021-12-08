@@ -148,7 +148,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 	}
 
 	// Create a role that will allow a user to impersonate another user
-	crole, err = h.KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
+	croleImpersonate, err := h.KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: kind.ProxyImageName + "-impersonate-",
 			OwnerReferences: []metav1.OwnerReference{
@@ -205,7 +205,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 				},
 			},
 			RoleRef: rbacv1.RoleRef{
-				Name: crole.Name, Kind: "ClusterRole",
+				Name: croleImpersonate.Name, Kind: "ClusterRole",
 			},
 			Subjects: []rbacv1.Subject{
 				{Name: "user@example.com", Kind: "User"},
