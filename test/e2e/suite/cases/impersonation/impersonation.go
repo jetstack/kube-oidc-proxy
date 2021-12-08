@@ -164,9 +164,18 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 
 	// check body and status code the token was rejected
 	//if int(kErr.Status().Code) != http.StatusForbidden ||
-	if int(kErr.Status().Code) != expectedCode ||
+
+	if int(kErr.Status().Code) != expectedCode {
+		Expect(fmt.Errorf("expected status code=%d, got=%d", expectedCode, int(kErr.Status().Code))).NotTo(HaveOccurred())
+	}
+
+	if resp != expRespBody {
+		Expect(fmt.Errorf("expected response=%s, got=%s", expRespBody, resp)).NotTo(HaveOccurred())
+	}
+
+	/*if int(kErr.Status().Code) != expectedCode ||
 		resp != expRespBody {
 		Expect(fmt.Errorf("expected status code %d with body \"%s\", got code=%d, body=\"%s\"",
 			http.StatusForbidden, expRespBody, int(kErr.Status().Code), resp)).NotTo(HaveOccurred())
-	}
+	}*/
 }
