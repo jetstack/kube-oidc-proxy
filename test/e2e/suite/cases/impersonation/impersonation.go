@@ -81,7 +81,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 					"k1", "k2", "k3",
 				},
 			},
-		}, http.StatusForbidden, "user@example.com is not allowed to impersonate extra info 'Foo'='k1'")
+		}, http.StatusForbidden, "user@example.com is not allowed to impersonate extra info 'foo'='k1'")
 
 	})
 
