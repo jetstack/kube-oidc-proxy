@@ -21,6 +21,33 @@ import (
 var _ = framework.CasesDescribe("Impersonation", func() {
 	f := framework.NewDefaultFramework("impersonation")
 
+	It("should allow an authenticated user to impersonate an authorized user when az by rbac", func() {
+		By("Impersonating a user, group, and extra")
+		tryImpersonationClient(f, rest.ImpersonationConfig{
+			UserName: "ok-to-impersonate@nodomain.dev",
+			Groups: []string{
+				"ok-to-impersonate-group",
+			},
+			Extra: map[string][]string{
+				"oktoimpersonateextra": {
+					"foo",
+				},
+			},
+		}, http.StatusOK, "no Impersonation-User header found for request")
+
+		By("Impersonating as a extra")
+		tryImpersonationClient(f, rest.ImpersonationConfig{
+			Extra: map[string][]string{
+				"foo": {
+					"k1", "k2", "k3",
+				},
+				"bar": {
+					"k1", "k2", "k3",
+				},
+			},
+		}, http.StatusInternalServerError, "no Impersonation-User header found for request")
+	})
+
 	It("should error at proxy when impersonation enabled but a user is not specified", func() {
 		By("Impersonating as a group")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
