@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview/fake"
@@ -287,7 +288,7 @@ func runTest(t *testing.T, name string, test testT) {
 		headers["Impersonate-Uid"] = []string{test.expTarget.GetUID()}
 
 		for key, value := range test.expTarget.GetExtra() {
-			headers["Impersonate-Extra-"+key] = value
+			headers["Impersonate-Extra-"+strings.ToUpper(key)] = value
 		}
 
 		if test.extraImpersonationHeader {

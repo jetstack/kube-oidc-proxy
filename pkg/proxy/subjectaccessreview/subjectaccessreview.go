@@ -102,7 +102,9 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 					}
 				}
 			} else if strings.HasPrefix(keyToCheck, "impersonate-extra-") {
-				extraName := key[18:]
+				// according to https://github.com/kubernetes/kubernetes/blob/555623c07eabf22864f6147736fa191e020cca25/staging/src/k8s.io/apiserver/pkg/authentication/user/user.go#L31-L41
+				// the extra name MUST be lowercase...so we'll force to lowercase for the rbac check
+				extraName := strings.ToLower(key[18:])
 				for i := range values {
 					result, err := subjectAccessReview.checkRbacImpersonationAuthorization("userextras/"+extraName, values[i], requester)
 					if err != nil {
