@@ -51,7 +51,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 
 		By("Impersonating as a user, group")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
-			UserName: "user@example.com",
+			UserName: "ok-to-impersonate@nodomain.dev",
 			Groups: []string{
 				"group-1",
 			},
@@ -59,7 +59,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 
 		By("Impersonating as a user, extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
-			UserName: "user@example.com",
+			UserName: "ok-to-impersonate@nodomain.dev",
 			Extra: map[string][]string{
 				"foo": {
 					"k1", "k2", "k3",
