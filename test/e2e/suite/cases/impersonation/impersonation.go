@@ -49,22 +49,23 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 			UserName: "foo@example.com",
 		}, http.StatusForbidden, "user@example.com is not allowed to impersonate user 'foo@example.com'")
 
-		By("Impersonating as a user, group and extra")
+		By("Impersonating as a user, group")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
 			UserName: "user@example.com",
 			Groups: []string{
 				"group-1",
-				"group-2",
 			},
+		}, http.StatusForbidden, "user@example.com is not allowed to impersonate group 'group-1'")
+
+		By("Impersonating as a user, extra")
+		tryImpersonationClient(f, rest.ImpersonationConfig{
+			UserName: "user@example.com",
 			Extra: map[string][]string{
 				"foo": {
 					"k1", "k2", "k3",
 				},
-				"bar": {
-					"k1", "k2", "k3",
-				},
 			},
-		}, http.StatusForbidden, "user@example.com is not allowed to impersonate group 'group-1'")
+		}, http.StatusForbidden, "user@example.com is not allowed to impersonate extra info 'Foo'='k1'")
 
 	})
 
