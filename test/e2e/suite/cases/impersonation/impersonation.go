@@ -28,12 +28,12 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 			Groups: []string{
 				"ok-to-impersonate-group",
 			},
-			Extra: map[string][]string{
+			/*Extra: map[string][]string{
 				"oktoimpersonateextra": {
 					"foo",
 				},
-			},
-		}, http.StatusOK, "no Impersonation-User header found for request")
+			},*/
+		}, http.StatusOK, "")
 
 	})
 
