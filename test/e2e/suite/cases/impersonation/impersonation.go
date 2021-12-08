@@ -21,19 +21,14 @@ import (
 var _ = framework.CasesDescribe("Impersonation", func() {
 	f := framework.NewDefaultFramework("impersonation")
 
-	It("should error at proxy when impersonation enabled and impersonation is attempted on a request", func() {
-		By("Impersonating as a user")
-		tryImpersonationClient(f, rest.ImpersonationConfig{
-			UserName: "foo@example.com",
-		})
-
+	It("should error at proxy when impersonation enabled but a user is not specified", func() {
 		By("Impersonating as a group")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
 			Groups: []string{
 				"group-1",
 				"group-2",
 			},
-		})
+		}, http.StatusInternalServerError)
 
 		By("Impersonating as a extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
@@ -45,7 +40,14 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 					"k1", "k2", "k3",
 				},
 			},
-		})
+		}, http.StatusInternalServerError)
+	})
+
+	It("should return error from proxy when impersonation enabled and impersonation is not authorized by the cluster's RBAC", func() {
+		By("Impersonating as a user")
+		tryImpersonationClient(f, rest.ImpersonationConfig{
+			UserName: "foo@example.com",
+		}, http.StatusUnauthorized)
 
 		By("Impersonating as a user, group and extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
@@ -62,7 +64,8 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 					"k1", "k2", "k3",
 				},
 			},
-		})
+		}, http.StatusUnauthorized)
+
 	})
 
 	It("should not error at proxy when impersonation is disabled and impersonation is attempted on a request", func() {
@@ -144,7 +147,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 	})
 })
 
-func tryImpersonationClient(f *framework.Framework, impConfig rest.ImpersonationConfig) {
+func tryImpersonationClient(f *framework.Framework, impConfig rest.ImpersonationConfig, expectedCode int) {
 	// build client with impersonation
 	config := f.NewProxyRestConfig()
 	config.Impersonate = impConfig
@@ -161,7 +164,8 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 	resp := kErr.Status().Details.Causes[0].Message
 
 	// check body and status code the token was rejected
-	if int(kErr.Status().Code) != http.StatusForbidden ||
+	//if int(kErr.Status().Code) != http.StatusForbidden ||
+	if int(kErr.Status().Code) != expectedCode ||
 		resp != expRespBody {
 		Expect(fmt.Errorf("expected status code %d with body %q, got=%s",
 			http.StatusForbidden, expRespBody, kErr)).NotTo(HaveOccurred())
