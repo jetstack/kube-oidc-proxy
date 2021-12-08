@@ -22,6 +22,29 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 	f := framework.NewDefaultFramework("impersonation")
 
 	It("should allow an authenticated user to impersonate an authorized user when az by rbac", func() {
+
+		By("Creating Role for user ok-to-impersonate@nodomain.dev to list Pods")
+		rolePods, err := f.Helper().KubeClient.RbacV1().Roles(f.Namespace.Name).Create(context.TODO(), &rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-user-role-pods-impersonate-",
+			},
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list"}},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating ClusterRoleBinding for user ok-to-impersonate@nodomain.dev")
+		_, err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(),
+			&rbacv1.ClusterRoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-user-binding-impersonate",
+				},
+				Subjects: []rbacv1.Subject{{Name: "ok-to-impersonate@nodomain.dev", Kind: "User"}},
+				RoleRef:  rbacv1.RoleRef{Name: rolePods.Name, Kind: "ClusterRole"},
+			}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
 		By("Impersonating a user, group, and extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
 			UserName: "ok-to-impersonate@nodomain.dev",
