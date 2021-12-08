@@ -170,6 +170,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 				Verbs:         []string{"impersonate"},
 			},
 			{
+				APIGroups:     []string{""},
 				Resources:     []string{"groups"},
 				ResourceNames: []string{"ok-to-impersonate-group"},
 				Verbs:         []string{"impersonate"},
