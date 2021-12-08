@@ -133,8 +133,13 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 			},
 			{
 				APIGroups: []string{"authentication.k8s.io"},
-				Resources: []string{"userextras/scopes", "tokenreviews", "subjectaccessreviews"},
+				Resources: []string{"userextras/scopes", "tokenreviews"},
 				Verbs:     []string{"impersonate", "create"},
+			},
+			{
+				APIGroups: []string{"authorization.k8s.io"},
+				Resources: []string{"subjectaccessreviews"},
+				Verbs:     []string{"create"},
 			},
 		},
 	}, metav1.CreateOptions{})
