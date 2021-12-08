@@ -133,7 +133,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 			},
 			{
 				APIGroups: []string{"authentication.k8s.io"},
-				Resources: []string{"userextras/scopes", "tokenreviews"},
+				Resources: []string{"userextras/scopes", "tokenreviews", "subjectaccessreviews"},
 				Verbs:     []string{"impersonate", "create"},
 			},
 		},
