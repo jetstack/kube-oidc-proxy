@@ -6,11 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
@@ -83,9 +85,21 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				ExtraUserHeadersClientIPEnabled: opts.App.ExtraHeaderOptions.EnableClientIPExtraUserHeader,
 			}
 
+			// Setup Subject Access Review
+			kubeclient, err := kubernetes.NewForConfig(restConfig)
+			if err != nil {
+				return err
+			}
+
+			subectAccessReviewer, err := subjectaccessreview.New(kubeclient.AuthorizationV1().SubjectAccessReviews())
+
+			if err != nil {
+				return err
+			}
+
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(restConfig, opts.OIDCAuthentication, opts.Audit,
-				tokenReviewer, secureServingInfo, proxyConfig)
+				tokenReviewer, subectAccessReviewer, secureServingInfo, proxyConfig)
 			if err != nil {
 				return err
 			}
