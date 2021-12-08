@@ -171,19 +171,26 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 	client, err := kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 
-	_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
-	kErr, ok := err.(*k8sErrors.StatusError)
-	if !ok {
-		Expect(err).NotTo(HaveOccurred())
-	}
+	var resp string
+	var respCode int
 
-	resp := kErr.Status().Details.Causes[0].Message
+	_, err = client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		kErr, ok := err.(*k8sErrors.StatusError)
+		if !ok {
+			Expect(err).NotTo(HaveOccurred())
+		}
+		resp = kErr.Status().Details.Causes[0].Message
+		respCode = int(kErr.ErrStatus.Code)
+	} else {
+		respCode = http.StatusOK
+	}
 
 	// check body and status code the token was rejected
 	//if int(kErr.Status().Code) != http.StatusForbidden ||
 
-	if int(kErr.Status().Code) != expectedCode {
-		Expect(fmt.Errorf("expected status code=%d, got=%d", expectedCode, int(kErr.Status().Code))).NotTo(HaveOccurred())
+	if respCode != expectedCode {
+		Expect(fmt.Errorf("expected status code=%d, got=%d", expectedCode, respCode)).NotTo(HaveOccurred())
 	}
 
 	if resp != expRespBody {
