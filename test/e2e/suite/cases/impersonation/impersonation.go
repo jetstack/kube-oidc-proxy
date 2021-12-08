@@ -180,8 +180,14 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 		if !ok {
 			Expect(err).NotTo(HaveOccurred())
 		}
-		resp = kErr.Status().Details.Causes[0].Message
 		respCode = int(kErr.ErrStatus.Code)
+		fmt.Printf("http status code %d\n", respCode)
+		if respCode != http.StatusOK {
+			resp = kErr.Status().Details.Causes[0].Message
+		} else {
+			resp = ""
+		}
+
 	} else {
 		respCode = http.StatusOK
 	}
