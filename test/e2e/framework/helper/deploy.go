@@ -176,10 +176,10 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 				Verbs:         []string{"impersonate"},
 			},
 			{
-				APIGroups:     []string{"authentication.k8s.io"},
-				Resources:     []string{"userextras/oktoimpersonateextra"},
-				ResourceNames: []string{"foo"},
-				Verbs:         []string{"impersonate"},
+				APIGroups: []string{"authentication.k8s.io"},
+				Resources: []string{"userextras/oktoimpersonateextra"},
+				/*ResourceNames: []string{"foo"},*/
+				Verbs: []string{"impersonate"},
 			},
 		},
 	}, metav1.CreateOptions{})
