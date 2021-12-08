@@ -47,7 +47,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		By("Impersonating as a user")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
 			UserName: "foo@example.com",
-		}, http.StatusUnauthorized, "user@example.com is not allowed to impersonate user 'foo@example.com' (get pods)")
+		}, http.StatusUnauthorized, "user@example.com is not allowed to impersonate user 'foo@example.com'")
 
 		By("Impersonating as a user, group and extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
@@ -64,7 +64,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 					"k1", "k2", "k3",
 				},
 			},
-		}, http.StatusUnauthorized, "user@example.com is not allowed to impersonate user 'foo@example.com' (get pods)")
+		}, http.StatusUnauthorized, "user@example.com is not allowed to impersonate user 'foo@example.com'")
 
 	})
 
@@ -166,7 +166,7 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 	//if int(kErr.Status().Code) != http.StatusForbidden ||
 	if int(kErr.Status().Code) != expectedCode ||
 		resp != expRespBody {
-		Expect(fmt.Errorf("expected status code %d with body \"%q\", got=\"%s\"",
+		Expect(fmt.Errorf("expected status code %d with body \"%s\", got code=%d, body=\"%s\"",
 			http.StatusForbidden, expRespBody, resp)).NotTo(HaveOccurred())
 	}
 }
