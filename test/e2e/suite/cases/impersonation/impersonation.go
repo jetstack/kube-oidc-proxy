@@ -28,7 +28,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 				"group-1",
 				"group-2",
 			},
-		}, http.StatusInternalServerError)
+		}, http.StatusInternalServerError, "no Impersonation-User header found for request")
 
 		By("Impersonating as a extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
@@ -40,14 +40,14 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 					"k1", "k2", "k3",
 				},
 			},
-		}, http.StatusInternalServerError)
+		}, http.StatusInternalServerError, "no Impersonation-User header found for request")
 	})
 
 	It("should return error from proxy when impersonation enabled and impersonation is not authorized by the cluster's RBAC", func() {
 		By("Impersonating as a user")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
 			UserName: "foo@example.com",
-		}, http.StatusUnauthorized)
+		}, http.StatusUnauthorized, "")
 
 		By("Impersonating as a user, group and extra")
 		tryImpersonationClient(f, rest.ImpersonationConfig{
@@ -64,7 +64,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 					"k1", "k2", "k3",
 				},
 			},
-		}, http.StatusUnauthorized)
+		}, http.StatusUnauthorized, "")
 
 	})
 
@@ -147,7 +147,7 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 	})
 })
 
-func tryImpersonationClient(f *framework.Framework, impConfig rest.ImpersonationConfig, expectedCode int) {
+func tryImpersonationClient(f *framework.Framework, impConfig rest.ImpersonationConfig, expectedCode int, expRespBody string) {
 	// build client with impersonation
 	config := f.NewProxyRestConfig()
 	config.Impersonate = impConfig
@@ -160,7 +160,6 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	expRespBody := "Impersonation requests are disabled when using kube-oidc-proxy"
 	resp := kErr.Status().Details.Causes[0].Message
 
 	// check body and status code the token was rejected
