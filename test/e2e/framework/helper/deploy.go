@@ -177,7 +177,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 			},
 			{
 				APIGroups:     []string{"authentication.k8s.io"},
-				Resources:     []string{"userextras/ok-to-impersonate-extra"},
+				Resources:     []string{"userextras/oktoimpersonateextra"},
 				ResourceNames: []string{"foo"},
 				Verbs:         []string{"impersonate"},
 			},

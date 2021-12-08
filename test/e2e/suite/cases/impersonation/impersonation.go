@@ -35,17 +35,6 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 			},
 		}, http.StatusOK, "no Impersonation-User header found for request")
 
-		By("Impersonating as a extra")
-		tryImpersonationClient(f, rest.ImpersonationConfig{
-			Extra: map[string][]string{
-				"foo": {
-					"k1", "k2", "k3",
-				},
-				"bar": {
-					"k1", "k2", "k3",
-				},
-			},
-		}, http.StatusInternalServerError, "no Impersonation-User header found for request")
 	})
 
 	It("should error at proxy when impersonation enabled but a user is not specified", func() {
