@@ -161,9 +161,20 @@ func (subjectAccessReview *SubjectAccessReview) CheckAuthorizedForImpersonation(
 // submit a SubjectAccessReview request to the API server to validate that impersonation can occur
 func (subjectAccessReview *SubjectAccessReview) checkRbacImpersonationAuthorization(resource string, name string, requester user.Info) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
+	var group string
+	var subresource string
 
 	for key, value := range requester.GetExtra() {
 		extras[key] = value
+	}
+
+	slashIndex := strings.Index(resource, "/")
+
+	if slashIndex > 0 {
+		newResources := strings.Split(resource, "/")
+		resource = newResources[0]
+		subresource = newResources[1]
+		group = "authentication.k8s.io"
 	}
 
 	clusterSubjectAccessReview := v1.SubjectAccessReview{
@@ -171,11 +182,13 @@ func (subjectAccessReview *SubjectAccessReview) checkRbacImpersonationAuthorizat
 			User:   requester.GetName(),
 			Groups: requester.GetGroups(),
 			Extra:  extras,
+
 			ResourceAttributes: &v1.ResourceAttributes{
-				Verb:     "impersonate",
-				Group:    "",
-				Resource: resource,
-				Name:     name,
+				Verb:        "impersonate",
+				Group:       group,
+				Resource:    resource,
+				Subresource: subresource,
+				Name:        name,
 			},
 		},
 	}
