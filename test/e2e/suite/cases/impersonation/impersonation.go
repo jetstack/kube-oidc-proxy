@@ -223,7 +223,7 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 	//if int(kErr.Status().Code) != http.StatusForbidden ||
 
 	if respCode != expectedCode {
-		Expect(fmt.Errorf("expected status code=%d, got=%d", expectedCode, respCode)).NotTo(HaveOccurred())
+		Expect(fmt.Errorf("expected status code=%d, got=%d resp=%s", expectedCode, respCode, resp)).NotTo(HaveOccurred())
 	}
 
 	if resp != expRespBody {
