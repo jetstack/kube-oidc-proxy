@@ -462,6 +462,7 @@ func TestHandlers(t *testing.T) {
 					User: &user.DefaultInfo{
 						Name:   "mmosley",
 						Groups: []string{"group1"},
+						Extra:  map[string][]string{"someextra": {"someval1", "someval2"}, "someextra2": {"foo", "bar"}},
 					},
 				},
 				pass: true,
@@ -474,6 +475,7 @@ func TestHandlers(t *testing.T) {
 				"Impersonate-Extra-Remoteaddr":                      {"1.2.3.4"},
 				"Impersonate-Extra-Originaluser.jetstack.io-User":   {"mmosley"},
 				"Impersonate-Extra-Originaluser.jetstack.io-Groups": {"group1"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Extra":  {"{\"someextra\":[\"someval1\",\"someval2\"],\"someextra2\":[\"foo\",\"bar\"]}"},
 			},
 			expBody: "",
 		},

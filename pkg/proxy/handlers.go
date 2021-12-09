@@ -2,6 +2,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -190,9 +191,12 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			}
 
 			if userForContext.GetExtra() != nil && len(userForContext.GetExtra()) > 0 {
-				for extraName, values := range userForContext.GetExtra() {
-					extra["originaluser.jetstack.io-extra-"+extraName] = values
+				jsonExtras, errJsonMarshal := json.Marshal(userForContext.GetExtra())
+				if errJsonMarshal != nil {
+					p.handleError(rw, req, errJsonMarshal)
+					return
 				}
+				extra["originaluser.jetstack.io-extra"] = []string{string(jsonExtras)}
 			}
 		}
 
