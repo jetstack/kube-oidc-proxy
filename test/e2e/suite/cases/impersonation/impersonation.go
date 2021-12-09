@@ -206,7 +206,11 @@ func tryImpersonationClient(f *framework.Framework, impConfig rest.Impersonation
 		respCode = int(kErr.ErrStatus.Code)
 		fmt.Printf("http status code %d\n", respCode)
 		if respCode != http.StatusOK {
-			resp = kErr.Status().Details.Causes[0].Message
+			if len(kErr.Status().Details.Causes) > 0 {
+				resp = kErr.Status().Details.Causes[0].Message
+			} else {
+				resp = kErr.Error()
+			}
 		} else {
 			resp = ""
 		}
