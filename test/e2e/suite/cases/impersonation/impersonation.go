@@ -35,13 +35,13 @@ var _ = framework.CasesDescribe("Impersonation", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating ClusterRoleBinding for user ok-to-impersonate@nodomain.dev")
-		_, err = f.Helper().KubeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(),
-			&rbacv1.ClusterRoleBinding{
+		_, err = f.Helper().KubeClient.RbacV1().RoleBindings(f.Namespace.Name).Create(context.TODO(),
+			&rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-user-binding-impersonate",
 				},
 				Subjects: []rbacv1.Subject{{Name: "ok-to-impersonate@nodomain.dev", Kind: "User"}},
-				RoleRef:  rbacv1.RoleRef{Name: rolePods.Name, Kind: "ClusterRole"},
+				RoleRef:  rbacv1.RoleRef{Name: rolePods.Name, Kind: "Role"},
 			}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
