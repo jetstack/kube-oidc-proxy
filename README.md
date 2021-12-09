@@ -149,6 +149,25 @@ When there's an error or failure:
 
 This is similar to success, but without the token information.
 
+## End-User Impersonation
+
+kube-oidc-proxy supports the impersonation headers for inbound requests.  This allowes the proxy to support `kubectl --as`.  When impersonation headers are included in a request, the proxy checks that the authenticated user is able to assume the identity of the impersonation headers by submitting `SubjectAccessReview` requests to the API server.  Once authorized, the proxy will send those identity headers instead of headers generated for the authenticated user.  In addition, three `Extra` impersonation headers are sent to the API server to identify the authenticated user who's making the request:
+
+| Header | Description |
+| ------ | ----------- |
+| `originaluser.jetstack.io-user` | The original username |
+| `originaluser.jetstack.io-groups` | The original groups |
+| `originaluser.jetstack.io-extra` | A JSON encoded map of arrays representing all of the `extra` headers included in the original identity |
+
+In addition to sending this `extra` information, the proxy adds an additional section to the logfile that will identify outbound identity data.  When impersonation headers are present, the `AuSuccess` log will look like:
+
+```
+[2021-11-25T01:05:17+0000] AuSuccess src:[10.42.0.5 / 10.42.1.3, 10.42.0.5] URI:/api/v1/namespaces/openunison/pods?limit=500 inbound:[mlbadmin1 / system:masters|system:authenticated /] outbound:[mlbadmin2 / group2|system:authenticated /]
+```
+
+When using `Impersonate-Extra-` headers, the proxy's `ServiceAccount` must be explicitly authorized via RBAC to impersonate whatever the extra key is named.  This is because extras are treated as subresources which must be explicitly authorized.  
+
+
 ## Development
 *NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.
 
