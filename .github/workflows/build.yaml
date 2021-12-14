@@ -30,8 +30,11 @@ jobs:
       - name: install go-junit
         run: go get -u github.com/jstemmer/go-junit-report
 
-      - name: build container
-        run: make docker_build
+      - name: run tests
+        run: make test
+
+      - name: build executable
+        run: make build
       
       
       
