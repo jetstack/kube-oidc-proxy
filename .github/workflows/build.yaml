@@ -34,7 +34,7 @@ jobs:
         run: make test
 
       - name: build executable
-        run: make build
+        run: make build; ls; ls bin
       
       
       
