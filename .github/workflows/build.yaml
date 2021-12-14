@@ -23,6 +23,15 @@ jobs:
 
       - name: Update go deps
         run: go mod tidy
+
+      - name: install go mock
+        run: go install github.com/golang/mock/mockgen@v1.6.0
+
+      - name: install go-junit
+        run: go get -u github.com/jstemmer/go-junit-report
+
+      - name: build container
+        run: make docker_build
       
       
       
