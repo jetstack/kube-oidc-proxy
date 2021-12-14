@@ -30,8 +30,8 @@ jobs:
       - name: install go-junit
         run: go get -u github.com/jstemmer/go-junit-report
 
-      - name: run tests
-        run: make test
+      #- name: run tests
+      #  run: make test
 
       - name: build executable
         run: make build; ls; ls bin
@@ -54,6 +54,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v2
         with:
+          context: "."
           push: true
           tags: ${{ secrets.OU_CONTAINER_DEST }}
           
