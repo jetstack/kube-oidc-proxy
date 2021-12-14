@@ -1,0 +1,49 @@
+name: dockerbuild
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - uses: actions/checkout@v1
+      
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ‘1.17.0’
+
+      - name: Update go deps
+        run: go mod tidy
+      
+      
+      
+      
+#      -
+#        name: Login to DockerHub
+#        uses: docker/login-action@v1 
+#        with:
+#          username: ${{ secrets.OU_REG_USER }}
+#          password: ${{ secrets.OU_REG_PASSWORD }}
+      
+      
+      
+      
+#      -
+#        name: Build and push
+#        id: docker_build
+#        uses: docker/build-push-action@v2
+#        with:
+#          push: true
+#          tags: docker.io/tremolosecurity/openunison-k8s-operator
+          
