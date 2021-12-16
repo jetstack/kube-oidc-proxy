@@ -253,7 +253,17 @@ func (p *Proxy) logSuccessfulRequest(req *http.Request, inboundUser user.Info, o
 		outboundUserLog = fmt.Sprintf(" outbound:[%s / %s / %s / %s]", outboundUser.GetName(), strings.Join(outboundUser.GetGroups(), "|"), outboundUser.GetUID(), outboundExtras)
 	}
 
-	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s / %s]%s\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI, inboundUser.GetName(), strings.Join(inboundUser.GetGroups(), "|"), inboundExtras, outboundUserLog)
+	xFwdFor := req.Header.Get("x-forwarded-for")
+
+	// clean off remoteaddr from x-forwarded-for
+	if xFwdFor != "" {
+		if strings.HasSuffix(xFwdFor, remoteAddr) {
+			xFwdFor = xFwdFor[0 : len(xFwdFor)-(len(remoteAddr)+2)]
+		}
+
+	}
+
+	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s / %s]%s\n", time.Now().Format(timestampLayout), remoteAddr, xFwdFor, req.RequestURI, inboundUser.GetName(), strings.Join(inboundUser.GetGroups(), "|"), inboundExtras, outboundUserLog)
 }
 
 // logs the failed request
