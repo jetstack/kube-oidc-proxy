@@ -1,4 +1,6 @@
-# Generates OpenUnison Changelog
+# Copyright Jetstack Ltd. See LICENSE for details.
+
+# Generates kube-oidc-proxy Changelog
 # Call from the branch with 3 parameters:
 # 1. Date from which to start looking
 # 2. Github Token
