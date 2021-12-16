@@ -1,15 +1,5 @@
 # kube-oidc-proxy
 
->  :warning:
->
->  kube-oidc-proxy is an experimental tool that we would like to get feedback
->  on from the community. Jetstack makes no guarantees on the soundness of the
->  security in this project, nor any suggestion that it's 'production ready'.
->  This server sits in the critical path of authentication to the Kubernetes
->  API.
->
->  :warning:
-
 `kube-oidc-proxy` is a reverse proxy server to authenticate users using OIDC to
 Kubernetes API servers where OIDC authentication is not available (i.e. managed 
 Kubernetes providers such as GKE, EKS, etc).
@@ -32,6 +22,10 @@ API server.
 The following is a diagram of the request flow for a user request.
 ![kube-oidc-proxy request
 flow](https://storage.googleapis.com/kube-oidc-proxy/diagram-d9623e38a6cd3b585b45f47d80ca1e1c43c7e695.png)
+
+## Quickest Start
+
+OpenUnison integrates kube-oidc-proxy directly, and includes an identity provider and access portal for Kubernetes.  The quickest way to get started with kube-oidc-proxy is to follow the directions for OpenUnison's deployment at https://openunison.github.io/.
 
 ## Tutorial
 
@@ -162,14 +156,14 @@ kube-oidc-proxy supports the impersonation headers for inbound requests.  This a
 In addition to sending this `extra` information, the proxy adds an additional section to the logfile that will identify outbound identity data.  When impersonation headers are present, the `AuSuccess` log will look like:
 
 ```
-[2021-11-25T01:05:17+0000] AuSuccess src:[10.42.0.5 / 10.42.1.3, 10.42.0.5] URI:/api/v1/namespaces/openunison/pods?limit=500 inbound:[mlbadmin1 / system:masters|system:authenticated /] outbound:[mlbadmin2 / group2|system:authenticated /]
+[2021-11-25T01:05:17+0000] AuSuccess src:[10.42.0.5 / 10.42.1.3] URI:/api/v1/namespaces/openunison/pods?limit=500 inbound:[mlbadmin1 / system:masters|system:authenticated /] outbound:[mlbadmin2 / group2|system:authenticated /]
 ```
 
 When using `Impersonate-Extra-` headers, the proxy's `ServiceAccount` must be explicitly authorized via RBAC to impersonate whatever the extra key is named.  This is because extras are treated as subresources which must be explicitly authorized.  
 
 
 ## Development
-*NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.
+*NOTE*: building kube-oidc-proxy requires Go version 1.17 or higher.
 
 To help with development, there is a suite of tools you can use to deploy a
 functioning proxy from source locally. You can read more
