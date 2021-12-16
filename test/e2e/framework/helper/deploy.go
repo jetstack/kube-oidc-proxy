@@ -60,7 +60,7 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 			},
 		},
 		ReadinessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Path: "/ready",
 					Port: intstr.FromInt(8080),
@@ -133,11 +133,84 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 			},
 			{
 				APIGroups: []string{"authentication.k8s.io"},
-				Resources: []string{"userextras/scopes", "tokenreviews"},
+				Resources: []string{"userextras/scopes", "tokenreviews", "userextras/originaluser.jetstack.io-user", "userextras/originaluser.jetstack.io-groups", "userextras/originaluser.jetstack.io-extra", "userextras/oktoimpersonateextra"},
 				Verbs:     []string{"impersonate", "create"},
+			},
+			{
+				APIGroups: []string{"authorization.k8s.io"},
+				Resources: []string{"subjectaccessreviews"},
+				Verbs:     []string{"create"},
 			},
 		},
 	}, metav1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create a role that will allow a user to impersonate another user
+	croleImpersonate, err := h.KubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: kind.ProxyImageName + "-impersonate-",
+			OwnerReferences: []metav1.OwnerReference{
+				metav1.OwnerReference{
+					APIVersion:         "core/v1",
+					BlockOwnerDeletion: &pTrue,
+					Controller:         &pFalse,
+					Kind:               "Namespace",
+					Name:               ns.Name,
+					UID:                ns.UID,
+				},
+			},
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"users"},
+				ResourceNames: []string{"ok-to-impersonate@nodomain.dev"},
+				Verbs:         []string{"impersonate"},
+			},
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"groups"},
+				ResourceNames: []string{"ok-to-impersonate-group"},
+				Verbs:         []string{"impersonate"},
+			},
+			{
+				APIGroups:     []string{"authentication.k8s.io"},
+				Resources:     []string{"userextras/oktoimpersonateextra"},
+				ResourceNames: []string{"foo"},
+				Verbs:         []string{"impersonate"},
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create a ClusterRoleBinding so the user can impersonate test users
+
+	_, err = h.KubeClient.RbacV1().ClusterRoleBindings().Create(context.TODO(),
+		&rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: kind.ProxyImageName + "-impersonate-",
+				OwnerReferences: []metav1.OwnerReference{
+					metav1.OwnerReference{
+						APIVersion:         "core/v1",
+						BlockOwnerDeletion: &pTrue,
+						Controller:         &pFalse,
+						Kind:               "Namespace",
+						Name:               ns.Name,
+						UID:                ns.UID,
+					},
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				Name: croleImpersonate.Name, Kind: "ClusterRole",
+			},
+			Subjects: []rbacv1.Subject{
+				{Name: "user@example.com", Kind: "User"},
+			},
+		}, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}

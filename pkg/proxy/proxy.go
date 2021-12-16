@@ -4,6 +4,7 @@ package proxy
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
@@ -22,23 +24,19 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
 
 const (
 	UserHeaderClientIPKey = "Remote-Client-IP"
+	timestampLayout       = "2006-01-02T15:04:05-0700"
 )
 
 var (
 	errUnauthorized          = errors.New("Unauthorized")
-	errImpersonateHeader     = errors.New("Impersonate-User in header")
 	errNoName                = errors.New("No name in OIDC info")
 	errNoImpersonationConfig = errors.New("No impersonation configuration in context")
-
-	// http headers are case-insensitive
-	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
-	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
-	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
 type Config struct {
@@ -55,11 +53,12 @@ type Config struct {
 type errorHandlerFn func(http.ResponseWriter, *http.Request, error)
 
 type Proxy struct {
-	oidcRequestAuther *bearertoken.Authenticator
-	tokenAuther       authenticator.Token
-	tokenReviewer     *tokenreview.TokenReview
-	secureServingInfo *server.SecureServingInfo
-	auditor           *audit.Audit
+	oidcRequestAuther     *bearertoken.Authenticator
+	tokenAuther           authenticator.Token
+	tokenReviewer         *tokenreview.TokenReview
+	subjectAccessReviewer *subjectaccessreview.SubjectAccessReview
+	secureServingInfo     *server.SecureServingInfo
+	auditor               *audit.Audit
 
 	restConfig            *rest.Config
 	clientTransport       http.RoundTripper
@@ -71,16 +70,33 @@ type Proxy struct {
 	handleError errorHandlerFn
 }
 
+// implement oidc.CAContentProvider to load
+// the ca file from the options
+type CAFromFile struct {
+	CAFile string
+}
+
+func (caFromFile CAFromFile) CurrentCABundleContent() []byte {
+	res, _ := ioutil.ReadFile(caFromFile.CAFile)
+	return res
+}
+
 func New(restConfig *rest.Config,
 	oidcOptions *options.OIDCAuthenticationOptions,
 	auditOptions *options.AuditOptions,
 	tokenReviewer *tokenreview.TokenReview,
+	subjectAccessReviewer *subjectaccessreview.SubjectAccessReview,
 	ssinfo *server.SecureServingInfo,
 	config *Config) (*Proxy, error) {
 
+	// load the CA from the file listed in the options
+	caFromFile := CAFromFile{
+		CAFile: oidcOptions.CAFile,
+	}
+
 	// generate tokenAuther from oidc config
 	tokenAuther, err := oidc.New(oidc.Options{
-		CAFile:               oidcOptions.CAFile,
+		CAContentProvider:    caFromFile,
 		ClientID:             oidcOptions.ClientID,
 		GroupsClaim:          oidcOptions.GroupsClaim,
 		GroupsPrefix:         oidcOptions.GroupsPrefix,
@@ -100,14 +116,15 @@ func New(restConfig *rest.Config,
 	}
 
 	return &Proxy{
-		restConfig:        restConfig,
-		hooks:             hooks.New(),
-		tokenReviewer:     tokenReviewer,
-		secureServingInfo: ssinfo,
-		config:            config,
-		oidcRequestAuther: bearertoken.New(tokenAuther),
-		tokenAuther:       tokenAuther,
-		auditor:           auditor,
+		restConfig:            restConfig,
+		hooks:                 hooks.New(),
+		tokenReviewer:         tokenReviewer,
+		subjectAccessReviewer: subjectAccessReviewer,
+		secureServingInfo:     ssinfo,
+		config:                config,
+		oidcRequestAuther:     bearertoken.New(tokenAuther),
+		tokenAuther:           tokenAuther,
+		auditor:               auditor,
 	}, nil
 }
 
@@ -191,16 +208,73 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// Get the impersonation headers from the context.
-	conf := context.ImpersonationConfig(req)
-	if conf == nil {
+	impersonationConf := context.ImpersonationConfig(req)
+	if impersonationConf == nil {
 		return nil, errNoImpersonationConfig
 	}
 
 	// Set up impersonation request.
-	rt := transport.NewImpersonatingRoundTripper(*conf, p.clientTransport)
+	rt := transport.NewImpersonatingRoundTripper(*impersonationConf.ImpersonationConfig, p.clientTransport)
+
+	// Log the request
+	p.logSuccessfulRequest(req, *impersonationConf.InboundUser, *impersonationConf.ImpersonatedUser)
 
 	// Push request through round trippers to the API server.
 	return rt.RoundTrip(req)
+}
+
+// logs the request
+func (p *Proxy) logSuccessfulRequest(req *http.Request, inboundUser user.Info, outboundUser user.Info) {
+	remoteAddr := req.RemoteAddr
+	indexOfColon := strings.Index(remoteAddr, ":")
+	if indexOfColon > 0 {
+		remoteAddr = remoteAddr[0:indexOfColon]
+	}
+
+	inboundExtras := ""
+
+	if inboundUser.GetExtra() != nil {
+		for key, value := range inboundUser.GetExtra() {
+			inboundExtras += key + "=" + strings.Join(value, "|") + " "
+		}
+	}
+
+	outboundUserLog := ""
+
+	if outboundUser != nil {
+		outboundExtras := ""
+
+		if outboundUser.GetExtra() != nil {
+			for key, value := range outboundUser.GetExtra() {
+				outboundExtras += key + "=" + strings.Join(value, "|") + " "
+			}
+		}
+
+		outboundUserLog = fmt.Sprintf(" outbound:[%s / %s / %s / %s]", outboundUser.GetName(), strings.Join(outboundUser.GetGroups(), "|"), outboundUser.GetUID(), outboundExtras)
+	}
+
+	xFwdFor := req.Header.Get("x-forwarded-for")
+
+	// clean off remoteaddr from x-forwarded-for
+	if xFwdFor != "" {
+		if strings.HasSuffix(xFwdFor, remoteAddr) {
+			xFwdFor = xFwdFor[0 : len(xFwdFor)-(len(remoteAddr)+2)]
+		}
+
+	}
+
+	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s / %s]%s\n", time.Now().Format(timestampLayout), remoteAddr, xFwdFor, req.RequestURI, inboundUser.GetName(), strings.Join(inboundUser.GetGroups(), "|"), inboundExtras, outboundUserLog)
+}
+
+// logs the failed request
+func (p *Proxy) logFailedRequest(req *http.Request) {
+	remoteAddr := req.RemoteAddr
+	indexOfColon := strings.Index(remoteAddr, ":")
+	if indexOfColon > 0 {
+		remoteAddr = remoteAddr[0:indexOfColon]
+	}
+
+	fmt.Printf("[%s] AuFail src:[%s / % s] URI:%s\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI)
 }
 
 func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {

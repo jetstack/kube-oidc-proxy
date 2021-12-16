@@ -24,6 +24,8 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
+	fakesubjectaccessreview "github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview/fake"
 )
 
 type fakeProxy struct {
@@ -45,6 +47,7 @@ type fakeRT struct {
 	expUser  string
 	expGroup []string
 	expExtra map[string][]string
+	expUid   string
 }
 
 func (f *fakeRW) Write(b []byte) (int, error) {
@@ -77,6 +80,11 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 	if h.Header.Get("Impersonate-User") != f.expUser {
 		f.t.Errorf("client transport got unexpected user impersonation header, exp=%s got=%s",
 			f.expUser, h.Header.Get("Impersonate-User"))
+	}
+
+	if h.Header.Get("Impersonate-Uid") != f.expUid {
+		f.t.Errorf("client transport got unexpected uid impersonation header, exp=%s got=%s",
+			f.expUid, h.Header.Get("Impersonate-Uid"))
 	}
 
 	if exp, act := sort.StringSlice(f.expGroup), sort.StringSlice(h.Header["Impersonate-Group"]); !reflect.DeepEqual(exp, act) {
@@ -152,11 +160,6 @@ func TestError(t *testing.T) {
 		t.Errorf("unexpected response, exp='%s' got='%s'", exp, frw.buffer)
 	}
 
-	frw = tryError(t, http.StatusForbidden, errImpersonateHeader)
-	if exp := []byte("Impersonation requests are disabled when using kube-oidc-proxy\n"); !bytes.Equal(frw.buffer, exp) {
-		t.Errorf("unexpected response, exp='%s' got='%s'", exp, frw.buffer)
-	}
-
 	frw = tryError(t, http.StatusForbidden, errNoName)
 	if exp := []byte("Username claim not available in OIDC Issuer response\n"); !bytes.Equal(frw.buffer, exp) {
 		t.Errorf("unexpected response, exp='%s' got='%s'", exp, frw.buffer)
@@ -184,9 +187,7 @@ func TestHasImpersonation(t *testing.T) {
 		{
 			"Impersonate": []string{"bar", "foo"},
 		},
-		{
-			"impersonate-Extra": []string{"bar", "foo"},
-		},
+
 		{
 			"-impersonate-Extra-": []string{"bar", "foo"},
 		},
@@ -239,6 +240,11 @@ func TestHasImpersonation(t *testing.T) {
 			"impersonate-User":   []string{"bar"},
 			"bar2":               []string{"bar"},
 		},
+		// any attempt to user impersonate- should be interpreted as
+		// an impersonation header since it could be in the future
+		{
+			"impersonate-Extra": []string{"bar", "foo"},
+		},
 	}
 
 	for _, h := range noImpersonation {
@@ -258,6 +264,8 @@ func newTestProxy(t *testing.T) *fakeProxy {
 	ctrl := gomock.NewController(t)
 	fakeToken := mocks.NewMockToken(ctrl)
 	fakeRT := &fakeRT{t: t}
+	fakeSubjectAccessReviewer := fakesubjectaccessreview.New(nil)
+	subjectAccessReview, _ := subjectaccessreview.New(fakeSubjectAccessReviewer)
 
 	p := &fakeProxy{
 		ctrl:      ctrl,
@@ -265,6 +273,7 @@ func newTestProxy(t *testing.T) *fakeProxy {
 		fakeRT:    fakeRT,
 		Proxy: &Proxy{
 			oidcRequestAuther:     bearertoken.New(fakeToken),
+			subjectAccessReviewer: subjectAccessReview,
 			clientTransport:       fakeRT,
 			noAuthClientTransport: fakeRT,
 			config:                new(Config),
@@ -303,6 +312,7 @@ func TestHandlers(t *testing.T) {
 		expUser  string
 		expGroup []string
 		expExtra map[string][]string
+		expUid   string
 	}{
 		"an empty request should 401": {
 			req:     new(http.Request),
@@ -379,7 +389,130 @@ func TestHandlers(t *testing.T) {
 			expCode: http.StatusUnauthorized,
 			expBody: errUnauthorized.Error(),
 		},
-		"an authed request with impersonation user should error impersonation header": {
+
+		// BEGIN IMPERSONATION TESTS
+
+		"an authed request with authorized impersonation user should succeed": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":    []string{"bearer fake-token"},
+					"Impersonate-User": []string{"jjackson"},
+				},
+			},
+			expUser:      "jjackson",
+			expGroup:     []string{"system:authenticated"},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusOK,
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Originaluser.jetstack.io-User":   {"mmosley"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Groups": {"group1"},
+			},
+			expBody: "",
+		},
+		"an authed request with authorized impersonation group should succeed": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":     []string{"bearer fake-token"},
+					"Impersonate-User":  []string{"jjackson"},
+					"Impersonate-Group": []string{"group3"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expUser:  "jjackson",
+			expGroup: []string{"group3", "system:authenticated"},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Originaluser.jetstack.io-User":   {"mmosley"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Groups": {"group1"},
+			},
+			expCode: http.StatusOK,
+			expBody: "",
+		},
+		"an authed request with authorized impersonation extra should succeed": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":                []string{"bearer fake-token"},
+					"Impersonate-User":             []string{"jjackson"},
+					"Impersonate-Group":            []string{"group3"},
+					"Impersonate-Extra-remoteaddr": []string{"1.2.3.4"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+						Extra:  map[string][]string{"someextra": {"someval1", "someval2"}, "someextra2": {"foo", "bar"}},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode:  http.StatusOK,
+			expUser:  "jjackson",
+			expGroup: []string{"group3", "system:authenticated"},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Remoteaddr":                      {"1.2.3.4"},
+				"Impersonate-Extra-Originaluser.jetstack.io-User":   {"mmosley"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Groups": {"group1"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Extra":  {"{\"someextra\":[\"someval1\",\"someval2\"],\"someextra2\":[\"foo\",\"bar\"]}"},
+			},
+			expBody: "",
+		},
+
+		/* Commenting due to https://github.com/TremoloSecurity/kube-oidc-proxy/issues/7
+		"an authed request with authorized impersonation uid should succeed": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":     []string{"bearer fake-token"},
+					"Impersonate-Uid":   []string{"1-2-3-4"},
+					"Impersonate-User":  []string{"jjackson"},
+					"Impersonate-Group": []string{"group3"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode:  http.StatusOK,
+			expUser:  "jjackson",
+			expUid:   "1-2-3-4",
+			expGroup: []string{"group3", "system:authenticated"},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Originaluser.jetstack.io-User":   {"mmosley"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Groups": {"group1"},
+			},
+			expBody: "",
+		},*/
+
+		"an authed request with unauthorized impersonation user should error unauthorized": {
 			req: &http.Request{
 				Header: http.Header{
 					"Authorization":    []string{"bearer fake-token"},
@@ -389,33 +522,107 @@ func TestHandlers(t *testing.T) {
 			expAuthToken: "fake-token",
 			authResponse: &authResponse{
 				resp: &authenticator.Response{
-					User: &user.DefaultInfo{},
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
 				},
 				pass: true,
 				err:  nil,
 			},
 			expCode: http.StatusForbidden,
-			expBody: "Impersonation requests are disabled when using kube-oidc-proxy",
+			expBody: "mmosley is not allowed to impersonate user 'a-user'",
 		},
-		"an authed request with impersonation group should error impersonation header": {
+		"an authed request with unauthorized impersonation group should error unauthorized": {
 			req: &http.Request{
 				Header: http.Header{
 					"Authorization":     []string{"bearer fake-token"},
+					"Impersonate-User":  []string{"jjackson"},
 					"Impersonate-Group": []string{"a-group"},
 				},
 			},
 			expAuthToken: "fake-token",
 			authResponse: &authResponse{
 				resp: &authenticator.Response{
-					User: &user.DefaultInfo{},
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
 				},
 				pass: true,
 				err:  nil,
 			},
 			expCode: http.StatusForbidden,
-			expBody: "Impersonation requests are disabled when using kube-oidc-proxy",
+			expBody: "mmosley is not allowed to impersonate group 'a-group'",
 		},
-		"an authed request with impersonation extra should error impersonation header": {
+		"an authed request with unauthorized impersonation extra should error unauthorized": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":         []string{"bearer fake-token"},
+					"Impersonate-User":      []string{"jjackson"},
+					"Impersonate-Extra-foo": []string{"bar"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusForbidden,
+			expBody: "mmosley is not allowed to impersonate extra info 'foo'='bar'",
+		},
+		"an authed request with unauthorized impersonation uid should error unauthorized": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":    []string{"bearer fake-token"},
+					"Impersonate-User": []string{"jjackson"},
+					"Impersonate-Uid":  []string{"bar"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusForbidden,
+			expBody: "mmosley is not allowed to impersonate uid 'bar'",
+		},
+
+		"an authed request with impersonation groups missing user should fail": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":      []string{"bearer fake-token"},
+					"Impersonate-Groups": []string{"bar"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusInternalServerError,
+			expBody: "no Impersonation-User header found for request",
+		},
+
+		"an authed request with impersonation extra missing user should fail": {
 			req: &http.Request{
 				Header: http.Header{
 					"Authorization":         []string{"bearer fake-token"},
@@ -425,14 +632,64 @@ func TestHandlers(t *testing.T) {
 			expAuthToken: "fake-token",
 			authResponse: &authResponse{
 				resp: &authenticator.Response{
-					User: nil,
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
 				},
 				pass: true,
 				err:  nil,
 			},
-			expCode: http.StatusForbidden,
-			expBody: "Impersonation requests are disabled when using kube-oidc-proxy",
+			expCode: http.StatusInternalServerError,
+			expBody: "no Impersonation-User header found for request",
 		},
+
+		"an authed request with impersonation uid missing user should fail": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":   []string{"bearer fake-token"},
+					"Impersonate-Uid": []string{"bar"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusInternalServerError,
+			expBody: "no Impersonation-User header found for request",
+		},
+
+		"an authed request with an invalid impersonation header should fail": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":        []string{"bearer fake-token"},
+					"Impersonate-User":     []string{"jjackson"},
+					"Impersonate-Not-Real": []string{"bar"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode: http.StatusInternalServerError,
+			expBody: "",
+		},
+
+		// END IMPERSONATION TESTS
 
 		"an authed request with no username is token should 403": {
 			req: &http.Request{
@@ -549,6 +806,7 @@ func TestHandlers(t *testing.T) {
 			p.fakeRT.expUser = test.expUser
 			p.fakeRT.expGroup = test.expGroup
 			p.fakeRT.expExtra = test.expExtra
+			p.fakeRT.expUid = test.expUid
 
 			if test.config != nil {
 				p.config = test.config

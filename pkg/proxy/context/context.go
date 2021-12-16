@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/sebest/xff"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/transport"
 )
@@ -25,6 +26,12 @@ const (
 	clientAddressKey
 )
 
+type ImpersonationRequest struct {
+	ImpersonationConfig *transport.ImpersonationConfig
+	InboundUser         *user.Info
+	ImpersonatedUser    *user.Info
+}
+
 // WithNoImpersonation returns a copy of the request in which the noImpersonation context value is set.
 func WithNoImpersonation(req *http.Request) *http.Request {
 	return req.WithContext(request.WithValue(req.Context(), noImpersonationKey, true))
@@ -37,13 +44,13 @@ func NoImpersonation(req *http.Request) bool {
 }
 
 // WithImpersonationConfig returns a copy of parent in which contains the impersonation configuration.
-func WithImpersonationConfig(req *http.Request, conf *transport.ImpersonationConfig) *http.Request {
+func WithImpersonationConfig(req *http.Request, conf *ImpersonationRequest) *http.Request {
 	return req.WithContext(request.WithValue(req.Context(), impersonationConfigKey, conf))
 }
 
 // ImpersonationConfig returns the impersonation configuration held in the context if existing.
-func ImpersonationConfig(req *http.Request) *transport.ImpersonationConfig {
-	conf, _ := req.Context().Value(impersonationConfigKey).(*transport.ImpersonationConfig)
+func ImpersonationConfig(req *http.Request) *ImpersonationRequest {
+	conf, _ := req.Context().Value(impersonationConfigKey).(*ImpersonationRequest)
 	return conf
 }
 

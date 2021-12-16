@@ -1,6 +1,7 @@
+// Copyright Jetstack Ltd. See LICENSE for details.
+//go:build tools
 // +build tools
 
-// Copyright Jetstack Ltd. See LICENSE for details.
 package tools
 
 // This file is used to vendor packages we use to build binaries.
