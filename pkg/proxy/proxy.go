@@ -8,12 +8,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
-	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
@@ -24,6 +22,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/logging"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 )
@@ -217,64 +216,10 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	rt := transport.NewImpersonatingRoundTripper(*impersonationConf.ImpersonationConfig, p.clientTransport)
 
 	// Log the request
-	p.logSuccessfulRequest(req, *impersonationConf.InboundUser, *impersonationConf.ImpersonatedUser)
+	logging.LogSuccessfulRequest(req, *impersonationConf.InboundUser, *impersonationConf.ImpersonatedUser)
 
 	// Push request through round trippers to the API server.
 	return rt.RoundTrip(req)
-}
-
-// logs the request
-func (p *Proxy) logSuccessfulRequest(req *http.Request, inboundUser user.Info, outboundUser user.Info) {
-	remoteAddr := req.RemoteAddr
-	indexOfColon := strings.Index(remoteAddr, ":")
-	if indexOfColon > 0 {
-		remoteAddr = remoteAddr[0:indexOfColon]
-	}
-
-	inboundExtras := ""
-
-	if inboundUser.GetExtra() != nil {
-		for key, value := range inboundUser.GetExtra() {
-			inboundExtras += key + "=" + strings.Join(value, "|") + " "
-		}
-	}
-
-	outboundUserLog := ""
-
-	if outboundUser != nil {
-		outboundExtras := ""
-
-		if outboundUser.GetExtra() != nil {
-			for key, value := range outboundUser.GetExtra() {
-				outboundExtras += key + "=" + strings.Join(value, "|") + " "
-			}
-		}
-
-		outboundUserLog = fmt.Sprintf(" outbound:[%s / %s / %s / %s]", outboundUser.GetName(), strings.Join(outboundUser.GetGroups(), "|"), outboundUser.GetUID(), outboundExtras)
-	}
-
-	xFwdFor := req.Header.Get("x-forwarded-for")
-
-	// clean off remoteaddr from x-forwarded-for
-	if xFwdFor != "" {
-		if strings.HasSuffix(xFwdFor, remoteAddr) {
-			xFwdFor = xFwdFor[0 : len(xFwdFor)-(len(remoteAddr)+2)]
-		}
-
-	}
-
-	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s / %s]%s\n", time.Now().Format(timestampLayout), remoteAddr, xFwdFor, req.RequestURI, inboundUser.GetName(), strings.Join(inboundUser.GetGroups(), "|"), inboundExtras, outboundUserLog)
-}
-
-// logs the failed request
-func (p *Proxy) logFailedRequest(req *http.Request) {
-	remoteAddr := req.RemoteAddr
-	indexOfColon := strings.Index(remoteAddr, ":")
-	if indexOfColon > 0 {
-		remoteAddr = remoteAddr[0:indexOfColon]
-	}
-
-	fmt.Printf("[%s] AuFail src:[%s / % s] URI:%s\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI)
 }
 
 func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {

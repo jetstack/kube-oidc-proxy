@@ -14,6 +14,7 @@ import (
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/logging"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 )
 
@@ -233,7 +234,7 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 		}
 
 		// regardless of reason, log failed auth
-		p.logFailedRequest(r)
+		logging.LogFailedRequest(r)
 
 		switch err {
 

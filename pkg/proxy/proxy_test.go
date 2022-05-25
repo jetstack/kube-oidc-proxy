@@ -24,6 +24,7 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/logging"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	fakesubjectaccessreview "github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview/fake"
 )
@@ -78,16 +79,19 @@ func newFakeRW() *fakeRW {
 
 func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 	if h.Header.Get("Impersonate-User") != f.expUser {
+		logging.LogFailedRequest(h)
 		f.t.Errorf("client transport got unexpected user impersonation header, exp=%s got=%s",
 			f.expUser, h.Header.Get("Impersonate-User"))
 	}
 
 	if h.Header.Get("Impersonate-Uid") != f.expUid {
+		logging.LogFailedRequest(h)
 		f.t.Errorf("client transport got unexpected uid impersonation header, exp=%s got=%s",
 			f.expUid, h.Header.Get("Impersonate-Uid"))
 	}
 
 	if exp, act := sort.StringSlice(f.expGroup), sort.StringSlice(h.Header["Impersonate-Group"]); !reflect.DeepEqual(exp, act) {
+		logging.LogFailedRequest(h)
 		f.t.Errorf(
 			"client transport got unexpected group impersonation header, exp=%#v got=%#v",
 			exp,
@@ -99,11 +103,13 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 		if strings.HasPrefix(k, "Impersonate-Extra-") {
 			expvv, ok := f.expExtra[k]
 			if !ok {
+				logging.LogFailedRequest(h)
 				f.t.Errorf("got unexpected impersonate extra: %s", k)
 				continue
 			}
 
 			if !reflect.DeepEqual(vv, expvv) {
+				logging.LogFailedRequest(h)
 				f.t.Errorf("unexpected values in impersonate extra (%s), exp=%s got=%s", k, expvv, vv)
 			}
 		}
@@ -112,14 +118,18 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 	for k, expvv := range f.expExtra {
 		vv, ok := h.Header[k]
 		if !ok {
+			logging.LogFailedRequest(h)
 			f.t.Errorf("did not get expected impersonate extra: %s", k)
 			continue
 		}
 
 		if !reflect.DeepEqual(vv, expvv) {
+			logging.LogFailedRequest(h)
 			f.t.Errorf("unexpected values in impersonate extra (%s), exp=%s got=%s", k, expvv, vv)
 		}
 	}
+
+	logging.LogSuccessfulRequest(h, &user.DefaultInfo{}, &user.DefaultInfo{})
 
 	return nil, nil
 }
@@ -454,6 +464,40 @@ func TestHandlers(t *testing.T) {
 					"Impersonate-User":             []string{"jjackson"},
 					"Impersonate-Group":            []string{"group3"},
 					"Impersonate-Extra-remoteaddr": []string{"1.2.3.4"},
+				},
+			},
+			expAuthToken: "fake-token",
+			authResponse: &authResponse{
+				resp: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "mmosley",
+						Groups: []string{"group1"},
+						Extra:  map[string][]string{"someextra": {"someval1", "someval2"}, "someextra2": {"foo", "bar"}},
+					},
+				},
+				pass: true,
+				err:  nil,
+			},
+			expCode:  http.StatusOK,
+			expUser:  "jjackson",
+			expGroup: []string{"group3", "system:authenticated"},
+			expExtra: map[string][]string{
+				"Impersonate-Extra-Remoteaddr":                      {"1.2.3.4"},
+				"Impersonate-Extra-Originaluser.jetstack.io-User":   {"mmosley"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Groups": {"group1"},
+				"Impersonate-Extra-Originaluser.jetstack.io-Extra":  {"{\"someextra\":[\"someval1\",\"someval2\"],\"someextra2\":[\"foo\",\"bar\"]}"},
+			},
+			expBody: "",
+		},
+
+		"an authed request with authorized impersonation extra should succeed, with an empty X-Forwarded-For header": {
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization":                []string{"bearer fake-token"},
+					"Impersonate-User":             []string{"jjackson"},
+					"Impersonate-Group":            []string{"group3"},
+					"Impersonate-Extra-remoteaddr": []string{"1.2.3.4"},
+					"X-Forwarded-For":              []string{""},
 				},
 			},
 			expAuthToken: "fake-token",
