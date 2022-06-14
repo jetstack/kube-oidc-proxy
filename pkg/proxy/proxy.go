@@ -127,11 +127,11 @@ func New(restConfig *rest.Config,
 	}, nil
 }
 
-func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
+func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, <-chan struct{}, error) {
 	// standard round tripper for proxy to API Server
 	clientRT, err := p.roundTripperForRestConfig(p.restConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	p.clientTransport = clientRT
 
@@ -147,7 +147,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 			},
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		p.noAuthClientTransport = noAuthClientRT
@@ -156,7 +156,7 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	// get API server url
 	url, err := url.Parse(p.restConfig.Host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %s", err)
+		return nil, nil, fmt.Errorf("failed to parse url: %s", err)
 	}
 
 	p.handleError = p.newErrorHandler()
@@ -167,30 +167,30 @@ func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, error) {
 	proxyHandler.ErrorHandler = p.handleError
 	proxyHandler.FlushInterval = p.config.FlushInterval
 
-	waitCh, err := p.serve(proxyHandler, stopCh)
+	waitCh, listenerStoppedCh, err := p.serve(proxyHandler, stopCh)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return waitCh, nil
+	return waitCh, listenerStoppedCh, nil
 }
 
-func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan struct{}, error) {
+func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan struct{}, <-chan struct{}, error) {
 	// Setup proxy handlers
 	handler = p.withHandlers(handler)
 
 	// Run auditor
 	if err := p.auditor.Run(stopCh); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// securely serve using serving config
-	waitCh, err := p.secureServingInfo.Serve(handler, time.Second*60, stopCh)
+	waitCh, listenerStoppedCh, err := p.secureServingInfo.Serve(handler, time.Second*60, stopCh)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return waitCh, nil
+	return waitCh, listenerStoppedCh, nil
 }
 
 // RoundTrip is called last and is used to manipulate the forwarded request using context.
