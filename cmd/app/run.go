@@ -117,12 +117,13 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			// Run proxy
-			waitCh, err := p.Run(stopCh)
+			waitCh, listenerStoppedCh, err := p.Run(stopCh)
 			if err != nil {
 				return err
 			}
 
 			<-waitCh
+			<-listenerStoppedCh
 
 			if err := p.RunPreShutdownHooks(); err != nil {
 				return err
