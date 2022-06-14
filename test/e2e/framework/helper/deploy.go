@@ -527,6 +527,9 @@ func (h *Helper) deployApp(ns, name string, serviceType corev1.ServiceType, cont
 			appURL, err)
 	}
 
+	// this is a hack.  better to launch a pod that will wait until the URL is available
+	time.Sleep(2 * time.Second)
+
 	return keyBundle, appNetURL, nil
 }
 
