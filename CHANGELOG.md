@@ -1,3 +1,12 @@
+# 1.0.1
+
+**enhancements:**
+ - 1.0.1 [\#14](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/14)
+
+**bugs:**
+ - fix timing issues in e2e tests [\#18](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/18)
+ - runtime error: slice bounds out of range [:-2] [\#17](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/17)
+ 
 # 1.0.0
 
 **enhancements:**
@@ -10,3 +19,4 @@
 
 **bugs:**
  - update dependencies [\#5](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/5)
+
