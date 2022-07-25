@@ -23,6 +23,12 @@ require (
 	sigs.k8s.io/kind v0.14.0
 )
 
+replace (
+	github.com/emicklei/go-restful => github.com/emicklei/go-restful/v3 v3.8.0
+	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
+	gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.1
+)
+
 require (
 	cloud.google.com/go v0.99.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
@@ -44,6 +50,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
+	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
