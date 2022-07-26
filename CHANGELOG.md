@@ -1,3 +1,8 @@
+# 1.0.2
+
+**bugs:**
+ - CVE-2022-1996 [\#20](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/20)
+
 # 1.0.1
 
 **enhancements:**
