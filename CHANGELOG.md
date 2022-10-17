@@ -1,3 +1,8 @@
+# 1.0.3
+
+**enhancements:**
+ - 1.0.3 release [\#26](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/26)
+
 # 1.0.2
 
 **bugs:**
