@@ -57,6 +57,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				}
 			}
 
+			// Set a known working client-side rate limit.
+			restConfig.QPS = 100
+			restConfig.Burst = 100
+
 			// Initialise token reviewer if enabled
 			var tokenReviewer *tokenreview.TokenReview
 			if opts.App.TokenPassthrough.Enabled {
