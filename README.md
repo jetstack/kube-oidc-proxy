@@ -27,11 +27,9 @@ Since the proxy server utilises impersonation to forward requests to the API
 server once authenticated, impersonation is disabled for user requests to the
 API server.
 
-![kube-oidc-proxy demo](https://storage.googleapis.com/kube-oidc-proxy/demo-9de755f8e4b4e5dd67d17addf09759860f903098.svg)
-
 The following is a diagram of the request flow for a user request.
 ![kube-oidc-proxy request
-flow](https://storage.googleapis.com/kube-oidc-proxy/diagram-d9623e38a6cd3b585b45f47d80ca1e1c43c7e695.png)
+flow](./img/kube-oidc-proxy.png)
 
 ## Tutorial
 
