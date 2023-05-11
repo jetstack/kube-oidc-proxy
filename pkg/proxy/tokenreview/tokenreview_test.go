@@ -9,6 +9,7 @@ import (
 
 	authv1 "k8s.io/api/authentication/v1"
 
+	"github.com/jetstack/kube-oidc-proxy/pkg/metrics"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview/fake"
 )
 
@@ -74,6 +75,7 @@ func TestReview(t *testing.T) {
 func runTest(t *testing.T, test testT) {
 	tReviewer := &TokenReview{
 		audiences:       nil,
+		metrics:         metrics.New(),
 		reviewRequester: fake.New().WithCreate(test.reviewResp, test.errResp),
 	}
 
