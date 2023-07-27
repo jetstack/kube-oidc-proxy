@@ -83,8 +83,8 @@ jobs:
             ghcr.io/${{ env.REPO }}:${{ env.SHORT_TAG }}
             ghcr.io/${{ env.REPO }}:latest
 
-            - name: sign images
-            run: |-
+      - name: sign images
+        run: |-
                   cosign sign -y ${{ secrets.OU_CONTAINER_DEST }}:${{ env.TAG }}
                   cosign sign -y ghcr.io/${{ env.REPO }}:${{ env.TAG }}
           
