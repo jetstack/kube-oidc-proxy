@@ -3,6 +3,11 @@ on:
   push:
     branches:
       - 'master'
+
+permissions:
+  id-token: write
+  packages: write
+  
 jobs:
   docker:
     runs-on: ubuntu-latest
