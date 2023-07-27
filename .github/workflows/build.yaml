@@ -80,7 +80,7 @@ jobs:
             ${{ secrets.OU_CONTAINER_DEST }}:${{ env.SHORT_TAG }}
             ${{ secrets.OU_CONTAINER_DEST }}
             ghcr.io/${{ env.REPO }}:${{ env.TAG }}
-            ghcr.io/${{ env.REPO }}::${{ env.SHORT_TAG }}
+            ghcr.io/${{ env.REPO }}:${{ env.SHORT_TAG }}
             ghcr.io/${{ env.REPO }}:latest
 
             - name: sign images
