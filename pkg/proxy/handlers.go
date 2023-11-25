@@ -10,7 +10,7 @@ import (
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/transport"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
@@ -38,6 +38,7 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 		// Auth request and handle unauthed
 		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
 		if err != nil {
+			klog.V(5).Infof("Authenticated request failed: %s", err)
 			// Since we have failed OIDC auth, we will try a token review, if enabled.
 			tokenReviewHandler.ServeHTTP(rw, req)
 			return
