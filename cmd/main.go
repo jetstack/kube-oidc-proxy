@@ -4,10 +4,10 @@ package main
 import (
 	"fmt"
 	"os"
-	
-	"k8s.io/klog/v2"
+
 	"github.com/jetstack/kube-oidc-proxy/cmd/app"
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
+	"k8s.io/klog/v2"
 )
 
 func main() {
