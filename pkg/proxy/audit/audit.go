@@ -70,6 +70,7 @@ func (a *Audit) Shutdown() error {
 // into the context which is then used by the wrapped audit handler.
 func (a *Audit) WithRequest(handler http.Handler) http.Handler {
 	handler = genericapifilters.WithAudit(handler, a.serverConfig.AuditBackend, a.serverConfig.AuditPolicyRuleEvaluator, a.serverConfig.LongRunningFunc)
+	handler = genericapifilters.WithAuditInit(handler)
 	return genericapifilters.WithRequestInfo(handler, a.serverConfig.RequestInfoResolver)
 }
 
