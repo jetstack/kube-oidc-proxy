@@ -1,4 +1,13 @@
-$ 1.0.5
+# 1.0.6
+
+**bugs:**
+ - e2e tests failing to complete [\#45](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/45)
+ - Auditing is not working anymore [\#39](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/39)
+
+**tasks:**
+ - 1.0.6 build [\#41](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/41)
+
+# 1.0.5
 
 **tasks:**
  - 1.0.5 build [\#34](https://github.com/TremoloSecurity/kube-oidc-proxy/issues/34)
