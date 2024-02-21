@@ -43,7 +43,7 @@ func (k *Kind) LoadAllImages() error {
 }
 
 func (k *Kind) LoadKubeOIDCProxy() error {
-	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy-linux")
+	binPath := filepath.Join(k.rootPath, "./bin/kube-oidc-proxy")
 	mainPath := filepath.Join(k.rootPath, "./cmd/.")
 
 	return k.loadImage(binPath, mainPath, ProxyImageName, k.rootPath)

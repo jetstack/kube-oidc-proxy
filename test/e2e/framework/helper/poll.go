@@ -4,6 +4,9 @@ package helper
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -93,7 +96,25 @@ func (h *Helper) WaitForDeploymentToDelete(namespace, name string, timeout time.
 	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
 		_, err := h.KubeClient.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if k8sErrors.IsNotFound(err) {
-			return true, nil
+			log.Infof("Deployment %s/%s deleted, waiting for pods", namespace, name)
+			pods, err := h.KubeClient.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
+
+			if err != nil {
+				return false, nil
+			}
+
+			foundPods := false
+
+			for _, pod := range pods.Items {
+				if strings.HasPrefix(pod.ObjectMeta.Name, name+"-") {
+					log.Infof("Pod %s/%s still not terminated", namespace, &pod.ObjectMeta.Name)
+					foundPods = true
+					return false, nil
+				}
+			}
+
+			log.Infof("All pods for %s/%s terminated", namespace, name)
+			return !foundPods, nil
 		}
 
 		if err != nil {
@@ -113,4 +134,29 @@ func (h *Helper) WaitForDeploymentToDelete(namespace, name string, timeout time.
 	}
 
 	return nil
+}
+
+func (h *Helper) WaitForUrlToBeReady(url *url.URL, timeout time.Duration) error {
+	log.Infof("Waiting for URL %s to be ready", url)
+
+	err := wait.PollImmediate(time.Second*2, timeout, func() (bool, error) {
+		host := url.Host
+		port := url.Port()
+		tocheck := host
+
+		if port != "" {
+			tocheck = tocheck + ":" + port
+		}
+
+		con, err := net.DialTimeout("tcp", tocheck, timeout)
+		if err != nil {
+			return false, nil
+		} else {
+			con.Close()
+			return true, nil
+		}
+
+	})
+
+	return err
 }

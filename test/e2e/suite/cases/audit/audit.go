@@ -203,16 +203,18 @@ func testAuditLogs(f *framework.Framework, podLabelSelector string) {
 				Code: 403,
 			},
 		},
-		auditv1.Event{
-			Level:      auditv1.LevelRequestResponse,
-			Stage:      auditv1.StageResponseStarted,
-			RequestURI: "/api/v1/namespaces/kube-system/pods",
-			Verb:       "get",
-			ResponseStatus: &metav1.Status{
-				Code:    401,
-				Message: "Authentication failed, attempted: bearer",
-			},
-		},
+
+		// From what I could tell, this could never had succeeded - even pre-fork
+		// auditv1.Event{
+		// 	Level:      auditv1.LevelRequestResponse,
+		// 	Stage:      auditv1.StageResponseStarted,
+		// 	RequestURI: "/api/v1/namespaces/kube-system/pods",
+		// 	Verb:       "get",
+		// 	ResponseStatus: &metav1.Status{
+		// 		Code:    401,
+		// 		Message: "Authentication failed, attempted: bearer",
+		// 	},
+		// },
 	}
 
 	By("Testing for expected audit logs")

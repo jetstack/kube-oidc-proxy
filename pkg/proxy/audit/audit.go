@@ -34,7 +34,7 @@ func New(opts *options.AuditOptions, externalAddress string, secureServingInfo *
 	}
 
 	// We do not support dynamic auditing, so leave nil
-	if err := opts.ApplyTo(serverConfig, nil, nil, nil, nil); err != nil {
+	if err := opts.ApplyTo(serverConfig); err != nil {
 		return nil, err
 	}
 
@@ -69,7 +69,8 @@ func (a *Audit) Shutdown() error {
 // WithRequest will wrap the given handler to inject the request information
 // into the context which is then used by the wrapped audit handler.
 func (a *Audit) WithRequest(handler http.Handler) http.Handler {
-	handler = genericapifilters.WithAudit(handler, a.serverConfig.AuditBackend, a.serverConfig.AuditPolicyChecker, a.serverConfig.LongRunningFunc)
+	handler = genericapifilters.WithAudit(handler, a.serverConfig.AuditBackend, a.serverConfig.AuditPolicyRuleEvaluator, a.serverConfig.LongRunningFunc)
+	handler = genericapifilters.WithAuditInit(handler)
 	return genericapifilters.WithRequestInfo(handler, a.serverConfig.RequestInfoResolver)
 }
 
@@ -77,6 +78,6 @@ func (a *Audit) WithRequest(handler http.Handler) http.Handler {
 // information into the context which is then used by the wrapped audit
 // handler.
 func (a *Audit) WithUnauthorized(handler http.Handler) http.Handler {
-	handler = genericapifilters.WithFailedAuthenticationAudit(handler, a.serverConfig.AuditBackend, a.serverConfig.AuditPolicyChecker)
+	handler = genericapifilters.WithFailedAuthenticationAudit(handler, a.serverConfig.AuditBackend, a.serverConfig.AuditPolicyRuleEvaluator)
 	return genericapifilters.WithRequestInfo(handler, a.serverConfig.RequestInfoResolver)
 }

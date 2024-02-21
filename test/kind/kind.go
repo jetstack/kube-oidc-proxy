@@ -4,7 +4,6 @@ package kind
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,7 +95,7 @@ func (k *Kind) Create() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(k.KubeConfigPath(), []byte(kubeconfigData), 0600); err != nil {
+	if err := os.WriteFile(k.KubeConfigPath(), []byte(kubeconfigData), 0600); err != nil {
 		return err
 	}
 
@@ -128,12 +127,20 @@ func (k *Kind) Create() error {
 func DeleteCluster(name string) error {
 	provider := cluster.NewProvider()
 
+	f, err := os.CreateTemp("", name)
+
 	kubeconfig, err := provider.KubeConfig(clusterName, false)
 	if err != nil {
 		return err
 	}
 
-	return provider.Delete(clusterName, kubeconfig)
+	if _, err := f.Write([]byte(kubeconfig)); err != nil {
+		return err
+	}
+
+	f.Close()
+
+	return provider.Delete(clusterName, f.Name())
 }
 
 func (k *Kind) Destroy() error {
