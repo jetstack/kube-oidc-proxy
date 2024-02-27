@@ -90,10 +90,6 @@ func (o *Options) Validate(cmd *cobra.Command) error {
 		errs = append(errs, errors.New("cannot add extra user headers when impersonation disabled"))
 	}
 
-	if o.Audit.DynamicOptions.Enabled {
-		errs = append(errs, errors.New("The flag --audit-dynamic-configuration may not be set"))
-	}
-
 	if len(errs) > 0 {
 		return k8sErrors.NewAggregate(errs)
 	}
