@@ -169,7 +169,8 @@ func (p *Proxy) serve(handler http.Handler, stopCh <-chan struct{}) (<-chan stru
 	}
 
 	// securely serve using serving config
-	waitCh, err := p.secureServingInfo.Serve(handler, time.Second*60, stopCh)
+	// we want to wait until the underlying server stops listening.
+	_, waitCh, err := p.secureServingInfo.Serve(handler, time.Second*60, stopCh)
 	if err != nil {
 		return nil, err
 	}
