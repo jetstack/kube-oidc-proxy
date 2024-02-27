@@ -1,6 +1,6 @@
 module github.com/jetstack/kube-oidc-proxy
 
-go 1.21.3
+go 1.21.5
 
 require (
 	github.com/golang/mock v1.6.0
@@ -11,7 +11,6 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/term v0.17.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.26.14
 	k8s.io/apimachinery v0.26.14
@@ -108,6 +107,7 @@ require (
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/term v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.16.1 // indirect
