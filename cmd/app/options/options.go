@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	k8sErrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apiserver/pkg/util/term"
 	cliflag "k8s.io/component-base/cli/flag"
 )
 
@@ -45,7 +45,7 @@ func New() *Options {
 func (o *Options) AddFlags(cmd *cobra.Command) {
 	// pretty output from kube-apiserver
 	usageFmt := "Usage:\n  %s\n"
-	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
+	cols, _, _ := term.GetSize(cmd.OutOrStdout())
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStderr(), *o.nfs, cols)
