@@ -80,7 +80,7 @@ func New(restConfig *rest.Config,
 
 	// generate tokenAuther from oidc config
 	tokenAuther, err := oidc.New(oidc.Options{
-		CAFile:               oidcOptions.CAFile,
+		CAContentProvider:    oidcOptions,
 		ClientID:             oidcOptions.ClientID,
 		GroupsClaim:          oidcOptions.GroupsClaim,
 		GroupsPrefix:         oidcOptions.GroupsPrefix,

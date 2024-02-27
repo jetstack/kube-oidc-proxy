@@ -21,6 +21,10 @@ type OIDCAuthenticationOptions struct {
 	RequiredClaims map[string]string
 }
 
+func (oo *OIDCAuthenticationOptions) CurrentCABundleContent() []byte {
+	return []byte(oo.CAFile)
+}
+
 func NewOIDCAuthenticationOptions(nfs *cliflag.NamedFlagSets) *OIDCAuthenticationOptions {
 	return new(OIDCAuthenticationOptions).AddFlags(nfs.FlagSet("OIDC"))
 }
