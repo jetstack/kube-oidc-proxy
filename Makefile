@@ -100,7 +100,7 @@ build: generate ## build kube-oidc-proxy
 	CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy ./cmd/.
 
 docker_build: generate test build ## build docker image
-	GOARCH=$(ARCH) GOOS=linux CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy-linux  ./cmd/.
+	GOARCH=$(ARCH) GOOS=linux CGO_ENABLED=0 go build -ldflags '-w $(shell hack/version-ldflags.sh)' -o ./bin/kube-oidc-proxy  ./cmd/.
 	docker build -t kube-oidc-proxy .
 
 all: test build ## runs tests, build

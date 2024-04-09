@@ -2,16 +2,20 @@
 package proxy
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
+	"k8s.io/apiserver/pkg/authentication/user"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/transport"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/logging"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 )
 
 func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
@@ -34,6 +38,7 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 		// Auth request and handle unauthed
 		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
 		if err != nil {
+			klog.V(5).Infof("Authenticated request failed: %s", err)
 			// Since we have failed OIDC auth, we will try a token review, if enabled.
 			tokenReviewHandler.ServeHTTP(rw, req)
 			return
@@ -89,6 +94,9 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			return
 		}
 
+		var targetForContext user.Info
+		targetForContext = nil
+
 		var remoteAddr string
 		req, remoteAddr = context.RemoteAddr(req)
 
@@ -101,16 +109,30 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			return
 		}
 
-		if p.hasImpersonation(req.Header) {
-			p.handleError(rw, req, errImpersonateHeader)
-			return
-		}
-
 		user, ok := genericapirequest.UserFrom(req.Context())
 		// No name available so reject request
 		if !ok || len(user.GetName()) == 0 {
 			p.handleError(rw, req, errNoName)
 			return
+		}
+
+		userForContext := user
+
+		if p.hasImpersonation(req.Header) {
+			// if impersonation headers are present, let's check to see
+			// if the user is authorized to perform the impersonation
+			target, err := p.subjectAccessReviewer.CheckAuthorizedForImpersonation(req, user)
+
+			if err != nil {
+				p.handleError(rw, req, err)
+				return
+			}
+
+			if target != nil {
+				// TODO - store original context for logging
+				user = target
+				targetForContext = target
+			}
 		}
 
 		// Ensure group contains allauthenticated builtin
@@ -151,10 +173,43 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			}
 		}
 
-		conf := &transport.ImpersonationConfig{
-			UserName: user.GetName(),
-			Groups:   groups,
-			Extra:    extra,
+		if targetForContext != nil {
+			// add the original user's information as extra headers
+			// so they're recorded in the API server's audit log
+			extra["originaluser.jetstack.io-user"] = []string{userForContext.GetName()}
+
+			numGroups := len(userForContext.GetGroups())
+			if numGroups > 0 {
+				groupNames := make([]string, numGroups)
+				for i, groupName := range userForContext.GetGroups() {
+					groupNames[i] = groupName
+				}
+
+				extra["originaluser.jetstack.io-groups"] = groupNames
+			}
+
+			if userForContext.GetUID() != "" {
+				extra["originaluser.jetstack.io-uid"] = []string{userForContext.GetUID()}
+			}
+
+			if userForContext.GetExtra() != nil && len(userForContext.GetExtra()) > 0 {
+				jsonExtras, errJsonMarshal := json.Marshal(userForContext.GetExtra())
+				if errJsonMarshal != nil {
+					p.handleError(rw, req, errJsonMarshal)
+					return
+				}
+				extra["originaluser.jetstack.io-extra"] = []string{string(jsonExtras)}
+			}
+		}
+
+		conf := &context.ImpersonationRequest{
+			ImpersonationConfig: &transport.ImpersonationConfig{
+				UserName: user.GetName(),
+				Groups:   groups,
+				Extra:    extra,
+			},
+			InboundUser:      &userForContext,
+			ImpersonatedUser: &targetForContext,
 		}
 
 		// Add the impersonation configuration to the context.
@@ -165,17 +220,22 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 
 // newErrorHandler returns a handler failed requests.
 func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, err error) {
+
 	unauthedHandler := audit.NewUnauthenticatedHandler(p.auditor, func(rw http.ResponseWriter, r *http.Request) {
 		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
 		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 	})
 
 	return func(rw http.ResponseWriter, r *http.Request, err error) {
+
 		if err == nil {
 			klog.Error("error was called with no error")
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 		}
+
+		// regardless of reason, log failed auth
+		logging.LogFailedRequest(r)
 
 		switch err {
 
@@ -183,12 +243,6 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 		case errUnauthorized:
 			// If Unauthorized then error and report to audit
 			unauthedHandler.ServeHTTP(rw, r)
-			return
-
-			// User request with impersonation
-		case errImpersonateHeader:
-			klog.V(2).Infof("impersonation user request %s", r.RemoteAddr)
-			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
 			return
 
 			// No name given or available in oidc request
@@ -203,20 +257,29 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 
+			// No impersonation user found
+		case subjectaccessreview.ErrorNoImpersonationUserFound:
+			http.Error(rw, subjectaccessreview.ErrorNoImpersonationUserFound.Error(), http.StatusInternalServerError)
+			return
+
 			// Server or unknown error
 		default:
-			klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
-			http.Error(rw, "", http.StatusInternalServerError)
+
+			if strings.Contains(err.Error(), "not allowed to impersonate") {
+				klog.V(2).Infof(err.Error(), r.RemoteAddr)
+				http.Error(rw, err.Error(), http.StatusForbidden)
+			} else {
+				klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
+				http.Error(rw, "", http.StatusInternalServerError)
+			}
+
 		}
 	}
 }
 
 func (p *Proxy) hasImpersonation(header http.Header) bool {
 	for h := range header {
-		if strings.ToLower(h) == impersonateUserHeader ||
-			strings.ToLower(h) == impersonateGroupHeader ||
-			strings.HasPrefix(strings.ToLower(h), impersonateExtraHeader) {
-
+		if strings.HasPrefix(strings.ToLower(h), "impersonate-") {
 			return true
 		}
 	}

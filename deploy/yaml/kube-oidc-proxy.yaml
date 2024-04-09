@@ -137,6 +137,10 @@ rules:
   - "userextras/scopes"
   - "userextras/remote-client-ip"
   - "tokenreviews"
+  # to support end user impersonation
+  - "userextras/originaluser.jetstack.io-user"
+  - "userextras/originaluser.jetstack.io-groups"
+  - "userextras/originaluser.jetstack.io-extra"
   verbs:
   - "create"
   - "impersonate"

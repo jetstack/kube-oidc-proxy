@@ -11,7 +11,7 @@ import (
 
 	"github.com/heptiolabs/healthcheck"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -66,8 +66,7 @@ func (h *HealthCheck) Check() error {
 
 	h.ready = true
 
-	klog.V(4).Infof("OIDC provider initialized, readiness check returned expected error: %s", err)
-	klog.Info("OIDC provider initialized, proxy ready")
+	klog.V(4).Info("OIDC provider initialized.")
 
 	return nil
 }
