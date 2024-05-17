@@ -2,11 +2,7 @@
 
 >  :warning:
 >
->  kube-oidc-proxy is an experimental tool that we would like to get feedback
->  on from the community. Jetstack makes no guarantees on the soundness of the
->  security in this project, nor any suggestion that it's 'production ready'.
->  This server sits in the critical path of authentication to the Kubernetes
->  API.
+>  The kube-oidc-project has been archived, checkout the maintained [fork](https://github.com/TremoloSecurity/kube-oidc-proxy) by Tremolo Security.
 >
 >  :warning:
 
