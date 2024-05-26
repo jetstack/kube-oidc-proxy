@@ -60,7 +60,7 @@ spec:
           - "--oidc-signing-algs=$(OIDC_SIGNING_ALGS)"
           {{ end }}
           {{- if .Values.oidc.requiredClaims }}
-          - "--oidc-signing-algs=$(OIDC_REQUIRED_CLAIMS)"
+          - "--oidc-required-claim=$(OIDC_REQUIRED_CLAIMS)"
           {{ end }}
           {{- if .Values.tokenPassthrough.enabled }}
           - "--token-passthrough"
