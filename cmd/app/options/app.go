@@ -13,6 +13,7 @@ import (
 type KubeOIDCProxyOptions struct {
 	DisableImpersonation bool
 	ReadinessProbePort   int
+	MetricsListenAddress string
 
 	FlushInterval time.Duration
 
@@ -42,6 +43,10 @@ func (k *KubeOIDCProxyOptions) AddFlags(fs *pflag.FlagSet) *KubeOIDCProxyOptions
 
 	fs.IntVarP(&k.ReadinessProbePort, "readiness-probe-port", "P", 8080,
 		"Port to expose readiness probe.")
+
+	fs.StringVar(&k.MetricsListenAddress, "metrics-serving-address", "0.0.0.0:80",
+		"Address to serve metrics on at the /metrics path. An empty address will "+
+			"disable serving metrics. Cannot use the same address as proxy or probe.")
 
 	fs.DurationVar(&k.FlushInterval, "flush-interval", time.Millisecond*50,
 		"Specifies the interval to flush request bodies. If 0ms, "+

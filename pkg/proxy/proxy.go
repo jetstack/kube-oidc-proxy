@@ -2,12 +2,10 @@
 package proxy
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -19,26 +17,11 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
+	"github.com/jetstack/kube-oidc-proxy/pkg/metrics"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
-)
-
-const (
-	UserHeaderClientIPKey = "Remote-Client-IP"
-)
-
-var (
-	errUnauthorized          = errors.New("Unauthorized")
-	errImpersonateHeader     = errors.New("Impersonate-User in header")
-	errNoName                = errors.New("No name in OIDC info")
-	errNoImpersonationConfig = errors.New("No impersonation configuration in context")
-
-	// http headers are case-insensitive
-	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
-	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
-	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
 )
 
 type Config struct {
@@ -68,6 +51,7 @@ type Proxy struct {
 	config *Config
 
 	hooks       *hooks.Hooks
+	metrics     *metrics.Metrics
 	handleError errorHandlerFn
 }
 
@@ -76,6 +60,8 @@ func New(restConfig *rest.Config,
 	auditOptions *options.AuditOptions,
 	tokenReviewer *tokenreview.TokenReview,
 	ssinfo *server.SecureServingInfo,
+	hooks *hooks.Hooks,
+	metrics *metrics.Metrics,
 	config *Config) (*Proxy, error) {
 
 	// generate tokenAuther from oidc config
@@ -101,7 +87,8 @@ func New(restConfig *rest.Config,
 
 	return &Proxy{
 		restConfig:        restConfig,
-		hooks:             hooks.New(),
+		hooks:             hooks,
+		metrics:           metrics,
 		tokenReviewer:     tokenReviewer,
 		secureServingInfo: ssinfo,
 		config:            config,
@@ -199,8 +186,26 @@ func (p *Proxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Set up impersonation request.
 	rt := transport.NewImpersonatingRoundTripper(*conf, p.clientTransport)
 
+	req, remoteAddr := context.RemoteAddr(req)
+	serverDuration := time.Now()
+	clientDuration := context.ClientRequestTimestamp(req)
+
 	// Push request through round trippers to the API server.
-	return rt.RoundTrip(req)
+	resp, err := rt.RoundTrip(req)
+
+	var statusCode int
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
+
+	// If we get an error here, then the client metrics observation will happen
+	// at the proxy error handler.
+	if err == nil {
+		p.metrics.ObserveClient(statusCode, req.URL.Path, remoteAddr, time.Since(clientDuration))
+	}
+	p.metrics.ObserveServer(statusCode, req.URL.Path, remoteAddr, time.Since(serverDuration))
+
+	return resp, err
 }
 
 func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {
@@ -259,8 +264,4 @@ func (p *Proxy) roundTripperForRestConfig(config *rest.Config) (http.RoundTrippe
 // Return the proxy OIDC token authenticator
 func (p *Proxy) OIDCTokenAuthenticator() authenticator.Token {
 	return p.tokenAuther
-}
-
-func (p *Proxy) RunPreShutdownHooks() error {
-	return p.hooks.RunPreShutdownHooks()
 }

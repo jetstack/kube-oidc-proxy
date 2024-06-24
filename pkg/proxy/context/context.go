@@ -3,6 +3,7 @@ package context
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/sebest/xff"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -21,8 +22,11 @@ const (
 	// bearerTokenKey is the context key for the bearer token.
 	bearerTokenKey
 
-	// bearerTokenKey is the context key for the client address.
+	// clientAddressKey is the context key for the client address.
 	clientAddressKey
+
+	// clientRequestTimestampKey is the context key for the timestamp of a client request.
+	clientRequestTimestampKey
 )
 
 // WithNoImpersonation returns a copy of the request in which the noImpersonation context value is set.
@@ -56,6 +60,17 @@ func WithBearerToken(req *http.Request, header http.Header) *http.Request {
 func BearerToken(req *http.Request) string {
 	token, _ := req.Context().Value(bearerTokenKey).(string)
 	return token
+}
+
+// WithClientRequestTimestamp will add the current timestamp to the request context.
+func WithClientRequestTimestamp(req *http.Request) *http.Request {
+	return req.WithContext(request.WithValue(req.Context(), clientRequestTimestampKey, time.Now()))
+}
+
+// ClientRequestTimestamp will return thetimestamp that the client request was received.
+func ClientRequestTimestamp(req *http.Request) time.Time {
+	stamp, _ := req.Context().Value(clientRequestTimestampKey).(time.Time)
+	return stamp
 }
 
 // RemoteAddress will attempt to return the source client address if available

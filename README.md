@@ -124,6 +124,7 @@ users:
  - [No Impersonation](./docs/tasks/no-impersonation.md)
  - [Extra Impersonations Headers](./docs/tasks/extra-impersonation-headers.md)
  - [Auditing](./docs/tasks/auditing.md)
+ - [Metrics](./docs/tasks/metrics.md)
 
 ## Development
 *NOTE*: building kube-oidc-proxy requires Go version 1.12 or higher.

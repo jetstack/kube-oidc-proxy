@@ -2,8 +2,10 @@
 package proxy
 
 import (
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
@@ -14,8 +16,25 @@ import (
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/context"
 )
 
+const (
+	UserHeaderClientIPKey = "Remote-Client-IP"
+)
+
+var (
+	errUnauthorized          = errors.New("Unauthorized")
+	errImpersonateHeader     = errors.New("Impersonate-User in header")
+	errNoName                = errors.New("No name in OIDC info")
+	errNoImpersonationConfig = errors.New("No impersonation configuration in context")
+
+	// http headers are case-insensitive
+	impersonateUserHeader  = strings.ToLower(transport.ImpersonateUserHeader)
+	impersonateGroupHeader = strings.ToLower(transport.ImpersonateGroupHeader)
+	impersonateExtraHeader = strings.ToLower(transport.ImpersonateUserExtraHeaderPrefix)
+)
+
 func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
 	// Set up proxy handlers
+	handler = p.withClientTimestamp(handler)
 	handler = p.auditor.WithRequest(handler)
 	handler = p.withImpersonateRequest(handler)
 	handler = p.withAuthenticateRequest(handler)
@@ -31,27 +50,29 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 	tokenReviewHandler := p.withTokenReview(handler)
 
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		req, remoteAddr := context.RemoteAddr(req)
+
 		// Auth request and handle unauthed
 		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
 		if err != nil {
 			// Since we have failed OIDC auth, we will try a token review, if enabled.
+			p.metrics.IncrementOIDCAuthCount(false, remoteAddr, "")
 			tokenReviewHandler.ServeHTTP(rw, req)
 			return
 		}
 
 		// Failed authorization
 		if !ok {
+			p.metrics.IncrementOIDCAuthCount(false, remoteAddr, "")
 			p.handleError(rw, req, errUnauthorized)
 			return
 		}
-
-		var remoteAddr string
-		req, remoteAddr = context.RemoteAddr(req)
 
 		klog.V(4).Infof("authenticated request: %s", remoteAddr)
 
 		// Add the user info to the request context
 		req = req.WithContext(genericapirequest.WithUser(req.Context(), info.User))
+		p.metrics.IncrementOIDCAuthCount(true, remoteAddr, info.User.GetName())
 		handler.ServeHTTP(rw, req)
 	})
 }
@@ -89,8 +110,7 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 			return
 		}
 
-		var remoteAddr string
-		req, remoteAddr = context.RemoteAddr(req)
+		req, remoteAddr := context.RemoteAddr(req)
 
 		// If we have disabled impersonation we can forward the request right away
 		if p.config.DisableImpersonation {
@@ -163,14 +183,35 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 	})
 }
 
+// withClientTimestamp adds the current timestamp for the client request to the
+// request context.
+func (p *Proxy) withClientTimestamp(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		req = context.WithClientRequestTimestamp(req)
+		handler.ServeHTTP(rw, req)
+	})
+}
+
 // newErrorHandler returns a handler failed requests.
-func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, err error) {
-	unauthedHandler := audit.NewUnauthenticatedHandler(p.auditor, func(rw http.ResponseWriter, r *http.Request) {
-		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
+func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, req *http.Request, err error) {
+
+	// Setup unauthed handler so that it is passed through the audit
+	unauthedHandler := audit.NewUnauthenticatedHandler(p.auditor, func(rw http.ResponseWriter, req *http.Request) {
+		_, remoteAddr := context.RemoteAddr(req)
+		klog.V(2).Infof("unauthenticated user request %s", remoteAddr)
 		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 	})
 
-	return func(rw http.ResponseWriter, r *http.Request, err error) {
+	return func(rw http.ResponseWriter, req *http.Request, err error) {
+		var statusCode int
+		req, remoteAddr := context.RemoteAddr(req)
+
+		// Update client duration metrics from error
+		defer func() {
+			clientDuration := context.ClientRequestTimestamp(req)
+			p.metrics.ObserveClient(statusCode, req.URL.Path, remoteAddr, time.Since(clientDuration))
+		}()
+
 		if err == nil {
 			klog.Error("error was called with no error")
 			http.Error(rw, "", http.StatusInternalServerError)
@@ -182,31 +223,36 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 		// Failed auth
 		case errUnauthorized:
 			// If Unauthorized then error and report to audit
-			unauthedHandler.ServeHTTP(rw, r)
+			statusCode = http.StatusUnauthorized
+			unauthedHandler.ServeHTTP(rw, req)
 			return
 
 			// User request with impersonation
 		case errImpersonateHeader:
-			klog.V(2).Infof("impersonation user request %s", r.RemoteAddr)
-			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", http.StatusForbidden)
+			statusCode = http.StatusForbidden
+			klog.V(2).Infof("impersonation user request %s", remoteAddr)
+			http.Error(rw, "Impersonation requests are disabled when using kube-oidc-proxy", statusCode)
 			return
 
 			// No name given or available in oidc request
 		case errNoName:
-			klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
-			http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
+			statusCode = http.StatusForbidden
+			klog.V(2).Infof("no name available in oidc info %s", remoteAddr)
+			http.Error(rw, "Username claim not available in OIDC Issuer response", statusCode)
 			return
 
 			// No impersonation configuration found in context
 		case errNoImpersonationConfig:
-			klog.Errorf("if you are seeing this, there is likely a bug in the proxy (%s): %s", r.RemoteAddr, err)
-			http.Error(rw, "", http.StatusInternalServerError)
+			statusCode = http.StatusInternalServerError
+			klog.Errorf("if you are seeing this, there is likely a bug in the proxy (%s): %s", remoteAddr, err)
+			http.Error(rw, "", statusCode)
 			return
 
 			// Server or unknown error
 		default:
-			klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
-			http.Error(rw, "", http.StatusInternalServerError)
+			statusCode = http.StatusInternalServerError
+			klog.Errorf("unknown error (%s): %s", remoteAddr, err)
+			http.Error(rw, "", statusCode)
 		}
 	}
 }

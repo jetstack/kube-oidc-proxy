@@ -7,10 +7,13 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
+	"github.com/jetstack/kube-oidc-proxy/pkg/metrics"
 	"github.com/jetstack/kube-oidc-proxy/pkg/probe"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy"
+	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/jetstack/kube-oidc-proxy/pkg/util"
 )
@@ -38,6 +41,14 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				return err
 			}
 
+			// Initialise hooks handler
+			hooks := hooks.New()
+			defer func() {
+				if err := hooks.RunPreShutdownHooks(); err != nil {
+					klog.Errorf("failed to run shut down hooks: %s", err)
+				}
+			}()
+
 			// Here we determine to either use custom or 'in-cluster' client configuration
 			var err error
 			var restConfig *rest.Config
@@ -57,10 +68,15 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				}
 			}
 
+			// Initialise metrics handler
+			metrics := metrics.New()
+			// Add the metrics server as a shutdown hook
+			hooks.AddPreShutdownHook("Metrics", metrics.Shutdown)
+
 			// Initialise token reviewer if enabled
 			var tokenReviewer *tokenreview.TokenReview
 			if opts.App.TokenPassthrough.Enabled {
-				tokenReviewer, err = tokenreview.New(restConfig, opts.App.TokenPassthrough.Audiences)
+				tokenReviewer, err = tokenreview.New(restConfig, metrics, opts.App.TokenPassthrough.Audiences)
 				if err != nil {
 					return err
 				}
@@ -85,7 +101,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(restConfig, opts.OIDCAuthentication, opts.Audit,
-				tokenReviewer, secureServingInfo, proxyConfig)
+				tokenReviewer, secureServingInfo, hooks, metrics, proxyConfig)
 			if err != nil {
 				return err
 			}
@@ -97,9 +113,19 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			// Start readiness probe
-			if err := probe.Run(strconv.Itoa(opts.App.ReadinessProbePort),
-				fakeJWT, p.OIDCTokenAuthenticator()); err != nil {
+			readinessHandler, err := probe.Run(
+				strconv.Itoa(opts.App.ReadinessProbePort), fakeJWT, p.OIDCTokenAuthenticator())
+			if err != nil {
 				return err
+			}
+			hooks.AddPreShutdownHook("Readiness Probe", readinessHandler.Shutdown)
+
+			if len(opts.App.MetricsListenAddress) > 0 {
+				if err := metrics.Start(opts.App.MetricsListenAddress); err != nil {
+					return err
+				}
+			} else {
+				klog.Info("metrics listen address empty, disabling serving metrics")
 			}
 
 			// Run proxy
@@ -109,10 +135,6 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			<-waitCh
-
-			if err := p.RunPreShutdownHooks(); err != nil {
-				return err
-			}
 
 			return nil
 		},

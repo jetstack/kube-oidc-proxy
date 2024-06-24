@@ -21,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/server"
 
 	"github.com/jetstack/kube-oidc-proxy/cmd/app/options"
+	"github.com/jetstack/kube-oidc-proxy/pkg/metrics"
 	"github.com/jetstack/kube-oidc-proxy/pkg/mocks"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/jetstack/kube-oidc-proxy/pkg/proxy/hooks"
@@ -63,6 +64,7 @@ func (f *fakeRW) Header() http.Header {
 func newFakeR() *http.Request {
 	return &http.Request{
 		RemoteAddr: "fakeAddr",
+		URL:        new(url.URL),
 	}
 }
 
@@ -117,8 +119,7 @@ func (f *fakeRT) RoundTrip(h *http.Request) (*http.Response, error) {
 }
 
 func tryError(t *testing.T, expCode int, err error) *fakeRW {
-	p := new(Proxy)
-	p.handleError = p.newErrorHandler()
+	p := newTestProxy(t)
 
 	frw := newFakeRW()
 	fr := newFakeR()
@@ -169,7 +170,7 @@ func TestError(t *testing.T) {
 }
 
 func TestHasImpersonation(t *testing.T) {
-	p := new(Proxy)
+	p := newTestProxy(t)
 
 	// no impersonation headers
 	noImpersonation := []http.Header{
@@ -269,6 +270,7 @@ func newTestProxy(t *testing.T) *fakeProxy {
 			noAuthClientTransport: fakeRT,
 			config:                new(Config),
 			hooks:                 hooks.New(),
+			metrics:               metrics.New(),
 		},
 	}
 
@@ -425,7 +427,7 @@ func TestHandlers(t *testing.T) {
 			expAuthToken: "fake-token",
 			authResponse: &authResponse{
 				resp: &authenticator.Response{
-					User: nil,
+					User: &user.DefaultInfo{},
 				},
 				pass: true,
 				err:  nil,
